@@ -7,10 +7,10 @@ interface ProjectData {
   id: string;
   name: string | null;
   status: string;
-  productUrl: string;
-  productName: string | null;
-  productCategory: string | null;
-  productData: {
+  product_url: string;
+  product_name: string | null;
+  product_category: string | null;
+  product_data: {
     product_name?: string;
     brand?: string;
     product_type?: string;
@@ -26,10 +26,10 @@ interface ProjectData {
     image_description_for_nano_banana_pro?: string;
     avatar_description?: string;
   } | null;
-  costUsd: string | null;
-  errorMessage: string | null;
-  createdAt: string | null;
-  character: { name: string; avatarPersona: string | null } | null;
+  cost_usd: string | null;
+  error_message: string | null;
+  created_at: string | null;
+  character: { name: string; avatar_persona: string | null } | null;
 }
 
 export function ProjectDetail({ projectId }: { projectId: string }) {
@@ -76,7 +76,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
     return <p className="text-gray-500">Project not found.</p>;
   }
 
-  const data = project.productData;
+  const data = project.product_data;
 
   return (
     <div className="space-y-6">
@@ -84,18 +84,18 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">
-            {project.productName || project.name || 'Untitled Project'}
+            {project.product_name || project.name || 'Untitled Project'}
           </h1>
-          <p className="mt-1 text-sm text-gray-500 break-all">{project.productUrl}</p>
+          <p className="mt-1 text-sm text-gray-500 break-all">{project.product_url}</p>
         </div>
         <StatusBadge status={project.status} />
       </div>
 
       {/* Error message */}
-      {project.status === 'failed' && project.errorMessage && (
+      {project.status === 'failed' && project.error_message && (
         <div className="rounded-md bg-red-50 p-4">
           <h3 className="text-sm font-medium text-red-800">Analysis Failed</h3>
-          <p className="mt-1 text-sm text-red-700">{project.errorMessage}</p>
+          <p className="mt-1 text-sm text-red-700">{project.error_message}</p>
         </div>
       )}
 
@@ -150,10 +150,10 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
                   </dd>
                 </div>
               )}
-              {project.costUsd && (
+              {project.cost_usd && (
                 <div>
                   <dt className="text-sm font-medium text-gray-500">Cost</dt>
-                  <dd className="mt-1 text-sm text-gray-900">${parseFloat(project.costUsd).toFixed(4)}</dd>
+                  <dd className="mt-1 text-sm text-gray-900">${parseFloat(project.cost_usd).toFixed(4)}</dd>
                 </div>
               )}
             </dl>

@@ -1,17 +1,15 @@
 import Link from 'next/link';
 import { Nav } from '@/components/nav';
 import { ProjectList } from '@/components/project-list';
-import { db } from '@/db';
-import { project } from '@/db/schema';
-import { desc } from 'drizzle-orm';
+import { supabase } from '@/db';
 
 export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
-  const projects = await db.query.project.findMany({
-    orderBy: [desc(project.createdAt)],
-    with: { character: true },
-  });
+  const { data: projects } = await supabase
+    .from('project')
+    .select('*, character:ai_character(*)')
+    .order('created_at', { ascending: false });
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -27,7 +25,7 @@ export default async function DashboardPage() {
           </Link>
         </div>
         <div className="mt-6">
-          <ProjectList projects={projects} />
+          <ProjectList projects={projects || []} />
         </div>
       </main>
     </div>

@@ -1,15 +1,14 @@
 import 'dotenv/config';
 import { Worker, Job } from 'bullmq';
-import { drizzle } from 'drizzle-orm/node-postgres';
-import { Pool } from 'pg';
-import { eq } from 'drizzle-orm';
+import { createClient } from '@supabase/supabase-js';
 import IORedis from 'ioredis';
-import * as schema from '../db/schema';
 import { ProductAnalyzerAgent } from '../agents/product-analyzer';
 
-// Set up standalone DB connection (not using the Next.js singleton)
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-const db = drizzle(pool, { schema });
+// Set up standalone Supabase client for the worker process
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 // Set up standalone Redis connection
 const connection = new IORedis(process.env.REDIS_CONNECTION_URL || 'redis://localhost:6379', {
@@ -46,40 +45,40 @@ const worker = new Worker(
 async function handleProductAnalysis(projectId: string) {
   try {
     // Update status to analyzing
-    await db
-      .update(schema.project)
-      .set({ status: 'analyzing', updatedAt: new Date() })
-      .where(eq(schema.project.id, projectId));
+    await supabase
+      .from('project')
+      .update({ status: 'analyzing', updated_at: new Date().toISOString() })
+      .eq('id', projectId);
 
     // Run the ProductAnalyzerAgent
-    const agent = new ProductAnalyzerAgent();
+    const agent = new ProductAnalyzerAgent(supabase);
     const analysis = await agent.run(projectId);
 
     // Store results
-    await db
-      .update(schema.project)
-      .set({
+    await supabase
+      .from('project')
+      .update({
         status: 'completed',
-        productData: analysis,
-        productName: analysis.product_name,
-        productCategory: analysis.category,
-        updatedAt: new Date(),
+        product_data: analysis,
+        product_name: analysis.product_name,
+        product_category: analysis.category,
+        updated_at: new Date().toISOString(),
       })
-      .where(eq(schema.project.id, projectId));
+      .eq('id', projectId);
 
     console.log(`[Worker] Product analysis complete for project ${projectId}`);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error(`[Worker] Product analysis failed for project ${projectId}:`, errorMessage);
 
-    await db
-      .update(schema.project)
-      .set({
+    await supabase
+      .from('project')
+      .update({
         status: 'failed',
-        errorMessage,
-        updatedAt: new Date(),
+        error_message: errorMessage,
+        updated_at: new Date().toISOString(),
       })
-      .where(eq(schema.project.id, projectId));
+      .eq('id', projectId);
 
     throw error; // Re-throw so BullMQ marks the job as failed
   }
@@ -105,7 +104,6 @@ worker.on('error', (error) => {
 process.on('SIGTERM', async () => {
   console.log('[Worker] Shutting down...');
   await worker.close();
-  await pool.end();
   connection.disconnect();
   process.exit(0);
 });
@@ -113,7 +111,6 @@ process.on('SIGTERM', async () => {
 process.on('SIGINT', async () => {
   console.log('[Worker] Shutting down...');
   await worker.close();
-  await pool.end();
   connection.disconnect();
   process.exit(0);
 });

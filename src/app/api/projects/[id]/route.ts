@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
-import { project } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { supabase } from '@/db';
 
 export async function GET(
   request: NextRequest,
@@ -9,15 +7,13 @@ export async function GET(
 ) {
   const { id } = await params;
 
-  const proj = await db.query.project.findFirst({
-    where: eq(project.id, id),
-    with: {
-      character: true,
-      scriptTemplate: true,
-    },
-  });
+  const { data: proj, error } = await supabase
+    .from('project')
+    .select('*, character:ai_character(*), script_template:script_template(*)')
+    .eq('id', id)
+    .single();
 
-  if (!proj) {
+  if (error || !proj) {
     return NextResponse.json({ error: 'Project not found' }, { status: 404 });
   }
 
@@ -33,13 +29,14 @@ export async function PATCH(
   try {
     const body = await request.json();
 
-    const [updated] = await db
-      .update(project)
-      .set({ ...body, updatedAt: new Date() })
-      .where(eq(project.id, id))
-      .returning();
+    const { data: updated, error } = await supabase
+      .from('project')
+      .update({ ...body, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
 
-    if (!updated) {
+    if (error || !updated) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 

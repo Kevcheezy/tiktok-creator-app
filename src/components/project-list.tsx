@@ -3,12 +3,12 @@ import { ProjectCard } from './project-card';
 interface Project {
   id: string;
   name: string | null;
-  productUrl: string;
-  productName: string | null;
-  productCategory: string | null;
+  product_url: string;
+  product_name: string | null;
+  product_category: string | null;
   status: string;
-  createdAt: string | Date | null;
-  costUsd: string | null;
+  created_at: string | null;
+  cost_usd: string | null;
 }
 
 export function ProjectList({ projects }: { projects: Project[] }) {

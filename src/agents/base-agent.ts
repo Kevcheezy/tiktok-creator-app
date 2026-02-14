@@ -1,18 +1,17 @@
-import { db } from '@/db';
-import { project } from '@/db/schema';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { WaveSpeedClient } from '@/lib/api-clients/wavespeed';
-import { eq, sql } from 'drizzle-orm';
-
-export type Database = typeof db;
 
 export abstract class BaseAgent {
-  protected db: Database;
+  protected supabase: SupabaseClient;
   protected wavespeed: WaveSpeedClient;
   protected agentName: string;
 
-  constructor(agentName: string) {
+  constructor(agentName: string, supabaseClient?: SupabaseClient) {
     this.agentName = agentName;
-    this.db = db;
+    this.supabase = supabaseClient || createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
     this.wavespeed = new WaveSpeedClient();
   }
 
@@ -21,13 +20,22 @@ export abstract class BaseAgent {
   }
 
   protected async trackCost(projectId: string, amount: number): Promise<void> {
-    await this.db
-      .update(project)
-      .set({
-        costUsd: sql`${project.costUsd} + ${amount.toString()}`,
-        updatedAt: new Date(),
+    // Fetch current cost, add amount, update
+    const { data } = await this.supabase
+      .from('project')
+      .select('cost_usd')
+      .eq('id', projectId)
+      .single();
+
+    const currentCost = parseFloat(data?.cost_usd || '0');
+    await this.supabase
+      .from('project')
+      .update({
+        cost_usd: (currentCost + amount).toFixed(4),
+        updated_at: new Date().toISOString(),
       })
-      .where(eq(project.id, projectId));
+      .eq('id', projectId);
+
     this.log(`Cost tracked: +$${amount.toFixed(4)} for project ${projectId}`);
   }
 

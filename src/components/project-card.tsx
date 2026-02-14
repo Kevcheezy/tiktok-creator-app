@@ -5,16 +5,16 @@ interface ProjectCardProps {
   project: {
     id: string;
     name: string | null;
-    productUrl: string;
-    productName: string | null;
-    productCategory: string | null;
+    product_url: string;
+    product_name: string | null;
+    product_category: string | null;
     status: string;
-    createdAt: string | Date | null;
-    costUsd: string | null;
+    created_at: string | null;
+    cost_usd: string | null;
   };
 }
 
-function timeAgo(date: string | Date | null): string {
+function timeAgo(date: string | null): string {
   if (!date) return '';
   const now = new Date();
   const then = new Date(date);
@@ -29,7 +29,7 @@ function timeAgo(date: string | Date | null): string {
 }
 
 export function ProjectCard({ project }: ProjectCardProps) {
-  const displayName = project.productName || project.name || truncateUrl(project.productUrl);
+  const displayName = project.product_name || project.name || truncateUrl(project.product_url);
 
   return (
     <Link href={`/projects/${project.id}`} className="block">
@@ -41,19 +41,19 @@ export function ProjectCard({ project }: ProjectCardProps) {
           <StatusBadge status={project.status} />
         </div>
         <div className="mt-3 flex items-center gap-2">
-          {project.productCategory && (
+          {project.product_category && (
             <span className="inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-600 ring-1 ring-inset ring-gray-500/10">
-              {project.productCategory}
+              {project.product_category}
             </span>
           )}
-          {project.costUsd && parseFloat(project.costUsd) > 0 && (
+          {project.cost_usd && parseFloat(project.cost_usd) > 0 && (
             <span className="text-xs text-gray-500">
-              ${parseFloat(project.costUsd).toFixed(2)}
+              ${parseFloat(project.cost_usd).toFixed(2)}
             </span>
           )}
         </div>
         <p className="mt-2 text-xs text-gray-400">
-          {timeAgo(project.createdAt)}
+          {timeAgo(project.created_at)}
         </p>
       </div>
     </Link>

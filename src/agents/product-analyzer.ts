@@ -1,6 +1,5 @@
+import { SupabaseClient } from '@supabase/supabase-js';
 import { BaseAgent } from './base-agent';
-import { project, aiCharacter } from '@/db/schema';
-import { eq } from 'drizzle-orm';
 import { AVATAR_MAPPING, API_COSTS, PRODUCT_CATEGORIES, type ProductCategory } from '@/lib/constants';
 
 export interface ProductAnalysis {
@@ -51,20 +50,21 @@ RULES:
 - If you cannot access the URL, infer what you can from the URL structure and any provided context`;
 
 export class ProductAnalyzerAgent extends BaseAgent {
-  constructor() {
-    super('ProductAnalyzerAgent');
+  constructor(supabaseClient?: SupabaseClient) {
+    super('ProductAnalyzerAgent', supabaseClient);
   }
 
   async run(projectId: string): Promise<ProductAnalysis> {
     this.log(`Starting analysis for project ${projectId}`);
 
     // 1. Fetch project from DB
-    const proj = await this.db.query.project.findFirst({
-      where: eq(project.id, projectId),
-      with: { character: true },
-    });
+    const { data: proj, error } = await this.supabase
+      .from('project')
+      .select('*, character:ai_character(*)')
+      .eq('id', projectId)
+      .single();
 
-    if (!proj) {
+    if (error || !proj) {
       throw new Error(`Project not found: ${projectId}`);
     }
 
@@ -124,21 +124,21 @@ export class ProductAnalyzerAgent extends BaseAgent {
   }
 
   private buildUserPrompt(proj: {
-    productUrl: string;
-    productName: string | null;
-    productCategory: string | null;
-    productData: unknown;
+    product_url: string;
+    product_name: string | null;
+    product_category: string | null;
+    product_data: unknown;
   }): string {
-    let prompt = `Analyze this TikTok Shop product page and extract structured data:\n\nProduct URL: ${proj.productUrl}`;
+    let prompt = `Analyze this TikTok Shop product page and extract structured data:\n\nProduct URL: ${proj.product_url}`;
 
-    if (proj.productName) {
-      prompt += `\nKnown product name: ${proj.productName}`;
+    if (proj.product_name) {
+      prompt += `\nKnown product name: ${proj.product_name}`;
     }
-    if (proj.productCategory) {
-      prompt += `\nKnown category: ${proj.productCategory}`;
+    if (proj.product_category) {
+      prompt += `\nKnown category: ${proj.product_category}`;
     }
-    if (proj.productData && typeof proj.productData === 'object') {
-      prompt += `\nExisting product data: ${JSON.stringify(proj.productData)}`;
+    if (proj.product_data && typeof proj.product_data === 'object') {
+      prompt += `\nExisting product data: ${JSON.stringify(proj.product_data)}`;
     }
 
     return prompt;

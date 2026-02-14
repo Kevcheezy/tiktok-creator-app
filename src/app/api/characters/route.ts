@@ -1,11 +1,16 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/db';
-import { aiCharacter } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { supabase } from '@/db';
 
 export async function GET() {
-  const characters = await db.query.aiCharacter.findMany({
-    where: eq(aiCharacter.status, 'Active'),
-  });
+  const { data: characters, error } = await supabase
+    .from('ai_character')
+    .select('*')
+    .eq('status', 'Active');
+
+  if (error) {
+    console.error('Error listing characters:', error);
+    return NextResponse.json({ error: 'Failed to list characters' }, { status: 500 });
+  }
+
   return NextResponse.json(characters);
 }
