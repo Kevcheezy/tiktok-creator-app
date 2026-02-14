@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "worker": "npx tsx src/workers/pipeline.worker.ts"
+    "worker": "npx tsx --tsconfig tsconfig.json src/workers/pipeline.worker.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.95.3",
