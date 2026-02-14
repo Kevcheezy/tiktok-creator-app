@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { project } from '@/db/schema';
-import { pipelineQueue } from '@/lib/queue';
+import { getPipelineQueue } from '@/lib/queue';
 import { desc } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
       .returning();
 
     // Enqueue product analysis job
-    await pipelineQueue.add('product_analysis', {
+    await getPipelineQueue().add('product_analysis', {
       projectId: newProject.id,
       step: 'product_analysis',
     });

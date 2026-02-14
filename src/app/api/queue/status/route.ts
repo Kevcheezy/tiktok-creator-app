@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { pipelineQueue } from '@/lib/queue';
+import { getPipelineQueue } from '@/lib/queue';
 
 export async function GET(request: NextRequest) {
   const projectId = request.nextUrl.searchParams.get('projectId');
@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Find the most recent job for this project
-  const jobs = await pipelineQueue.getJobs(
+  const jobs = await getPipelineQueue().getJobs(
     ['waiting', 'active', 'completed', 'failed', 'delayed'],
     0,
     50
