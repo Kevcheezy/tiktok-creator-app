@@ -102,7 +102,7 @@ Full roadmap at `docs/PRODUCT_ROADMAP.md`. Current priority order:
 - ~~B0.1-B0.11~~ ALL FIXED
 
 **Tier 1 (NOW): Complete the Pipeline**
-- R1.5 Product Versioning (semver, version in logs/UI/deployments, git tags)
+- ~~R1.5~~ DONE — Product Versioning (v0.2.0, /api/version, nav display, worker logs, git tag)
 - R1.4 Pipeline Observability & Logging (Pino structured logging, generation_log table, API call audit trail, correlation IDs)
 - R1.1 Complete Asset Generation (influencer selection gate, product interaction prompts, product image requirement, worker recovery)
 - R1.2 Video Composition + Run Archive (Phase 4 - EditorAgent, handle `editing` status)
