@@ -16,10 +16,10 @@ export class EditorAgent extends BaseAgent {
     await this.logEvent(projectId, 'stage_start', 'editing');
     this.log(`Starting editing for project ${projectId}`);
 
-    // 1. Fetch all completed video and audio assets
+    // 1. Fetch all completed video and audio assets with scene text overlays
     const { data: assets, error } = await this.supabase
       .from('asset')
-      .select('*, scene:scene(segment_index)')
+      .select('*, scene:scene(segment_index, text_overlay)')
       .eq('project_id', projectId)
       .in('type', ['video', 'audio'])
       .eq('status', 'completed');
@@ -29,6 +29,7 @@ export class EditorAgent extends BaseAgent {
 
     // 2. Build modifications map for Creatomate template
     const modifications: Record<string, string> = {};
+    const textOverlays = new Map<number, string>();
 
     for (const asset of assets) {
       const segIdx = asset.scene?.segment_index;
@@ -42,6 +43,16 @@ export class EditorAgent extends BaseAgent {
       } else if (asset.type === 'audio') {
         modifications[`Audio-${slotNum}`] = asset.url;
       }
+
+      // Collect text overlays from scene data (deduplicated by segment)
+      if (asset.scene?.text_overlay && !textOverlays.has(segIdx)) {
+        textOverlays.set(segIdx, asset.scene.text_overlay);
+      }
+    }
+
+    // Add text overlay modifications for each segment
+    for (const [segIdx, text] of textOverlays) {
+      modifications[`Text-${segIdx + 1}`] = text;
     }
 
     this.log(`Template modifications: ${JSON.stringify(Object.keys(modifications))}`);

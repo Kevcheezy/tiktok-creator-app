@@ -51,6 +51,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   const [deleting, setDeleting] = useState(false);
   const [finalVideoUrl, setFinalVideoUrl] = useState('');
   const [archived, setArchived] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const fetchProject = useCallback(async () => {
     try {
@@ -365,6 +366,22 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
                 </svg>
                 Download Video
               </a>
+            )}
+            {finalVideoUrl && (
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(finalVideoUrl);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+                className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2.5 font-[family-name:var(--font-display)] text-sm font-medium text-text-secondary transition-colors hover:text-electric hover:border-electric/30"
+              >
+                <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round">
+                  <rect x="5" y="5" width="9" height="9" rx="1.5" />
+                  <path d="M11 5V3.5A1.5 1.5 0 009.5 2h-6A1.5 1.5 0 002 3.5v6A1.5 1.5 0 003.5 11H5" />
+                </svg>
+                {copied ? 'Copied!' : 'Copy Link'}
+              </button>
             )}
             <button
               onClick={handleArchive}

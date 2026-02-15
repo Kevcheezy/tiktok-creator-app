@@ -138,16 +138,17 @@ These are blocking items. Nothing else matters until a user can go from product 
 #### R1.2 - Video Composition (Phase 4 - EditorAgent)
 **Priority:** P0 - Critical
 **Effort:** Large
-**Why:** The final deliverable. Without this, users have raw assets but no finished video. Currently the `editing` status exists in the pipeline but has zero UI or backend handling — the product dead-ends at `asset_review`.
+**Status:** Complete (2026-02-15)
+**Why:** The final deliverable — composing raw assets into a finished video.
 
-- [ ] EditorAgent: Compose 4 video segments + voiceover audio + text overlays into 60s video
-- [ ] Integration with Creatomate (or FFmpeg as fallback)
-- [ ] Text overlay rendering (hook text, CTA text from script)
-- [ ] Transition effects between segments
-- [ ] Handle `editing` status in ProjectDetail UI (currently shows blank — no component, no progress indicator)
-- [ ] Final review page: video player, download button, share link
-- [ ] Render status tracking and progress indicator
-- [ ] **Run archive:** On final approval, persist the completed run as an immutable record — snapshot the full "recipe" (product data, script version, tone, avatar, template, hook score, all asset URLs, final video URL, total cost) into a `completed_run` record. This is the unit of measurement for everything downstream.
+- [x] EditorAgent: Compose 4 video segments + voiceover audio + text overlays into 60s video — fetches completed video/audio assets, maps to Creatomate template slots (Video-1..4, Audio-1..4, Text-1..4), polls render, creates `final_video` asset
+- [x] Integration with Creatomate — CreatomateClient with `renderVideo()`, `getRenderStatus()`, `pollRender()`, structured logging
+- [x] Text overlay rendering (hook text, CTA text from script) — EditorAgent passes `Text-N` modifications from `scene.text_overlay` to Creatomate template
+- [x] Transition effects between segments — handled by Creatomate template (`85021700-850c-49cf-a65f-06aa50e720e6`)
+- [x] Handle `editing` status in ProjectDetail UI — StageProgress shows "Composing Final Video" spinner, progress bar, elapsed timer
+- [x] Final review page: video player, download button, share link — HTML5 video player (9:16), download button, copy link button, recipe summary
+- [x] Render status tracking and progress indicator — progress API polls final_video asset completion, StageProgress shows generating/completed/failed counts
+- [x] **Run archive:** `POST /api/projects/[id]/archive` snapshots full recipe into `completed_run` table. Archive button in completed UI.
 
 #### R1.3 - Reference Video Intelligence
 **Priority:** P0 - Critical
