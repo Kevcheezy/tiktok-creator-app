@@ -116,5 +116,8 @@ Upstash requires TLS. Both `src/lib/queue.ts` and `src/workers/pipeline.worker.t
 ## Backend Development Rule
 **ALL backend changes MUST use the `backend-developer` skill.** Any work touching API routes (`.ts` in `app/api/`), agents (`src/agents/`), workers (`src/workers/`), lib (`src/lib/`), db (`src/db/`), middleware (`src/middleware.ts`), or Supabase migrations must invoke the `backend-developer` skill first. This applies to both direct work and subagent-dispatched work. The skill enforces the superpowers workflow: brainstorm → plan → execute → verify. The skill is at `.claude/skills/backend-developer/SKILL.md`.
 
+## Debugger Rule
+**When the user asks to investigate, debug, or diagnose a pipeline failure, invoke the `debugger` skill.** Trigger words: "investigate", "debug", "diagnose", "what went wrong", "why did it fail", "check the logs", "look into this failure". The debugger skill is read-only — it queries `generation_log`, `project`, `asset`, `script`, and `scene` tables (SELECT only) and reads source code to produce a diagnosis report. It never modifies code or data. The skill is at `.claude/skills/debugger/SKILL.md`.
+
 ## Predecessor
 This app replaces the n8n-based orchestration at `../tt_shop_content_creator/`.
