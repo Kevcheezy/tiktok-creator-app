@@ -94,6 +94,10 @@ Changed `num_images` from 1 to 2 in `wavespeed.ts`. Poll result already picks fi
 - Current image remains visible alongside the preview so users can compare before replacing
 - After successful upload, influencer state updates in-place without full page reload
 
+#### ~~B0.12 - Influencer Image Upload Fails Silently~~ FIXED
+- Backend: `PATCH /api/influencers/[id]` passed raw `File` object to `supabase.storage.upload()` — incompatible in Node.js. Fixed by converting to `Buffer` via `Buffer.from(await file.arrayBuffer())` with explicit `contentType`, matching the working product-image upload pattern.
+- Frontend: `catch { // silently fail }` swallowed errors. Added `uploadStatus` state with success/error feedback messages that auto-clear after 3 seconds.
+
 #### ~~B0.5 - Project List Stale After Creation~~ FIXED
 Added `router.refresh()` before navigation after project creation to invalidate the client-side Router Cache.
 

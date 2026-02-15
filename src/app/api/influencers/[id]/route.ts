@@ -73,9 +73,10 @@ export async function PATCH(
       // Upload new image
       const ext = (image as File).name.split('.').pop() || 'png';
       const storagePath = `influencers/${id}/reference.${ext}`;
+      const buffer = Buffer.from(await (image as File).arrayBuffer());
       const { error: uploadError } = await supabase.storage
         .from('assets')
-        .upload(storagePath, image as File, { upsert: true });
+        .upload(storagePath, buffer, { contentType: (image as File).type, upsert: true });
 
       if (uploadError) {
         logger.error({ err: uploadError, route: `/api/influencers/${id}` }, 'Error uploading influencer image');

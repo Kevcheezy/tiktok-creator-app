@@ -35,6 +35,7 @@ export function InfluencerDetail({ influencerId }: { influencerId: string }) {
   const [deleting, setDeleting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDelete = useCallback(async () => {
@@ -61,6 +62,7 @@ export function InfluencerDetail({ influencerId }: { influencerId: string }) {
     if (!file) return;
 
     setUploading(true);
+    setUploadStatus('idle');
     try {
       const formData = new FormData();
       formData.append('image', file);
@@ -73,9 +75,12 @@ export function InfluencerDetail({ influencerId }: { influencerId: string }) {
         setInfluencer(updated);
         setPreviewUrl(null);
         if (fileInputRef.current) fileInputRef.current.value = '';
+        setUploadStatus('success');
+      } else {
+        setUploadStatus('error');
       }
     } catch {
-      // silently fail
+      setUploadStatus('error');
     } finally {
       setUploading(false);
     }
@@ -101,6 +106,12 @@ export function InfluencerDetail({ influencerId }: { influencerId: string }) {
         setLoading(false);
       });
   }, [influencerId]);
+
+  useEffect(() => {
+    if (uploadStatus === 'idle') return;
+    const timer = setTimeout(() => setUploadStatus('idle'), 3000);
+    return () => clearTimeout(timer);
+  }, [uploadStatus]);
 
   if (loading) {
     return (
@@ -249,6 +260,18 @@ export function InfluencerDetail({ influencerId }: { influencerId: string }) {
             )}
           </div>
         </div>
+
+        {/* Upload status feedback */}
+        {uploadStatus === 'success' && (
+          <p className="mb-2 font-[family-name:var(--font-display)] text-xs font-medium text-lime">
+            Image updated successfully
+          </p>
+        )}
+        {uploadStatus === 'error' && (
+          <p className="mb-2 font-[family-name:var(--font-display)] text-xs font-medium text-magenta">
+            Failed to upload image
+          </p>
+        )}
 
         {/* Preview of new image (before confirming) */}
         {previewUrl && (
