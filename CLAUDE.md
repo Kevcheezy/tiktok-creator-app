@@ -98,11 +98,8 @@ Upstash requires TLS. Both `src/lib/queue.ts` and `src/workers/pipeline.worker.t
 ## Product Roadmap
 Full roadmap at `docs/PRODUCT_ROADMAP.md`. Current priority order:
 
-**Tier 0 (FIRST): Critical Bugs**
-- ~~B0.1-B0.7~~ ALL FIXED
-- B0.8 CastingAgent crashes: `num_images` param wrong (pipeline blocked at casting)
-- B0.9 No product image captured/validated during analysis (required before casting)
-- B0.10 Failed pipeline has no recovery path (no retry, no rollback to last review gate)
+**Tier 0 (DONE): Critical Bugs**
+- ~~B0.1-B0.11~~ ALL FIXED
 
 **Tier 1 (NOW): Complete the Pipeline**
 - R1.1 Complete Asset Generation (influencer selection gate, product interaction prompts, product image requirement, worker recovery)
@@ -110,7 +107,7 @@ Full roadmap at `docs/PRODUCT_ROADMAP.md`. Current priority order:
 - R1.3 Reference Video Intelligence (make `video_url` input functional)
 
 **Tier 1.5 (POLISH): UX Hardening**
-- R1.5.1 Influencer management completion (edit, image re-upload)
+- R1.5.1 Influencer management completion (edit mode toggle, active-project deletion guard)
 - R1.5.2 Project settings editing (change tone/character at review gates)
 - R1.5.3 Navigation & state consistency (pagination, search, back links)
 - R1.5.4 Error handling & recovery (error boundaries, retry, offline)
@@ -129,7 +126,8 @@ Full roadmap at `docs/PRODUCT_ROADMAP.md`. Current priority order:
 **Before building any new feature, check `docs/PRODUCT_ROADMAP.md`.** Enforce these rules:
 1. **Tier ordering**: Do not start work from a lower tier while higher-tier items remain incomplete. Tier 0 bugs ALWAYS come first.
 2. **Dependency chain**: Check the `Depends on:` field on each roadmap item. Never build a feature before its dependencies are complete. Key dependencies:
-   - R1.1 (Asset Generation) requires B0.8 (num_images fix) and B0.9 (product image) to be fixed first
+   - R1.1 (Asset Generation) requires ~~B0.8~~ ~~B0.9~~ (both fixed)
+   - R1.5.1 (Influencer Management) requires B0.11 (image replacement) to be fixed first
    - R2.0 (Performance Tracking) requires R1.2 (Run Archive) to be built first
    - R2.1 (Hook A/B Testing) requires R2.0 (performance data to measure winners)
    - R2.2 (Trend-Aware Scripts) requires R2.0 (performance data to identify trends)

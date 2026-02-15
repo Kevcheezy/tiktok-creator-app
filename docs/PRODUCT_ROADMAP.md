@@ -64,8 +64,8 @@ FK guard added: DELETE returns 409 if influencer is referenced by projects.
 #### ~~B0.3 - Project Deletion While Pipeline Is Running~~ FIXED
 Status guard added: DELETE returns 409 if project is in an active pipeline status.
 
-#### ~~B0.4 - Influencer CRUD Incomplete: No Edit~~ PARTIAL FIX
-PATCH endpoint added for name/persona text updates only. Image re-upload/replacement still missing — see **B0.11**.
+#### ~~B0.4 - Influencer CRUD Incomplete: No Edit~~ FIXED
+PATCH endpoint added for name/persona text updates (B0.4) and image re-upload/replacement (B0.11). Full CRUD complete.
 
 #### ~~B0.8 - CastingAgent Crashes: WaveSpeed `num_images` Parameter~~ FIXED
 Changed `num_images` from 1 to 2 in `wavespeed.ts`. Poll result already picks first image from the pair via `outputs?.[0]`.
@@ -87,16 +87,12 @@ Changed `num_images` from 1 to 2 in `wavespeed.ts`. Poll result already picks fi
 - FailedRecovery component with "Retry [Stage]" and "Back to [Review Gate]" buttons
 - All existing work (scripts, assets, cost) preserved on both retry and rollback
 
-#### B0.11 - Influencer Image Re-upload / Replacement
-**Severity:** High - Incomplete CRUD on core entity, blocks casting quality
-**What:** The influencer PATCH endpoint (B0.4 fix) only handles text fields (name, persona). There is no way to replace or re-upload an influencer's reference image after creation. The POST creation route handles image upload via FormData + Supabase Storage, but this capability was never added to the update flow.
-**Impact:** If a user uploads a bad reference image (wrong person, low quality, wrong angle), they must delete the influencer and recreate from scratch — losing all project associations (projects with `influencer_id` pointing to the old record). Since the CastingAgent uses the influencer reference image for image-to-image keyframe generation, a bad reference image produces bad keyframes across every project using that influencer.
-**Fix scope:**
-- [ ] Add image upload handling to `PATCH /api/influencers/[id]` — accept FormData with optional image file, upload to Supabase Storage (`influencers/{id}/`), update `image_url` on the record
-- [ ] If replacing an existing image, delete the old file from Supabase Storage to avoid orphaned blobs
-- [ ] Influencer detail page: add "Replace Image" button/zone that opens a file picker, shows preview of new image before confirming, then calls the PATCH endpoint
-- [ ] Show current image alongside the upload zone so users can compare before replacing
-- [ ] After successful replacement, refresh the displayed image without full page reload
+#### ~~B0.11 - Influencer Image Re-upload / Replacement~~ FIXED
+- PATCH `/api/influencers/[id]` now accepts FormData with optional `image` file (alongside text fields `name`, `persona`)
+- Old image is deleted from Supabase Storage before uploading replacement (no orphaned blobs)
+- Influencer detail page: "Replace Image" button opens file picker, shows preview with confirm/cancel before uploading
+- Current image remains visible alongside the preview so users can compare before replacing
+- After successful upload, influencer state updates in-place without full page reload
 
 #### ~~B0.5 - Project List Stale After Creation~~ FIXED
 Added `router.refresh()` before navigation after project creation to invalidate the client-side Router Cache.
@@ -369,10 +365,8 @@ These features separate "generates a video" from "generates a video that sells."
 ## Recommended Execution Order
 
 ```
-FIRST      Tier 0: Critical Bugs
-           B0.11 Influencer image replacement
-           (complete CRUD, unblock casting quality)
-           Note: B0.1-B0.10 all fixed
+DONE       Tier 0: Critical Bugs
+           All bugs fixed (B0.1-B0.11)
 
 NOW        Tier 1: Complete Pipeline
            R1.1 Asset Generation ──→ R1.2 Video Composition + Run Archive ──→ R1.3 Reference Video Intel

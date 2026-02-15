@@ -30,17 +30,64 @@ export async function PATCH(
   const { id } = await params;
 
   try {
-    const body = await request.json();
-    const updates: Record<string, string> = {};
+    const formData = await request.formData();
+    const name = formData.get('name');
+    const persona = formData.get('persona');
+    const image = formData.get('image');
 
-    if (body.name !== undefined) updates.name = body.name;
-    if (body.persona !== undefined) updates.persona = body.persona;
+    const updates: Record<string, string | null> = {};
+    if (name !== null && typeof name === 'string') updates.name = name;
+    if (persona !== null && typeof persona === 'string') updates.persona = persona;
 
-    if (Object.keys(updates).length === 0) {
+    const hasImage = image && image instanceof File && image.size > 0;
+
+    if (Object.keys(updates).length === 0 && !hasImage) {
       return NextResponse.json(
-        { error: 'No valid fields to update (name, persona)' },
+        { error: 'No valid fields to update (name, persona, image)' },
         { status: 400 }
       );
+    }
+
+    // Handle image replacement
+    if (hasImage) {
+      // Fetch existing influencer to find old image path for cleanup
+      const { data: existing } = await supabase
+        .from('influencer')
+        .select('image_url')
+        .eq('id', id)
+        .single();
+
+      // Delete old image from Storage if it exists
+      if (existing?.image_url) {
+        const oldUrl = existing.image_url as string;
+        // Extract storage path from public URL: .../storage/v1/object/public/assets/influencers/...
+        const storageMarker = '/storage/v1/object/public/assets/';
+        const markerIndex = oldUrl.indexOf(storageMarker);
+        if (markerIndex !== -1) {
+          const oldPath = oldUrl.substring(markerIndex + storageMarker.length);
+          await supabase.storage.from('assets').remove([oldPath]);
+        }
+      }
+
+      // Upload new image
+      const ext = (image as File).name.split('.').pop() || 'png';
+      const storagePath = `influencers/${id}/reference.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from('assets')
+        .upload(storagePath, image as File, { upsert: true });
+
+      if (uploadError) {
+        console.error('Error uploading influencer image:', uploadError);
+        return NextResponse.json(
+          { error: 'Failed to upload image' },
+          { status: 500 }
+        );
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from('assets')
+        .getPublicUrl(storagePath);
+      updates.image_url = publicUrlData.publicUrl;
     }
 
     updates.updated_at = new Date().toISOString();

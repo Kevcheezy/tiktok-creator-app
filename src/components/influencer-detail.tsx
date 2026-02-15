@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ConfirmDialog } from './confirm-dialog';
@@ -33,6 +33,9 @@ export function InfluencerDetail({ influencerId }: { influencerId: string }) {
   const [error, setError] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDelete = useCallback(async () => {
     setDeleting(true);
@@ -46,6 +49,42 @@ export function InfluencerDetail({ influencerId }: { influencerId: string }) {
       setShowDeleteConfirm(false);
     }
   }, [influencerId, router]);
+
+  const handleImageSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPreviewUrl(URL.createObjectURL(file));
+  }, []);
+
+  const handleImageUpload = useCallback(async () => {
+    const file = fileInputRef.current?.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      const res = await fetch(`/api/influencers/${influencerId}`, {
+        method: 'PATCH',
+        body: formData,
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setInfluencer(updated);
+        setPreviewUrl(null);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setUploading(false);
+    }
+  }, [influencerId]);
+
+  const handleCancelPreview = useCallback(() => {
+    setPreviewUrl(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }, []);
 
   useEffect(() => {
     fetch(`/api/influencers/${influencerId}`)
@@ -168,9 +207,64 @@ export function InfluencerDetail({ influencerId }: { influencerId: string }) {
 
       {/* Base Image */}
       <div className="rounded-xl border border-border bg-surface p-5">
-        <h2 className="mb-4 font-[family-name:var(--font-display)] text-sm font-semibold uppercase tracking-wider text-text-muted">
-          Reference Image
-        </h2>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="font-[family-name:var(--font-display)] text-sm font-semibold uppercase tracking-wider text-text-muted">
+            Reference Image
+          </h2>
+          <div className="flex items-center gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleImageSelect}
+              className="hidden"
+            />
+            {previewUrl ? (
+              <>
+                <button
+                  type="button"
+                  onClick={handleCancelPreview}
+                  disabled={uploading}
+                  className="rounded-lg border border-border px-3 py-1.5 font-[family-name:var(--font-display)] text-xs font-medium text-text-secondary transition-colors hover:border-border-bright hover:text-text-primary disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleImageUpload}
+                  disabled={uploading}
+                  className="rounded-lg border border-electric/30 bg-electric/10 px-3 py-1.5 font-[family-name:var(--font-display)] text-xs font-medium text-electric transition-colors hover:bg-electric/20 disabled:opacity-50"
+                >
+                  {uploading ? 'Uploading...' : 'Confirm Upload'}
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="rounded-lg border border-border px-3 py-1.5 font-[family-name:var(--font-display)] text-xs font-medium text-text-secondary transition-colors hover:border-electric/40 hover:bg-electric/5 hover:text-electric"
+              >
+                {influencer.image_url ? 'Replace Image' : 'Upload Image'}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Preview of new image (before confirming) */}
+        {previewUrl && (
+          <div className="mb-4 rounded-lg border-2 border-dashed border-electric/40 bg-electric/5 p-3">
+            <p className="mb-2 font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-electric">
+              New Image Preview
+            </p>
+            <img
+              src={previewUrl}
+              alt="New reference preview"
+              className="max-h-64 rounded-lg object-contain"
+            />
+          </div>
+        )}
+
+        {/* Current image */}
         {influencer.image_url ? (
           <div className="relative overflow-hidden rounded-lg border border-border-bright bg-surface-raised">
             <img
@@ -178,7 +272,6 @@ export function InfluencerDetail({ influencerId }: { influencerId: string }) {
               alt={`${influencer.name} reference`}
               className="w-full max-w-lg object-contain"
             />
-            {/* Subtle corner accent */}
             <div className="absolute right-0 top-0 h-16 w-16">
               <div className="absolute right-0 top-0 h-px w-8 bg-gradient-to-l from-magenta/50 to-transparent" />
               <div className="absolute right-0 top-0 h-8 w-px bg-gradient-to-b from-magenta/50 to-transparent" />
