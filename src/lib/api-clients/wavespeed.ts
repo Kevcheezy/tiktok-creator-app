@@ -53,22 +53,21 @@ export class WaveSpeedClient {
     userPrompt: string,
     options: ChatCompletionOptions = {}
   ): Promise<string> {
-    const { model = 'gemini-2.5-flash', temperature = 0.7, maxTokens = 4096 } = options;
+    const { model = 'google/gemini-2.5-flash', temperature = 0.7, maxTokens = 4096 } = options;
 
-    const data = await this.request('/v1/chat/completions', {
+    const data = await this.request('/api/v3/wavespeed-ai/any-llm', {
       method: 'POST',
       body: JSON.stringify({
+        prompt: userPrompt,
+        system_prompt: systemPrompt,
         model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
         temperature,
         max_tokens: maxTokens,
+        enable_sync_mode: true,
       }),
     });
 
-    return data.choices?.[0]?.message?.content || '';
+    return data.data?.outputs?.[0] || '';
   }
 
   async generateImage(prompt: string, _options?: ImageOptions): Promise<{ taskId: string }> {

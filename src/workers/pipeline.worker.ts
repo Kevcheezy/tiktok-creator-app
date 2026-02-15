@@ -1,4 +1,5 @@
-import 'dotenv/config';
+import { config } from 'dotenv';
+config({ path: '.env.local' });
 import { Worker, Job } from 'bullmq';
 import { createClient } from '@supabase/supabase-js';
 import IORedis from 'ioredis';
