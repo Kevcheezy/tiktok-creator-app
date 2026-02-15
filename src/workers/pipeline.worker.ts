@@ -77,16 +77,21 @@ async function handleProductAnalysis(projectId: string) {
     const agent = new ProductAnalyzerAgent(supabase);
     const analysis = await agent.run(projectId);
 
-    // Store results
+    // Store results (including extracted product image URL if available)
+    const updateData: Record<string, unknown> = {
+      status: 'analysis_review',
+      product_data: analysis,
+      product_name: analysis.product_name,
+      product_category: analysis.category,
+      updated_at: new Date().toISOString(),
+    };
+    if (analysis.product_image_url) {
+      updateData.product_image_url = analysis.product_image_url;
+    }
+
     await supabase
       .from('project')
-      .update({
-        status: 'analysis_review',
-        product_data: analysis,
-        product_name: analysis.product_name,
-        product_category: analysis.category,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq('id', projectId);
 
     console.log(`[Worker] Product analysis complete for project ${projectId}`);

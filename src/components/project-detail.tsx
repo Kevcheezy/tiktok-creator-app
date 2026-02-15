@@ -15,6 +15,7 @@ interface ProjectData {
   product_url: string;
   product_name: string | null;
   product_category: string | null;
+  product_image_url: string | null;
   product_data: {
     product_name?: string;
     brand?: string;
@@ -252,29 +253,41 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       {project.status === 'analysis_review' && data && (
         <>
           <AnalysisResults data={data} costUsd={project.cost_usd} character={project.character} />
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={handleApproveAnalysis}
-              disabled={approving}
-              className="inline-flex items-center gap-2 rounded-lg bg-lime px-6 py-3 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:shadow-[0_0_32px_rgba(184,255,0,0.25)] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {approving ? (
-                <>
-                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="60" strokeDashoffset="15" strokeLinecap="round" />
-                  </svg>
-                  Approving...
-                </>
-              ) : (
-                <>
-                  <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="3.5 8 6.5 11 12.5 5" />
-                  </svg>
-                  Approve &amp; Generate Script
-                </>
-              )}
-            </button>
+          <ProductImageSection
+            projectId={projectId}
+            productImageUrl={project.product_image_url || data.product_image_url || null}
+            onImageUpdated={fetchProject}
+          />
+          <div className="flex items-center justify-between gap-4">
+            {!project.product_image_url && !data.product_image_url && (
+              <p className="text-sm text-amber-hot">
+                A product image is required before proceeding.
+              </p>
+            )}
+            <div className="ml-auto">
+              <button
+                type="button"
+                onClick={handleApproveAnalysis}
+                disabled={approving || (!project.product_image_url && !data.product_image_url)}
+                className="inline-flex items-center gap-2 rounded-lg bg-lime px-6 py-3 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:shadow-[0_0_32px_rgba(184,255,0,0.25)] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {approving ? (
+                  <>
+                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="60" strokeDashoffset="15" strokeLinecap="round" />
+                    </svg>
+                    Approving...
+                  </>
+                ) : (
+                  <>
+                    <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="3.5 8 6.5 11 12.5 5" />
+                    </svg>
+                    Approve &amp; Generate Script
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </>
       )}
@@ -607,6 +620,134 @@ function AnalysisResults({ data, costUsd, character }: AnalysisResultsProps) {
           </h3>
           <p className="text-sm leading-relaxed text-text-secondary">{data.avatar_description}</p>
         </div>
+      )}
+    </div>
+  );
+}
+
+/* ==============================
+   Product Image Section
+   ============================== */
+
+interface ProductImageSectionProps {
+  projectId: string;
+  productImageUrl: string | null;
+  onImageUpdated: () => void;
+}
+
+function ProductImageSection({ projectId, productImageUrl, onImageUpdated }: ProductImageSectionProps) {
+  const [uploading, setUploading] = useState(false);
+  const [imageError, setImageError] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+
+  const hasValidImage = !!productImageUrl && !imageError;
+
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    setUploadError('');
+
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+
+      const res = await fetch(`/api/projects/${projectId}/product-image`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Upload failed');
+      }
+
+      setImageError(false);
+      onImageUpdated();
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setUploading(false);
+      // Reset input so same file can be re-selected
+      e.target.value = '';
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-border bg-surface p-5">
+      <h3 className="mb-3 font-[family-name:var(--font-display)] text-xs font-semibold uppercase tracking-wider text-text-muted">
+        Product Image
+      </h3>
+
+      {hasValidImage ? (
+        <div className="flex items-start gap-5">
+          <div className="relative h-32 w-32 flex-shrink-0 overflow-hidden rounded-lg border border-border bg-void">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={productImageUrl}
+              alt="Product"
+              className="h-full w-full object-contain"
+              onError={() => setImageError(true)}
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <p className="text-sm text-text-secondary">
+              Image extracted from product page.
+            </p>
+            <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text-muted transition-colors hover:border-electric/30 hover:text-electric">
+              {uploading ? 'Uploading...' : 'Replace Image'}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleUpload}
+                disabled={uploading}
+              />
+            </label>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-amber-hot/30 bg-amber-hot/5 p-6">
+          <svg viewBox="0 0 24 24" fill="none" className="h-8 w-8 text-amber-hot" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="3" />
+            <circle cx="8.5" cy="8.5" r="1.5" />
+            <path d="M21 15l-5-5L5 21" />
+          </svg>
+          <p className="text-center text-sm text-text-secondary">
+            {productImageUrl && imageError
+              ? 'The extracted image could not be loaded. Please upload a product image.'
+              : 'No product image found. Upload one to continue.'}
+          </p>
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-amber-hot px-4 py-2 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:shadow-[0_0_24px_rgba(255,160,0,0.3)]">
+            {uploading ? (
+              <>
+                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="60" strokeDashoffset="15" strokeLinecap="round" />
+                </svg>
+                Uploading...
+              </>
+            ) : (
+              <>
+                <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+                  <path d="M8 12V4M4 7l4-4 4 4M2 14h12" />
+                </svg>
+                Upload Product Image
+              </>
+            )}
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleUpload}
+              disabled={uploading}
+            />
+          </label>
+        </div>
+      )}
+
+      {uploadError && (
+        <p className="mt-2 text-sm text-magenta">{uploadError}</p>
       )}
     </div>
   );

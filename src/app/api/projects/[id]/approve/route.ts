@@ -21,12 +21,20 @@ export async function POST(
     // Fetch current project status
     const { data: proj, error } = await supabase
       .from('project')
-      .select('id, status')
+      .select('id, status, product_image_url')
       .eq('id', id)
       .single();
 
     if (error || !proj) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    }
+
+    // Gate: require product image before progressing past analysis_review
+    if (proj.status === 'analysis_review' && !proj.product_image_url) {
+      return NextResponse.json(
+        { error: 'A product image is required before proceeding. Upload one or verify the extracted image.' },
+        { status: 400 }
+      );
     }
 
     // Map review status to next pipeline step

@@ -83,16 +83,13 @@ Upstash requires TLS. Both `src/lib/queue.ts` and `src/workers/pipeline.worker.t
 Full roadmap at `docs/PRODUCT_ROADMAP.md`. Current priority order:
 
 **Tier 0 (FIRST): Critical Bugs**
-- B0.1 Asset grading endpoint missing (feature broken)
-- B0.2 Influencer deletion FK integrity
-- B0.3 Pipeline status guards on deletion
-- B0.4 Influencer edit capability (no PATCH)
-- B0.5 Stale project list after creation
-- B0.6 Cost tracking on regeneration
-- B0.7 Schema documentation drift
+- ~~B0.1-B0.7~~ ALL FIXED
+- B0.8 CastingAgent crashes: `num_images` param wrong (pipeline blocked at casting)
+- B0.9 No product image captured/validated during analysis (required before casting)
+- B0.10 Failed pipeline has no recovery path (no retry, no rollback to last review gate)
 
 **Tier 1 (NOW): Complete the Pipeline**
-- R1.1 Complete Asset Generation (finish Phase 3, worker recovery, cost confirmations)
+- R1.1 Complete Asset Generation (influencer selection gate, product interaction prompts, product image requirement, worker recovery)
 - R1.2 Video Composition + Run Archive (Phase 4 - EditorAgent, handle `editing` status)
 - R1.3 Reference Video Intelligence (make `video_url` input functional)
 
@@ -116,7 +113,7 @@ Full roadmap at `docs/PRODUCT_ROADMAP.md`. Current priority order:
 **Before building any new feature, check `docs/PRODUCT_ROADMAP.md`.** Enforce these rules:
 1. **Tier ordering**: Do not start work from a lower tier while higher-tier items remain incomplete. Tier 0 bugs ALWAYS come first.
 2. **Dependency chain**: Check the `Depends on:` field on each roadmap item. Never build a feature before its dependencies are complete. Key dependencies:
-   - R1.1 (Asset Generation) requires B0.1 (asset grading endpoint) to be fixed first
+   - R1.1 (Asset Generation) requires B0.8 (num_images fix) and B0.9 (product image) to be fixed first
    - R2.0 (Performance Tracking) requires R1.2 (Run Archive) to be built first
    - R2.1 (Hook A/B Testing) requires R2.0 (performance data to measure winners)
    - R2.2 (Trend-Aware Scripts) requires R2.0 (performance data to identify trends)
@@ -128,6 +125,9 @@ Full roadmap at `docs/PRODUCT_ROADMAP.md`. Current priority order:
 
 ## Frontend Design Rule
 **ALL frontend changes MUST use the `frontend-designer` skill.** Any work touching `.tsx` files, pages, components, or styling must invoke `/frontend-designer` first. This applies to both direct work and subagent-dispatched work. The skill is at `.claude/skills/frontend-designer/SKILL.md`.
+
+## Backend Development Rule
+**ALL backend changes MUST use the `backend-developer` skill.** Any work touching API routes (`.ts` in `app/api/`), agents (`src/agents/`), workers (`src/workers/`), lib (`src/lib/`), db (`src/db/`), middleware (`src/middleware.ts`), or Supabase migrations must invoke the `backend-developer` skill first. This applies to both direct work and subagent-dispatched work. The skill enforces the superpowers workflow: brainstorm → plan → execute → verify. The skill is at `.claude/skills/backend-developer/SKILL.md`.
 
 ## Predecessor
 This app replaces the n8n-based orchestration at `../tt_shop_content_creator/`.

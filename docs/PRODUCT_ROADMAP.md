@@ -67,21 +67,28 @@ Status guard added: DELETE returns 409 if project is in an active pipeline statu
 #### ~~B0.4 - Influencer CRUD Incomplete: No Edit~~ FIXED
 PATCH endpoint added for name/persona updates.
 
-#### B0.8 - CastingAgent Crashes: WaveSpeed `num_images` Parameter
-**Severity:** Critical - Pipeline completely blocked at casting stage
-**What:** `src/lib/api-clients/wavespeed.ts` sends `num_images: 1` to the Nano Banana Pro API, but the API only accepts `num_images: 2`. Every attempt to generate keyframes returns a 400 error: `"Error at /num_images: value is not one of the allowed values [2]"`.
-**Impact:** The entire pipeline is dead from `script_review` onward. No user can progress past scripting. Since the API returns 2 images, the response handler also needs to pick the best image from the pair.
+#### ~~B0.8 - CastingAgent Crashes: WaveSpeed `num_images` Parameter~~ FIXED
+Changed `num_images` from 1 to 2 in `wavespeed.ts`. Poll result already picks first image from the pair via `outputs?.[0]`.
 
-#### B0.9 - No Product Image Captured During Analysis
-**Severity:** High - Missing data for downstream agents
-**What:** The ProductAnalyzerAgent extracts a `product_image_url` field and an `image_description_for_nano_banana_pro` text prompt, but: (a) the extracted URL is often empty or broken (TikTok product pages use dynamic image loading), (b) the image URL is stored in `product_data` JSONB but never validated or displayed to the user, (c) there's no fallback upload path if the URL is missing. The CastingAgent needs a real product image to generate accurate keyframes showing the product.
-**Impact:** Keyframes are generated with AI-imagined products instead of the real product. This produces off-brand, unrecognizable product shots that won't convert.
+#### ~~B0.9 - No Product Image Captured During Analysis~~ FIXED
+- Added `product_image_url` column to `project` table (migration applied)
+- Pipeline worker saves extracted image URL to project column during analysis
+- Analysis review UI displays product image with preview
+- Upload fallback via `POST /api/projects/[id]/product-image` (stores in Supabase Storage `assets/products/{id}/`)
+- Broken/missing image shows upload prompt with amber warning styling
+- Hard gate: approve button disabled without a valid product image; API returns 400 if no image present
+
+#### B0.10 - Failed Pipeline Has No Recovery Path
+**Severity:** Critical - Complete dead end
+**What:** When the pipeline fails at any stage (e.g., casting crash from B0.8), the project status is set to `failed` and the user sees the error message, but there is no way to recover. No "Retry" button, no "Go back to last review stage" option. The only option is to delete the project and start from scratch, losing all prior work (analysis, approved script, etc.).
+**Impact:** Every pipeline failure forces the user to redo the entire workflow from product URL entry. For failures at late stages (directing, voiceover), this wastes minutes of work and real API costs ($0.01-$5+). This is the single biggest UX frustration for any user hitting a transient error.
 **Fix scope:**
-- [ ] Display `product_image_url` in the analysis review UI (show the image, not just the URL)
-- [ ] If image URL is missing or broken (404), show a product image upload prompt at `analysis_review`
-- [ ] Store uploaded product images in Supabase Storage (`products/{project_id}/product.{ext}`)
-- [ ] Add `product_image_url` as a validated field on the project record (not just buried in JSONB)
-- [ ] **Hard gate:** Do not allow progression past `analysis_review` without a valid product image (either extracted or uploaded)
+- [ ] Add a "Retry" button on failed projects that re-enqueues the failed stage (e.g., if casting failed, retry casting with same inputs)
+- [ ] Add a "Back to [last review stage]" button that resets status to the previous human gate (e.g., failed at casting → go back to `script_review`, failed at directing → go back to `casting_review`)
+- [ ] Preserve all existing work: scripts, assets generated before failure, cost tracking
+- [ ] Show which stage failed in the pipeline progress UI (highlight the failed step in red, not just the generic "FAILED" badge)
+- [ ] API: `POST /api/projects/[id]/retry` — re-enqueue the last attempted stage
+- [ ] API: `POST /api/projects/[id]/rollback` — reset status to the previous review gate
 
 #### ~~B0.5 - Project List Stale After Creation~~ FIXED
 Added `router.refresh()` before navigation after project creation to invalidate the client-side Router Cache.
@@ -101,7 +108,7 @@ These are blocking items. Nothing else matters until a user can go from product 
 #### R1.1 - Complete Asset Generation (Phase 3)
 **Priority:** P0 - Critical
 **Effort:** Medium-Large
-**Depends on:** B0.1 (asset grading), B0.8 (num_images fix), B0.9 (product image)
+**Depends on:** ~~B0.1~~ ~~B0.8~~ ~~B0.9~~ (all fixed)
 **Why:** Without this, the product is a script generator, not a video creator.
 
 **Pre-casting gate (new review step between script_review and casting):**
@@ -354,9 +361,9 @@ These features separate "generates a video" from "generates a video that sells."
 
 ```
 FIRST      Tier 0: Critical Bugs
-           B0.8 num_images fix ──→ B0.9 Product image capture
-           (pipeline unblocked)    (required for casting)
-           Note: B0.1-B0.7 all fixed
+           B0.10 Failed pipeline recovery
+           (retry/rollback on failure)
+           Note: B0.1-B0.9 all fixed
 
 NOW        Tier 1: Complete Pipeline
            R1.1 Asset Generation ──→ R1.2 Video Composition + Run Archive ──→ R1.3 Reference Video Intel

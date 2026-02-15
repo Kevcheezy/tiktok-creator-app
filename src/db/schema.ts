@@ -77,6 +77,7 @@ export const project = pgTable('project', {
   productName: text('product_name'),
   productCategory: text('product_category'),
   productData: jsonb('product_data'),
+  productImageUrl: text('product_image_url'),
   characterId: uuid('character_id').references(() => aiCharacter.id),
   scriptTemplateId: uuid('script_template_id').references(() => scriptTemplate.id),
   tone: text('tone').default('reluctant-insider'),
