@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/db';
 import { countTextSyllables } from '@/lib/syllables';
+import { logger } from '@/lib/logger';
 
 // PATCH /api/projects/[id]/scripts/[scriptId]/segments/[segmentIndex]
 // Body: { script_text?: string, text_overlay?: string }
@@ -117,7 +118,7 @@ export async function PATCH(
 
     return NextResponse.json(newScene);
   } catch (error) {
-    console.error('Error editing segment:', error);
+    logger.error({ err: error, route: '/api/projects/[id]/scripts/[scriptId]/segments/[segmentIndex]' }, 'Error editing segment');
     return NextResponse.json(
       { error: 'Failed to edit segment' },
       { status: 500 }
@@ -174,7 +175,7 @@ export async function GET(
 
     return NextResponse.json(versions || []);
   } catch (error) {
-    console.error('Error fetching segment history:', error);
+    logger.error({ err: error, route: '/api/projects/[id]/scripts/[scriptId]/segments/[segmentIndex]' }, 'Error fetching segment history');
     return NextResponse.json(
       { error: 'Failed to fetch segment history' },
       { status: 500 }

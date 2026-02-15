@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/db';
 import { getPipelineQueue } from '@/lib/queue';
+import { logger } from '@/lib/logger';
 
 /**
  * POST /api/projects/[id]/approve
@@ -94,7 +95,7 @@ export async function POST(
       nextStep: next.step,
     });
   } catch (error) {
-    console.error('Error approving project:', error);
+    logger.error({ err: error, route: '/api/projects/[id]/approve' }, 'Error approving project');
     return NextResponse.json(
       { error: 'Failed to approve project' },
       { status: 500 }

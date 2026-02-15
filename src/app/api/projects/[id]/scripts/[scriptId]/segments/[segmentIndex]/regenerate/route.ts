@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/db';
 import { ScriptingAgent } from '@/agents/scripting-agent';
+import { logger } from '@/lib/logger';
 
 // POST /api/projects/[id]/scripts/[scriptId]/segments/[segmentIndex]/regenerate
 // Body: { tone?: string, feedback?: string }
@@ -52,7 +53,7 @@ export async function POST(
 
     return NextResponse.json(result);
   } catch (error) {
-    console.error('Error regenerating segment:', error);
+    logger.error({ err: error, route: '/api/projects/[id]/scripts/[scriptId]/segments/[segmentIndex]/regenerate' }, 'Error regenerating segment');
     return NextResponse.json(
       { error: 'Failed to regenerate segment' },
       { status: 500 }

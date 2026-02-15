@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/db';
+import { logger } from '@/lib/logger';
 
 export async function GET() {
   const { data: characters, error } = await supabase
@@ -8,7 +9,7 @@ export async function GET() {
     .eq('status', 'Active');
 
   if (error) {
-    console.error('Error listing characters:', error);
+    logger.error({ err: error, route: '/api/characters' }, 'Error listing characters');
     return NextResponse.json({ error: 'Failed to list characters' }, { status: 500 });
   }
 

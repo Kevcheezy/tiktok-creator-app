@@ -1,10 +1,14 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { WaveSpeedClient } from '@/lib/api-clients/wavespeed';
+import { createLogger, logToGenerationLog } from '@/lib/logger';
+import type pino from 'pino';
 
 export abstract class BaseAgent {
   protected supabase: SupabaseClient;
   protected wavespeed: WaveSpeedClient;
   protected agentName: string;
+  protected correlationId?: string;
+  private _logger: pino.Logger;
 
   constructor(agentName: string, supabaseClient?: SupabaseClient) {
     this.agentName = agentName;
@@ -13,10 +17,47 @@ export abstract class BaseAgent {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
     this.wavespeed = new WaveSpeedClient();
+    this._logger = createLogger({ agentName });
   }
 
-  protected log(message: string): void {
-    console.log(`[${this.agentName}] ${message}`);
+  /**
+   * Set the correlation ID for this agent run.
+   * Updates the internal logger bindings as well.
+   */
+  setCorrelationId(correlationId: string): void {
+    this.correlationId = correlationId;
+    this._logger = createLogger({
+      agentName: this.agentName,
+      correlationId,
+    });
+  }
+
+  protected log(message: string, extra?: Record<string, unknown>): void {
+    if (extra) {
+      this._logger.info(extra, message);
+    } else {
+      this._logger.info(message);
+    }
+  }
+
+  /**
+   * Persist an event to the generation_log table.
+   * Requires a projectId to be known. Fire-and-forget.
+   */
+  protected async logEvent(
+    projectId: string,
+    eventType: string,
+    stage: string,
+    detail: Record<string, unknown> = {}
+  ): Promise<void> {
+    await logToGenerationLog(this.supabase, {
+      project_id: projectId,
+      correlation_id: this.correlationId,
+      event_type: eventType,
+      agent_name: this.agentName,
+      stage,
+      detail,
+    });
   }
 
   protected async trackCost(projectId: string, amount: number): Promise<void> {

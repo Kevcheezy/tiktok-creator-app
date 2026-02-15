@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/db';
+import { logger } from '@/lib/logger';
 
 /**
  * POST /api/projects/[id]/rollback
@@ -63,7 +64,7 @@ export async function POST(
       rolledBackTo: rollbackTo,
     });
   } catch (error) {
-    console.error('Error rolling back project:', error);
+    logger.error({ err: error, route: '/api/projects/[id]/rollback' }, 'Error rolling back project');
     return NextResponse.json({ error: 'Failed to rollback' }, { status: 500 });
   }
 }

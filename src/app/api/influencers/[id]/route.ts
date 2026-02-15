@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/db';
+import { logger } from '@/lib/logger';
 
 export async function GET(
   _request: NextRequest,
@@ -77,7 +78,7 @@ export async function PATCH(
         .upload(storagePath, image as File, { upsert: true });
 
       if (uploadError) {
-        console.error('Error uploading influencer image:', uploadError);
+        logger.error({ err: uploadError, route: `/api/influencers/${id}` }, 'Error uploading influencer image');
         return NextResponse.json(
           { error: 'Failed to upload image' },
           { status: 500 }
@@ -108,7 +109,7 @@ export async function PATCH(
 
     return NextResponse.json(updated);
   } catch (error) {
-    console.error('Error updating influencer:', error);
+    logger.error({ err: error, route: `/api/influencers/[id]` }, 'Error updating influencer');
     return NextResponse.json(
       { error: 'Failed to update influencer' },
       { status: 500 }
@@ -142,13 +143,13 @@ export async function DELETE(
       .eq('id', id);
 
     if (error) {
-      console.error('Error deleting influencer:', error);
+      logger.error({ err: error, route: `/api/influencers/[id]` }, 'Error deleting influencer');
       return NextResponse.json({ error: 'Failed to delete influencer' }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Error deleting influencer:', error);
+    logger.error({ err: error, route: `/api/influencers/[id]` }, 'Error deleting influencer');
     return NextResponse.json({ error: 'Failed to delete influencer' }, { status: 500 });
   }
 }

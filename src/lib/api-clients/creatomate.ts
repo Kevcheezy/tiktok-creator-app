@@ -1,3 +1,8 @@
+import { createLogger, logToGenerationLog } from '@/lib/logger';
+import type { SupabaseClient } from '@supabase/supabase-js';
+
+const logger = createLogger({ agentName: 'CreatomateClient' });
+
 export interface RenderOptions {
   templateId: string;
   modifications: Record<string, string>;
@@ -11,6 +16,12 @@ export interface RenderResult {
   url?: string;
 }
 
+export interface CreatomateCallContext {
+  projectId?: string;
+  correlationId?: string;
+  supabase?: SupabaseClient;
+}
+
 export class CreatomateClient {
   private apiKey: string;
   private baseUrl = 'https://api.creatomate.com/v2';
@@ -18,30 +29,77 @@ export class CreatomateClient {
   constructor(apiKey?: string) {
     this.apiKey = apiKey || process.env.CREATOMATE_API_KEY || '';
     if (!this.apiKey) {
-      console.warn('CreatomateClient: No API key provided');
+      logger.warn('No API key provided');
     }
   }
 
-  private async request(path: string, options: RequestInit = {}): Promise<any> {
+  private async request(path: string, options: RequestInit = {}, context?: CreatomateCallContext): Promise<any> {
     const url = `${this.baseUrl}${path}`;
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.apiKey}`,
-        ...options.headers,
-      },
-    });
+    const start = Date.now();
+    let statusCode: number | undefined;
 
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Creatomate API error (${response.status}): ${error}`);
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.apiKey}`,
+          ...options.headers,
+        },
+      });
+
+      statusCode = response.status;
+      const latencyMs = Date.now() - start;
+
+      if (!response.ok) {
+        const error = await response.text();
+        logger.error(
+          { provider: 'Creatomate', endpoint: path, method: options.method || 'GET', statusCode, latencyMs },
+          `API call failed: ${error}`
+        );
+
+        if (context?.supabase && context?.projectId) {
+          await logToGenerationLog(context.supabase, {
+            project_id: context.projectId,
+            correlation_id: context.correlationId,
+            event_type: 'api_call',
+            agent_name: 'CreatomateClient',
+            detail: { provider: 'Creatomate', endpoint: path, method: options.method || 'GET', statusCode, latencyMs, error },
+          });
+        }
+
+        throw new Error(`Creatomate API error (${response.status}): ${error}`);
+      }
+
+      logger.info(
+        { provider: 'Creatomate', endpoint: path, method: options.method || 'GET', statusCode, latencyMs },
+        'API call completed'
+      );
+
+      if (context?.supabase && context?.projectId) {
+        await logToGenerationLog(context.supabase, {
+          project_id: context.projectId,
+          correlation_id: context.correlationId,
+          event_type: 'api_call',
+          agent_name: 'CreatomateClient',
+          detail: { provider: 'Creatomate', endpoint: path, method: options.method || 'GET', statusCode, latencyMs },
+        });
+      }
+
+      return response.json();
+    } catch (err) {
+      if (statusCode === undefined) {
+        const latencyMs = Date.now() - start;
+        logger.error(
+          { provider: 'Creatomate', endpoint: path, method: options.method || 'GET', error: (err as Error).message, latencyMs },
+          'API call failed (network error)'
+        );
+      }
+      throw err;
     }
-
-    return response.json();
   }
 
-  async renderVideo(options: RenderOptions): Promise<RenderResult> {
+  async renderVideo(options: RenderOptions, context?: CreatomateCallContext): Promise<RenderResult> {
     const body: Record<string, unknown> = {
       template_id: options.templateId,
       modifications: options.modifications,
@@ -53,7 +111,7 @@ export class CreatomateClient {
     const data = await this.request('/renders', {
       method: 'POST',
       body: JSON.stringify(body),
-    });
+    }, context);
 
     // Creatomate returns an array of renders
     const render = Array.isArray(data) ? data[0] : data;
@@ -64,8 +122,8 @@ export class CreatomateClient {
     };
   }
 
-  async getRenderStatus(renderId: string): Promise<RenderResult> {
-    const data = await this.request(`/renders/${renderId}`);
+  async getRenderStatus(renderId: string, context?: CreatomateCallContext): Promise<RenderResult> {
+    const data = await this.request(`/renders/${renderId}`, {}, context);
     return {
       id: data.id,
       status: data.status,
@@ -85,6 +143,8 @@ export class CreatomateClient {
       const result = await this.getRenderStatus(renderId);
 
       if (result.status === 'succeeded') {
+        const totalPollMs = Date.now() - startTime;
+        logger.info({ provider: 'Creatomate', renderId, totalPollMs }, 'Render poll completed successfully');
         return result;
       }
 

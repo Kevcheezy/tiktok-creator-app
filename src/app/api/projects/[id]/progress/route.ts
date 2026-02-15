@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/db';
+import { logger } from '@/lib/logger';
 
 /**
  * GET /api/projects/[id]/progress
@@ -100,7 +101,7 @@ export async function GET(
       startedAt: proj.updated_at,
     });
   } catch (error) {
-    console.error('Error fetching progress:', error);
+    logger.error({ err: error, route: '/api/projects/[id]/progress' }, 'Error fetching progress');
     return NextResponse.json({ error: 'Failed to fetch progress' }, { status: 500 });
   }
 }

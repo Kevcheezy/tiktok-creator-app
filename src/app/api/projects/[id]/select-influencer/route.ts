@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/db';
 import { getPipelineQueue } from '@/lib/queue';
+import { logger } from '@/lib/logger';
 
 /**
  * POST /api/projects/[id]/select-influencer
@@ -87,7 +88,7 @@ export async function POST(
       nextStep: 'casting',
     });
   } catch (error) {
-    console.error('Error selecting influencer:', error);
+    logger.error({ err: error, route: '/api/projects/[id]/select-influencer' }, 'Error selecting influencer');
     return NextResponse.json(
       { error: 'Failed to select influencer' },
       { status: 500 }

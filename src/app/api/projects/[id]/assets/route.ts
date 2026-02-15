@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/db';
+import { logger } from '@/lib/logger';
 
 interface AssetWithScene {
   id: string;
@@ -40,7 +41,7 @@ export async function GET(
       .order('created_at', { ascending: true });
 
     if (error) {
-      console.error('Error fetching assets:', error);
+      logger.error({ err: error, route: '/api/projects/[id]/assets' }, 'Error fetching assets');
       return NextResponse.json({ error: 'Failed to fetch assets' }, { status: 500 });
     }
 
@@ -55,7 +56,7 @@ export async function GET(
 
     return NextResponse.json({ assets: typedAssets, bySegment });
   } catch (error) {
-    console.error('Error fetching assets:', error);
+    logger.error({ err: error, route: '/api/projects/[id]/assets' }, 'Error fetching assets');
     return NextResponse.json(
       { error: 'Failed to fetch assets' },
       { status: 500 }
@@ -70,11 +71,12 @@ export async function PATCH(
   const { id } = await params;
 
   try {
-    const { assetId, grade } = await request.json();
+    const body = await request.json();
+    const { assetId, grade, action } = body;
 
-    if (!assetId || !grade) {
+    if (!assetId) {
       return NextResponse.json(
-        { error: 'assetId and grade are required' },
+        { error: 'assetId is required' },
         { status: 400 }
       );
     }
@@ -82,7 +84,7 @@ export async function PATCH(
     // Verify asset belongs to this project
     const { data: asset, error: fetchError } = await supabase
       .from('asset')
-      .select('id')
+      .select('id, status')
       .eq('id', assetId)
       .eq('project_id', id)
       .single();
@@ -94,6 +96,29 @@ export async function PATCH(
       );
     }
 
+    if (action === 'reject') {
+      const { data: updated, error } = await supabase
+        .from('asset')
+        .update({ status: 'rejected', updated_at: new Date().toISOString() })
+        .eq('id', assetId)
+        .select()
+        .single();
+
+      if (error) {
+        logger.error({ err: error, route: '/api/projects/[id]/assets' }, 'Error rejecting asset');
+        return NextResponse.json({ error: 'Failed to reject asset' }, { status: 500 });
+      }
+
+      return NextResponse.json(updated);
+    }
+
+    if (!grade) {
+      return NextResponse.json(
+        { error: 'grade or action is required' },
+        { status: 400 }
+      );
+    }
+
     const { data: updated, error } = await supabase
       .from('asset')
       .update({ grade, updated_at: new Date().toISOString() })
@@ -102,15 +127,15 @@ export async function PATCH(
       .single();
 
     if (error) {
-      console.error('Error grading asset:', error);
+      logger.error({ err: error, route: '/api/projects/[id]/assets' }, 'Error grading asset');
       return NextResponse.json({ error: 'Failed to grade asset' }, { status: 500 });
     }
 
     return NextResponse.json(updated);
   } catch (error) {
-    console.error('Error grading asset:', error);
+    logger.error({ err: error, route: '/api/projects/[id]/assets' }, 'Error updating asset');
     return NextResponse.json(
-      { error: 'Failed to grade asset' },
+      { error: 'Failed to update asset' },
       { status: 500 }
     );
   }

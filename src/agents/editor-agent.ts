@@ -12,6 +12,8 @@ export class EditorAgent extends BaseAgent {
   }
 
   async run(projectId: string): Promise<void> {
+    const stageStart = Date.now();
+    await this.logEvent(projectId, 'stage_start', 'editing');
     this.log(`Starting editing for project ${projectId}`);
 
     // 1. Fetch all completed video and audio assets
@@ -75,6 +77,8 @@ export class EditorAgent extends BaseAgent {
       .eq('provider_task_id', render.id);
 
     await this.trackCost(projectId, API_COSTS.creatomateRender);
+    const durationMs = Date.now() - stageStart;
+    await this.logEvent(projectId, 'stage_complete', 'editing', { durationMs });
     this.log(`Editing complete for project ${projectId}: ${result.url}`);
   }
 }

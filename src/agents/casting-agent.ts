@@ -12,6 +12,8 @@ export class CastingAgent extends BaseAgent {
   }
 
   async run(projectId: string): Promise<void> {
+    const stageStart = Date.now();
+    await this.logEvent(projectId, 'stage_start', 'casting');
     this.log(`Starting casting for project ${projectId}`);
 
     // 1. Fetch project with character
@@ -149,6 +151,8 @@ export class CastingAgent extends BaseAgent {
       }
     }
 
+    const durationMs = Date.now() - stageStart;
+    await this.logEvent(projectId, 'stage_complete', 'casting', { durationMs });
     this.log(`Casting complete for project ${projectId}`);
   }
 

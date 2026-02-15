@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/db';
+import { logger } from '@/lib/logger';
 
 export async function GET(
   request: NextRequest,
@@ -42,7 +43,7 @@ export async function PATCH(
 
     return NextResponse.json(updated);
   } catch (error) {
-    console.error('Error updating project:', error);
+    logger.error({ err: error, route: '/api/projects/[id]' }, 'Error updating project');
     return NextResponse.json(
       { error: 'Failed to update project' },
       { status: 500 }
@@ -98,13 +99,13 @@ export async function DELETE(
       .eq('id', id);
 
     if (error) {
-      console.error('Error deleting project:', error);
+      logger.error({ err: error, route: '/api/projects/[id]' }, 'Error deleting project');
       return NextResponse.json({ error: 'Failed to delete project' }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Error deleting project:', error);
+    logger.error({ err: error, route: '/api/projects/[id]' }, 'Error deleting project');
     return NextResponse.json({ error: 'Failed to delete project' }, { status: 500 });
   }
 }

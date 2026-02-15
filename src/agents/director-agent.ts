@@ -10,6 +10,8 @@ export class DirectorAgent extends BaseAgent {
   }
 
   async run(projectId: string): Promise<void> {
+    const stageStart = Date.now();
+    await this.logEvent(projectId, 'stage_start', 'directing');
     this.log(`Starting directing for project ${projectId}`);
 
     // 1. Get the approved script
@@ -142,6 +144,8 @@ export class DirectorAgent extends BaseAgent {
       }
     }
 
+    const durationMs = Date.now() - stageStart;
+    await this.logEvent(projectId, 'stage_complete', 'directing', { durationMs });
     this.log(`Directing complete for project ${projectId}`);
   }
 }

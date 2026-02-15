@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/db';
+import { logger } from '@/lib/logger';
 
 /**
  * PATCH /api/projects/[id]/scripts/[scriptId]
@@ -46,7 +47,7 @@ export async function PATCH(
 
     return NextResponse.json(updated);
   } catch (error) {
-    console.error('Error updating script:', error);
+    logger.error({ err: error, route: '/api/projects/[id]/scripts/[scriptId]' }, 'Error updating script');
     return NextResponse.json(
       { error: 'Failed to update script' },
       { status: 500 }

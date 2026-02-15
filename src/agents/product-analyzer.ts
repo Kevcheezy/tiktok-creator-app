@@ -55,6 +55,8 @@ export class ProductAnalyzerAgent extends BaseAgent {
   }
 
   async run(projectId: string): Promise<ProductAnalysis> {
+    const stageStart = Date.now();
+    await this.logEvent(projectId, 'stage_start', 'analyzing');
     this.log(`Starting analysis for project ${projectId}`);
 
     // 1. Fetch project from DB
@@ -119,6 +121,8 @@ export class ProductAnalyzerAgent extends BaseAgent {
     // 7. Track cost
     await this.trackCost(projectId, API_COSTS.wavespeedChat);
 
+    const durationMs = Date.now() - stageStart;
+    await this.logEvent(projectId, 'stage_complete', 'analyzing', { durationMs });
     this.log('Analysis complete');
     return analysis;
   }

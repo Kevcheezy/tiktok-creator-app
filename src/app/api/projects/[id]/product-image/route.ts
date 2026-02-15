@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/db';
+import { logger } from '@/lib/logger';
 
 export async function POST(
   request: NextRequest,
@@ -39,7 +40,7 @@ export async function POST(
       });
 
     if (uploadError) {
-      console.error('Upload error:', uploadError);
+      logger.error({ err: uploadError, route: '/api/projects/[id]/product-image' }, 'Upload error');
       return NextResponse.json({ error: 'Failed to upload image' }, { status: 500 });
     }
 
@@ -58,7 +59,7 @@ export async function POST(
 
     return NextResponse.json({ url: publicUrl });
   } catch (error) {
-    console.error('Error uploading product image:', error);
+    logger.error({ err: error, route: '/api/projects/[id]/product-image' }, 'Error uploading product image');
     return NextResponse.json({ error: 'Failed to upload product image' }, { status: 500 });
   }
 }

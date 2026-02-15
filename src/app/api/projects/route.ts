@@ -3,6 +3,7 @@ import { supabase } from '@/db';
 import { getPipelineQueue } from '@/lib/queue';
 import { TONE_IDS } from '@/lib/constants';
 import { z } from 'zod';
+import { logger } from '@/lib/logger';
 
 const createProjectSchema = z.object({
   productUrl: z.string().url('Must be a valid URL'),
@@ -20,7 +21,7 @@ export async function GET() {
     .order('created_at', { ascending: false });
 
   if (error) {
-    console.error('Error listing projects:', error);
+    logger.error({ err: error, route: '/api/projects' }, 'Error listing projects');
     return NextResponse.json({ error: 'Failed to list projects' }, { status: 500 });
   }
 
@@ -57,7 +58,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
-      console.error('Error creating project:', error);
+      logger.error({ err: error, route: '/api/projects' }, 'Error creating project');
       return NextResponse.json({ error: 'Failed to create project' }, { status: 500 });
     }
 
@@ -69,7 +70,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(newProject, { status: 201 });
   } catch (error) {
-    console.error('Error creating project:', error);
+    logger.error({ err: error, route: '/api/projects' }, 'Error creating project');
     return NextResponse.json(
       { error: 'Failed to create project' },
       { status: 500 }

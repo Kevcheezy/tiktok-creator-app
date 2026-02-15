@@ -148,6 +148,8 @@ export class ScriptingAgent extends BaseAgent {
   }
 
   async run(projectId: string): Promise<ScriptResult> {
+    const stageStart = Date.now();
+    await this.logEvent(projectId, 'stage_start', 'scripting');
     this.log(`Starting scripting for project ${projectId}`);
 
     // 1. Fetch project + product_data
@@ -258,6 +260,8 @@ export class ScriptingAgent extends BaseAgent {
     // 10. Track cost
     await this.trackCost(projectId, API_COSTS.wavespeedChat);
 
+    const durationMs = Date.now() - stageStart;
+    await this.logEvent(projectId, 'stage_complete', 'scripting', { durationMs });
     this.log(`Script v${version} saved (id=${savedScript.id}, hook_score=${script.hook_score.total}, syllables=${script.total_syllables})`);
 
     return {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/db';
 import { getPipelineQueue } from '@/lib/queue';
+import { logger } from '@/lib/logger';
 
 /**
  * POST /api/projects/[id]/scripts/[scriptId]/regenerate
@@ -72,7 +73,7 @@ export async function POST(
       previousScriptId: scriptId,
     });
   } catch (error) {
-    console.error('Error regenerating script:', error);
+    logger.error({ err: error, route: '/api/projects/[id]/scripts/[scriptId]/regenerate' }, 'Error regenerating script');
     return NextResponse.json(
       { error: 'Failed to regenerate script' },
       { status: 500 }

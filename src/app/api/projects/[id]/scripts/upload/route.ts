@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/db';
 import { ScriptingAgent } from '@/agents/scripting-agent';
+import { logger } from '@/lib/logger';
 
 // POST /api/projects/[id]/scripts/upload
 // Body: { text: string }
@@ -54,7 +55,7 @@ export async function POST(
 
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
-    console.error('Error uploading script:', error);
+    logger.error({ err: error, route: '/api/projects/[id]/scripts/upload' }, 'Error uploading script');
     return NextResponse.json(
       { error: 'Failed to analyze uploaded script' },
       { status: 500 }

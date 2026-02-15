@@ -14,6 +14,8 @@ export class VoiceoverAgent extends BaseAgent {
   }
 
   async run(projectId: string): Promise<void> {
+    const stageStart = Date.now();
+    await this.logEvent(projectId, 'stage_start', 'voiceover');
     this.log(`Starting voiceover for project ${projectId}`);
 
     // 1. Fetch project with character
@@ -112,6 +114,8 @@ export class VoiceoverAgent extends BaseAgent {
       this.log(`TTS complete for segment ${segIdx}`);
     }
 
+    const durationMs = Date.now() - stageStart;
+    await this.logEvent(projectId, 'stage_complete', 'voiceover', { durationMs });
     this.log(`Voiceover complete for project ${projectId}`);
   }
 

@@ -1,3 +1,8 @@
+import { createLogger, logToGenerationLog } from '@/lib/logger';
+import type { SupabaseClient } from '@supabase/supabase-js';
+
+const logger = createLogger({ agentName: 'WaveSpeedClient' });
+
 export interface ChatCompletionOptions {
   model?: string;
   temperature?: number;
@@ -19,6 +24,12 @@ export interface VideoParams {
   cfgScale?: number;
 }
 
+export interface ApiCallContext {
+  projectId?: string;
+  correlationId?: string;
+  supabase?: SupabaseClient;
+}
+
 export class WaveSpeedClient {
   private apiKey: string;
   private baseUrl = 'https://api.wavespeed.ai';
@@ -26,33 +37,81 @@ export class WaveSpeedClient {
   constructor(apiKey?: string) {
     this.apiKey = apiKey || process.env.WAVESPEED_API_KEY || '';
     if (!this.apiKey) {
-      console.warn('WaveSpeedClient: No API key provided');
+      logger.warn('No API key provided');
     }
   }
 
-  private async request(path: string, options: RequestInit = {}): Promise<any> {
+  private async request(path: string, options: RequestInit = {}, context?: ApiCallContext): Promise<any> {
     const url = `${this.baseUrl}${path}`;
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.apiKey}`,
-        ...options.headers,
-      },
-    });
+    const start = Date.now();
+    let statusCode: number | undefined;
 
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`WaveSpeed API error (${response.status}): ${error}`);
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.apiKey}`,
+          ...options.headers,
+        },
+      });
+
+      statusCode = response.status;
+      const latencyMs = Date.now() - start;
+
+      if (!response.ok) {
+        const error = await response.text();
+        logger.error(
+          { provider: 'WaveSpeed', endpoint: path, method: options.method || 'GET', statusCode, latencyMs },
+          `API call failed: ${error}`
+        );
+
+        if (context?.supabase && context?.projectId) {
+          await logToGenerationLog(context.supabase, {
+            project_id: context.projectId,
+            correlation_id: context.correlationId,
+            event_type: 'api_call',
+            agent_name: 'WaveSpeedClient',
+            detail: { provider: 'WaveSpeed', endpoint: path, method: options.method || 'GET', statusCode, latencyMs, error },
+          });
+        }
+
+        throw new Error(`WaveSpeed API error (${response.status}): ${error}`);
+      }
+
+      logger.info(
+        { provider: 'WaveSpeed', endpoint: path, method: options.method || 'GET', statusCode, latencyMs },
+        'API call completed'
+      );
+
+      if (context?.supabase && context?.projectId) {
+        await logToGenerationLog(context.supabase, {
+          project_id: context.projectId,
+          correlation_id: context.correlationId,
+          event_type: 'api_call',
+          agent_name: 'WaveSpeedClient',
+          detail: { provider: 'WaveSpeed', endpoint: path, method: options.method || 'GET', statusCode, latencyMs },
+        });
+      }
+
+      return response.json();
+    } catch (err) {
+      if (statusCode === undefined) {
+        const latencyMs = Date.now() - start;
+        logger.error(
+          { provider: 'WaveSpeed', endpoint: path, method: options.method || 'GET', error: (err as Error).message, latencyMs },
+          'API call failed (network error)'
+        );
+      }
+      throw err;
     }
-
-    return response.json();
   }
 
   async chatCompletion(
     systemPrompt: string,
     userPrompt: string,
-    options: ChatCompletionOptions = {}
+    options: ChatCompletionOptions = {},
+    context?: ApiCallContext
   ): Promise<string> {
     const { model = 'google/gemini-2.5-flash', temperature = 0.7, maxTokens = 4096 } = options;
 
@@ -66,12 +125,12 @@ export class WaveSpeedClient {
         max_tokens: maxTokens,
         enable_sync_mode: true,
       }),
-    });
+    }, context);
 
     return data.data?.outputs?.[0] || '';
   }
 
-  async generateImage(prompt: string, options?: ImageOptions): Promise<{ taskId: string }> {
+  async generateImage(prompt: string, options?: ImageOptions, context?: ApiCallContext): Promise<{ taskId: string }> {
     const { aspectRatio = '2:3' } = options || {};
 
     const data = await this.request('/api/v3/google/nano-banana-pro/text-to-image-multi', {
@@ -83,7 +142,7 @@ export class WaveSpeedClient {
         output_format: 'png',
         enable_sync_mode: false,
       }),
-    });
+    }, context);
 
     return { taskId: data.data?.id };
   }
@@ -91,7 +150,8 @@ export class WaveSpeedClient {
   async editImage(
     images: string[],
     prompt: string,
-    options?: { aspectRatio?: string; resolution?: string }
+    options?: { aspectRatio?: string; resolution?: string },
+    context?: ApiCallContext
   ): Promise<{ taskId: string }> {
     const { aspectRatio = '9:16', resolution = '1k' } = options || {};
 
@@ -105,12 +165,12 @@ export class WaveSpeedClient {
         output_format: 'png',
         enable_sync_mode: false,
       }),
-    });
+    }, context);
 
     return { taskId: data.data?.id };
   }
 
-  async generateVideo(params: VideoParams): Promise<{ taskId: string }> {
+  async generateVideo(params: VideoParams, context?: ApiCallContext): Promise<{ taskId: string }> {
     const { image, tailImage, prompt, negativePrompt, multiPrompt, duration = 15, cfgScale = 0.5 } = params;
 
     const body: Record<string, unknown> = {
@@ -130,7 +190,7 @@ export class WaveSpeedClient {
     const data = await this.request('/api/v3/kwaivgi/kling-v3.0-pro/image-to-video', {
       method: 'POST',
       body: JSON.stringify(body),
-    });
+    }, context);
 
     return { taskId: data.data?.id };
   }
@@ -156,11 +216,17 @@ export class WaveSpeedClient {
     let interval = config.initialInterval;
 
     while (Date.now() - startTime < config.maxWait) {
+      const pollStart = Date.now();
       const response = await fetch(config.url, {
         headers: { Authorization: `Bearer ${config.authKey}` },
       });
 
       if (!response.ok) {
+        const latencyMs = Date.now() - pollStart;
+        logger.error(
+          { provider: 'WaveSpeed', endpoint: `/api/v3/predictions/${taskId}/result`, method: 'GET', statusCode: response.status, latencyMs },
+          'Poll request failed'
+        );
         throw new Error(`Poll error (${response.status}): ${await response.text()}`);
       }
 
@@ -168,6 +234,8 @@ export class WaveSpeedClient {
       const status = config.extractStatus(data);
 
       if (config.successStatuses.includes(status)) {
+        const latencyMs = Date.now() - startTime;
+        logger.info({ provider: 'WaveSpeed', taskId, totalPollMs: latencyMs }, 'Poll completed successfully');
         return { status: 'completed', url: config.extractUrl(data) };
       }
 

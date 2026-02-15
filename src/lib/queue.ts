@@ -2,7 +2,8 @@ import { Queue } from 'bullmq';
 
 export type PipelineJobData = {
   projectId: string;
-  step: 'product_analysis' | 'scripting' | 'casting' | 'directing' | 'voiceover' | 'editing';
+  step: 'product_analysis' | 'scripting' | 'casting' | 'directing' | 'voiceover' | 'editing' | 'regenerate_asset';
+  assetId?: string;
 };
 
 function parseRedisUrl(url: string) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/db';
+import { logger } from '@/lib/logger';
 
 /**
  * POST /api/projects/[id]/archive
@@ -94,7 +95,7 @@ export async function POST(
 
     return NextResponse.json(run, { status: 201 });
   } catch (error) {
-    console.error('Error archiving project:', error);
+    logger.error({ err: error, route: '/api/projects/[id]/archive' }, 'Error archiving project');
     return NextResponse.json(
       { error: 'Failed to archive project' },
       { status: 500 }

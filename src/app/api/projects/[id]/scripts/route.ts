@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/db';
+import { logger } from '@/lib/logger';
 
 /**
  * GET /api/projects/[id]/scripts
@@ -33,7 +34,7 @@ export async function GET(
       .order('version', { ascending: false });
 
     if (error) {
-      console.error('Error fetching scripts:', error);
+      logger.error({ err: error, route: '/api/projects/[id]/scripts' }, 'Error fetching scripts');
       return NextResponse.json({ error: 'Failed to fetch scripts' }, { status: 500 });
     }
 
@@ -61,7 +62,7 @@ export async function GET(
 
     return NextResponse.json(sorted);
   } catch (error) {
-    console.error('Error fetching scripts:', error);
+    logger.error({ err: error, route: '/api/projects/[id]/scripts' }, 'Error fetching scripts');
     return NextResponse.json(
       { error: 'Failed to fetch scripts' },
       { status: 500 }

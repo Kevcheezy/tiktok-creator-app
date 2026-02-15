@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/db';
 import { getPipelineQueue } from '@/lib/queue';
+import { logger } from '@/lib/logger';
 
 /**
  * POST /api/projects/[id]/retry
@@ -72,7 +73,7 @@ export async function POST(
       retryStep: failedStep,
     });
   } catch (error) {
-    console.error('Error retrying project:', error);
+    logger.error({ err: error, route: '/api/projects/[id]/retry' }, 'Error retrying project');
     return NextResponse.json({ error: 'Failed to retry' }, { status: 500 });
   }
 }

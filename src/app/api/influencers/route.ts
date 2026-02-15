@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/db';
+import { logger } from '@/lib/logger';
 
 export async function GET() {
   const { data: influencers, error } = await supabase
@@ -9,7 +10,7 @@ export async function GET() {
     .order('created_at', { ascending: false });
 
   if (error) {
-    console.error('Error listing influencers:', error);
+    logger.error({ err: error, route: '/api/influencers' }, 'Error listing influencers');
     return NextResponse.json({ error: 'Failed to list influencers' }, { status: 500 });
   }
 
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (insertError) {
-      console.error('Error creating influencer:', insertError);
+      logger.error({ err: insertError, route: '/api/influencers' }, 'Error creating influencer');
       return NextResponse.json({ error: 'Failed to create influencer' }, { status: 500 });
     }
 
@@ -56,7 +57,7 @@ export async function POST(request: NextRequest) {
         .upload(storagePath, image, { upsert: true });
 
       if (uploadError) {
-        console.error('Error uploading influencer image:', uploadError);
+        logger.error({ err: uploadError, route: '/api/influencers' }, 'Error uploading influencer image');
         // Still return the influencer, but without the image
         return NextResponse.json(influencer, { status: 201 });
       }
@@ -73,7 +74,7 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (updateError) {
-        console.error('Error updating influencer image_url:', updateError);
+        logger.error({ err: updateError, route: '/api/influencers' }, 'Error updating influencer image_url');
         return NextResponse.json(influencer, { status: 201 });
       }
 
@@ -82,7 +83,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(influencer, { status: 201 });
   } catch (error) {
-    console.error('Error creating influencer:', error);
+    logger.error({ err: error, route: '/api/influencers' }, 'Error creating influencer');
     return NextResponse.json(
       { error: 'Failed to create influencer' },
       { status: 500 }
