@@ -31,6 +31,22 @@ export const aiCharacterRelations = relations(aiCharacter, ({ many }) => ({
   projects: many(project),
 }));
 
+// ─── Influencer ─────────────────────────────────────────────────────────────
+
+export const influencer = pgTable('influencer', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  persona: text('persona'),
+  imageUrl: text('image_url'),
+  status: text('status').default('active'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const influencerRelations = relations(influencer, ({ many }) => ({
+  projects: many(project),
+}));
+
 // ─── Script Template ─────────────────────────────────────────────────────────
 
 export const scriptTemplate = pgTable('script_template', {
@@ -63,6 +79,8 @@ export const project = pgTable('project', {
   productData: jsonb('product_data'),
   characterId: uuid('character_id').references(() => aiCharacter.id),
   scriptTemplateId: uuid('script_template_id').references(() => scriptTemplate.id),
+  tone: text('tone').default('reluctant-insider'),
+  influencerId: uuid('influencer_id').references(() => influencer.id),
   inputMode: text('input_mode').default('product_only'),
   videoUrl: text('video_url'),
   previewOnly: boolean('preview_only').default(false),
@@ -82,8 +100,13 @@ export const projectRelations = relations(project, ({ one, many }) => ({
     fields: [project.scriptTemplateId],
     references: [scriptTemplate.id],
   }),
+  influencer: one(influencer, {
+    fields: [project.influencerId],
+    references: [influencer.id],
+  }),
   scripts: many(script),
   assets: many(asset),
+  completedRuns: many(completedRun),
 }));
 
 // ─── Script ──────────────────────────────────────────────────────────────────
@@ -99,6 +122,8 @@ export const script = pgTable('script', {
   isFavorite: boolean('is_favorite').default(false),
   feedback: text('feedback'),
   fullText: text('full_text'),
+  tone: text('tone'),
+  source: text('source').default('generated'),
   createdAt: timestamp('created_at').defaultNow(),
 });
 
@@ -127,6 +152,8 @@ export const scene = pgTable('scene', {
   textOverlay: text('text_overlay'),
   visualPrompt: jsonb('visual_prompt'),
   productVisibility: text('product_visibility'),
+  tone: text('tone'),
+  version: integer('version').default(1),
   createdAt: timestamp('created_at').defaultNow(),
 });
 
@@ -166,5 +193,31 @@ export const assetRelations = relations(asset, ({ one }) => ({
   scene: one(scene, {
     fields: [asset.sceneId],
     references: [scene.id],
+  }),
+}));
+
+// ─── Completed Run ──────────────────────────────────────────────────────────
+
+export const completedRun = pgTable('completed_run', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id')
+    .notNull()
+    .references(() => project.id),
+  productData: jsonb('product_data'),
+  scriptSnapshot: jsonb('script_snapshot'),
+  tone: text('tone'),
+  characterName: text('character_name'),
+  influencerName: text('influencer_name'),
+  hookScore: integer('hook_score'),
+  assetUrls: jsonb('asset_urls'),
+  finalVideoUrl: text('final_video_url'),
+  totalCostUsd: numeric('total_cost_usd'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const completedRunRelations = relations(completedRun, ({ one }) => ({
+  project: one(project, {
+    fields: [completedRun.projectId],
+    references: [project.id],
   }),
 }));

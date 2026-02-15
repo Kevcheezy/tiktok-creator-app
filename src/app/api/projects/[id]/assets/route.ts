@@ -62,3 +62,56 @@ export async function GET(
     );
   }
 }
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+
+  try {
+    const { assetId, grade } = await request.json();
+
+    if (!assetId || !grade) {
+      return NextResponse.json(
+        { error: 'assetId and grade are required' },
+        { status: 400 }
+      );
+    }
+
+    // Verify asset belongs to this project
+    const { data: asset, error: fetchError } = await supabase
+      .from('asset')
+      .select('id')
+      .eq('id', assetId)
+      .eq('project_id', id)
+      .single();
+
+    if (fetchError || !asset) {
+      return NextResponse.json(
+        { error: 'Asset not found for this project' },
+        { status: 404 }
+      );
+    }
+
+    const { data: updated, error } = await supabase
+      .from('asset')
+      .update({ grade, updated_at: new Date().toISOString() })
+      .eq('id', assetId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error grading asset:', error);
+      return NextResponse.json({ error: 'Failed to grade asset' }, { status: 500 });
+    }
+
+    return NextResponse.json(updated);
+  } catch (error) {
+    console.error('Error grading asset:', error);
+    return NextResponse.json(
+      { error: 'Failed to grade asset' },
+      { status: 500 }
+    );
+  }
+}

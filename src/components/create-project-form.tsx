@@ -63,6 +63,7 @@ export function CreateProjectForm() {
       }
 
       const project = await res.json();
+      router.refresh();
       router.push(`/projects/${project.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');

@@ -20,23 +20,34 @@ export abstract class BaseAgent {
   }
 
   protected async trackCost(projectId: string, amount: number): Promise<void> {
-    // Fetch current cost, add amount, update
-    const { data } = await this.supabase
-      .from('project')
-      .select('cost_usd')
-      .eq('id', projectId)
-      .single();
+    // Atomic increment via Postgres function to prevent race conditions
+    // when multiple agents or regeneration calls update cost_usd concurrently
+    const { data, error } = await this.supabase
+      .rpc('increment_project_cost', {
+        p_project_id: projectId,
+        p_amount: parseFloat(amount.toFixed(4)),
+      });
 
-    const currentCost = parseFloat(data?.cost_usd || '0');
-    await this.supabase
-      .from('project')
-      .update({
-        cost_usd: (currentCost + amount).toFixed(4),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', projectId);
+    if (error) {
+      // Fallback to non-atomic update if RPC fails (e.g. function not yet deployed)
+      this.log(`RPC increment_project_cost failed (${error.message}), falling back to non-atomic update`);
+      const { data: proj } = await this.supabase
+        .from('project')
+        .select('cost_usd')
+        .eq('id', projectId)
+        .single();
 
-    this.log(`Cost tracked: +$${amount.toFixed(4)} for project ${projectId}`);
+      const currentCost = parseFloat(proj?.cost_usd || '0');
+      await this.supabase
+        .from('project')
+        .update({
+          cost_usd: (currentCost + amount).toFixed(4),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', projectId);
+    }
+
+    this.log(`Cost tracked: +$${amount.toFixed(4)} for project ${projectId} (new total: $${data ?? 'unknown'})`);
   }
 
   abstract run(projectId: string): Promise<unknown>;

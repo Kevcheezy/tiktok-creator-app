@@ -57,7 +57,28 @@ export async function DELETE(
   const { id } = await params;
 
   try {
-    // Delete related records first (assets, scenes, scripts)
+    // Check if pipeline is actively running
+    const ACTIVE_STATUSES = ['analyzing', 'scripting', 'casting', 'directing', 'voiceover', 'editing'];
+
+    const { data: proj, error: fetchError } = await supabase
+      .from('project')
+      .select('status')
+      .eq('id', id)
+      .single();
+
+    if (fetchError || !proj) {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    }
+
+    if (ACTIVE_STATUSES.includes(proj.status)) {
+      return NextResponse.json(
+        { error: `Cannot delete project while pipeline is running (status: ${proj.status})` },
+        { status: 409 }
+      );
+    }
+
+    // Delete related records first (completed_run, assets, scenes, scripts)
+    await supabase.from('completed_run').delete().eq('project_id', id);
     await supabase.from('asset').delete().eq('project_id', id);
 
     const { data: scripts } = await supabase
