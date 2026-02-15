@@ -16,7 +16,7 @@ export async function POST(
 
   try {
     const body = await request.json();
-    const { influencerId } = body;
+    const { influencerId, productPlacement } = body;
 
     if (!influencerId) {
       return NextResponse.json(
@@ -61,13 +61,17 @@ export async function POST(
       );
     }
 
-    // Set influencer on the project
+    // Set influencer and product placement on the project
+    const updateData: Record<string, unknown> = {
+      influencer_id: influencerId,
+      updated_at: new Date().toISOString(),
+    };
+    if (productPlacement && Array.isArray(productPlacement)) {
+      updateData.product_placement = productPlacement;
+    }
     await supabase
       .from('project')
-      .update({
-        influencer_id: influencerId,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq('id', id);
 
     // Enqueue casting

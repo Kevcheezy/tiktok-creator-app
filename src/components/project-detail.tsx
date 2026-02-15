@@ -777,6 +777,12 @@ function InfluencerSelection({ projectId, currentInfluencerId, onSelected }: Inf
   const [loadingList, setLoadingList] = useState(true);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState('');
+  const [productPlacement, setProductPlacement] = useState([
+    { segment: 0, visibility: 'none', notes: '' },
+    { segment: 1, visibility: 'subtle', notes: '' },
+    { segment: 2, visibility: 'hero', notes: '' },
+    { segment: 3, visibility: 'set_down', notes: '' },
+  ]);
 
   useEffect(() => {
     fetch('/api/influencers')
@@ -801,7 +807,7 @@ function InfluencerSelection({ projectId, currentInfluencerId, onSelected }: Inf
       const res = await fetch(`/api/projects/${projectId}/select-influencer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ influencerId: selectedId }),
+        body: JSON.stringify({ influencerId: selectedId, productPlacement }),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -913,6 +919,58 @@ function InfluencerSelection({ projectId, currentInfluencerId, onSelected }: Inf
                   </div>
                 )}
               </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Product Placement Per Segment */}
+      <div className="rounded-xl border border-border bg-surface p-5">
+        <h2 className="mb-1 font-[family-name:var(--font-display)] text-sm font-semibold uppercase tracking-wider text-text-muted">
+          Product Placement
+        </h2>
+        <p className="mb-4 text-xs text-text-muted">
+          Control how the product appears in each segment&apos;s keyframes. Add notes for specific instructions.
+        </p>
+        <div className="space-y-3">
+          {productPlacement.map((seg, i) => {
+            const sectionLabels = ['Hook', 'Problem', 'Solution + Product', 'CTA'];
+            return (
+              <div key={seg.segment} className="rounded-lg border border-border bg-surface-raised p-3">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-surface-overlay font-[family-name:var(--font-mono)] text-[10px] font-bold text-text-muted">
+                    {seg.segment + 1}
+                  </span>
+                  <span className="font-[family-name:var(--font-display)] text-xs font-semibold text-text-primary">
+                    {sectionLabels[i]}
+                  </span>
+                  <select
+                    value={seg.visibility}
+                    onChange={(e) => {
+                      const updated = [...productPlacement];
+                      updated[i] = { ...updated[i], visibility: e.target.value };
+                      setProductPlacement(updated);
+                    }}
+                    className="ml-auto appearance-none rounded-md border border-border bg-surface px-2.5 py-1 font-[family-name:var(--font-mono)] text-[11px] text-text-secondary transition-all focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric"
+                  >
+                    <option value="none">Not visible</option>
+                    <option value="subtle">Subtle / Background</option>
+                    <option value="hero">Hero shot</option>
+                    <option value="set_down">In frame</option>
+                  </select>
+                </div>
+                <input
+                  type="text"
+                  value={seg.notes}
+                  onChange={(e) => {
+                    const updated = [...productPlacement];
+                    updated[i] = { ...updated[i], notes: e.target.value };
+                    setProductPlacement(updated);
+                  }}
+                  placeholder="Optional: e.g. 'holds bottle at eye level'"
+                  className="mt-2 block w-full rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text-primary placeholder:text-text-muted/60 transition-all focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric"
+                />
+              </div>
             );
           })}
         </div>

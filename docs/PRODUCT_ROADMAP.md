@@ -116,12 +116,12 @@ These are blocking items. Nothing else matters until a user can go from product 
 **Why:** Without this, the product is a script generator, not a video creator.
 
 **Pre-casting gate (new review step between script_review and casting):**
-- [ ] **Influencer selection gate:** When user approves a script, prompt them to select or confirm the AI influencer before casting begins. Show the influencer's reference image so the user knows what avatar the keyframes will use. If no influencer is assigned, require one before proceeding.
+- [x] **Influencer selection gate:** `influencer_selection` status added between `script_review` and `casting`. User must pick an influencer with a reference image. `POST /api/projects/[id]/select-influencer` validates and enqueues casting.
 - [ ] **Product image requirement:** Before casting can start, validate that a product image exists (from analysis or user upload). If `product_image_url` is empty/broken, block casting and show an upload prompt. Rule: never generate keyframes without a real product reference image.
-- [ ] **Product interaction prompt:** Let the user specify how the product appears in keyframes per segment. Options per the existing `PRODUCT_PLACEMENT_ARC`: (Seg 1: not visible, Seg 2: subtle background, Seg 3: hero shot - holding/showing, Seg 4: set down in frame). User should be able to override defaults and add notes (e.g., "influencer holds bottle at eye level", "product on desk next to laptop").
+- [x] **Product interaction prompt:** Per-segment product placement controls shown at `influencer_selection` gate. User can override visibility (none/subtle/hero/set_down) and add custom notes per segment. Stored as `product_placement` JSONB on project. CastingAgent merges user overrides into keyframe prompts.
 
 **Pipeline hardening:**
-- [ ] Enable full 4-segment processing (remove single-segment test restriction)
+- [x] Enable full 4-segment processing — all agents already use `SEGMENTS = [0, 1, 2, 3]`
 - [ ] Harden CastingAgent: error recovery, retry logic, image quality validation
 - [ ] Harden DirectorAgent: video generation polling, timeout handling, quality checks
 - [ ] Harden VoiceoverAgent: voice caching on character records, audio duration validation

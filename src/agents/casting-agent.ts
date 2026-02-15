@@ -61,7 +61,12 @@ export class CastingAgent extends BaseAgent {
     const wardrobe = avatarFallback.wardrobe;
     const setting = avatarFallback.setting;
 
-    // 5. For each segment, generate start + end keyframes
+    // 5. Load custom product placement overrides (if user set them)
+    const customPlacement = project.product_placement as
+      | { segment: number; visibility: string; description: string; notes?: string }[]
+      | null;
+
+    // 6. For each segment, generate start + end keyframes
     for (const segIdx of SEGMENTS) {
       const scene = latestScenes.get(segIdx);
       if (!scene) {
@@ -69,7 +74,17 @@ export class CastingAgent extends BaseAgent {
         continue;
       }
 
-      const placement = PRODUCT_PLACEMENT_ARC[segIdx];
+      const defaultPlacement = PRODUCT_PLACEMENT_ARC[segIdx];
+      const userOverride = customPlacement?.find((p) => p.segment === segIdx);
+      const placement = userOverride
+        ? {
+            ...defaultPlacement,
+            visibility: userOverride.visibility || defaultPlacement.visibility,
+            description: userOverride.notes
+              ? `${defaultPlacement.description}. User note: ${userOverride.notes}`
+              : defaultPlacement.description,
+          }
+        : defaultPlacement;
       const energyArc = ENERGY_ARC[segIdx];
 
       // Use LLM to generate detailed prompts for start and end frames
@@ -142,7 +157,7 @@ export class CastingAgent extends BaseAgent {
     wardrobe: string,
     setting: string,
     scene: any,
-    placement: (typeof PRODUCT_PLACEMENT_ARC)[number],
+    placement: { section: string; visibility: string; description: string },
     energyArc: (typeof ENERGY_ARC)[number],
     productName: string,
     projectId: string,

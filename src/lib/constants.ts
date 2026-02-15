@@ -117,6 +117,7 @@ export const PROJECT_STATUSES = [
   'analysis_review',
   'scripting',
   'script_review',
+  'influencer_selection',
   'casting',
   'casting_review',
   'directing',
