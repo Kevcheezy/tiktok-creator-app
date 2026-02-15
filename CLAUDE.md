@@ -65,8 +65,8 @@ REDIS_CONNECTION_URL              # Upstash Redis (redis://...upstash.io:6379)
 ```
 
 ### Deploy Commands
-- `npx vercel --prod` -- Deploy frontend to Vercel production
-- Worker deploys via Railway dashboard (connected to GitHub, runs `npm run worker`)
+- **Auto-deploy**: Push to `main` → Vercel + Railway both deploy automatically
+- `npx vercel --prod` -- Manual deploy fallback (rarely needed)
 
 ### Redis TLS
 Upstash requires TLS. Both `src/lib/queue.ts` and `src/workers/pipeline.worker.ts` auto-enable TLS for non-localhost Redis hosts.
