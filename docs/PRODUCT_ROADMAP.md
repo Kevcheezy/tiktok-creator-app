@@ -176,25 +176,25 @@ These are blocking items. Nothing else matters until a user can go from product 
 **Why:** Product data is denormalized into the `project` table. Every project re-runs ProductAnalyzerAgent from scratch — even for the same product URL. This wastes API costs ($0.01/analysis), wastes user time (re-approve same analysis), and prevents cross-project product insights. Products should be a first-class entity: analyze once, use across many projects.
 
 **Data model:**
-- [ ] New `product` table (url, name, brand, category, selling_points, image_url, analysis_data, overrides, status, etc.)
-- [ ] Add `product_id` FK to `project` table
-- [ ] `overrides` JSONB column tracks which fields user has manually edited
-- [ ] Backward compat: old projects without `product_id` continue reading from their own `product_*` columns
+- [x] New `product` table (url, name, brand, category, selling_points, image_url, analysis_data, overrides, status, etc.)
+- [x] Add `product_id` FK to `project` table
+- [x] `overrides` JSONB column tracks which fields user has manually edited
+- [x] Backward compat: old projects without `product_id` continue reading from their own `product_*` columns
 
 **API:**
-- [ ] Full CRUD: `GET/POST /api/products`, `GET/PATCH/DELETE /api/products/[id]`
-- [ ] PATCH accepts all analysis fields as overrides: selling_points, key_claims, benefits, usage, hook_angle, avatar_description, image_description, name, brand, category, etc.
-- [ ] PATCH tracks overridden fields in `overrides` column; reset-to-original per field
-- [ ] Product image upload/replace: `POST /api/products/[id]/image`
-- [ ] Re-analyze endpoint: `POST /api/products/[id]/reanalyze` — preserves user-overridden fields
-- [ ] Duplicate URL detection: if URL already analyzed, return existing product (no re-analysis)
-- [ ] `POST /api/projects` accepts `productId` — skips analysis for analyzed products
-- [ ] Delete guard: 409 if product referenced by projects
+- [x] Full CRUD: `GET/POST /api/products`, `GET/PATCH/DELETE /api/products/[id]`
+- [x] PATCH accepts all analysis fields as overrides: selling_points, key_claims, benefits, usage, hook_angle, avatar_description, image_description, name, brand, category, etc.
+- [x] PATCH tracks overridden fields in `overrides` column; reset-to-original per field
+- [x] Product image upload/replace: `POST /api/products/[id]/image`
+- [x] Re-analyze endpoint: `POST /api/products/[id]/reanalyze` — preserves user-overridden fields
+- [x] Duplicate URL detection: if URL already analyzed, return existing product (no re-analysis)
+- [x] `POST /api/projects` accepts `productId` — skips analysis for analyzed products
+- [x] Delete guard: 409 if product referenced by projects
 
 **Pipeline:**
-- [ ] ProductAnalyzerAgent writes to `product` table (not `project`)
-- [ ] Worker updates both `product` and `project` after analysis
-- [ ] Project creation with existing product: copy denormalized fields, skip analysis
+- [x] ProductAnalyzerAgent writes to `product` table (not `project`)
+- [x] Worker updates both `product` and `project` after analysis
+- [x] Project creation with existing product: copy denormalized fields, skip analysis
 
 **Frontend:**
 - [ ] Products tab in navigation (between Projects and Influencers)
