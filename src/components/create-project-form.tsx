@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { ToneSelector } from './tone-selector';
 
 interface Character {
   id: string;
@@ -14,6 +15,7 @@ export function CreateProjectForm() {
   const [productUrl, setProductUrl] = useState('');
   const [videoUrl, setVideoUrl] = useState('');
   const [characterId, setCharacterId] = useState('');
+  const [tone, setTone] = useState('reluctant-insider');
   const [characters, setCharacters] = useState<Character[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -38,6 +40,7 @@ export function CreateProjectForm() {
           productUrl,
           videoUrl: videoUrl || undefined,
           characterId: characterId || undefined,
+          tone,
         }),
       });
 
@@ -137,6 +140,14 @@ export function CreateProjectForm() {
             <polyline points="4 6 8 10 12 6" />
           </svg>
         </div>
+      </div>
+
+      {/* Script Tone */}
+      <div>
+        <label className="mb-2 block font-[family-name:var(--font-display)] text-xs font-semibold uppercase tracking-wider text-text-secondary">
+          Script Tone
+        </label>
+        <ToneSelector value={tone} onChange={setTone} />
       </div>
 
       {/* Submit */}

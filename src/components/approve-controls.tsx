@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { ToneSelector } from './tone-selector';
 
 interface ApproveControlsProps {
   projectId: string;
@@ -8,6 +9,7 @@ interface ApproveControlsProps {
   currentGrade: string | null;
   currentFeedback: string | null;
   onGradeChange?: (grade: string) => void;
+  currentTone: string;
   onApprove?: () => void;
   onRegenerate?: () => void;
 }
@@ -24,12 +26,14 @@ export function ApproveControls({
   scriptId,
   currentGrade,
   currentFeedback,
+  currentTone,
   onGradeChange,
   onApprove,
   onRegenerate,
 }: ApproveControlsProps) {
   const [grade, setGrade] = useState(currentGrade || '');
   const [feedback, setFeedback] = useState(currentFeedback || '');
+  const [tone, setTone] = useState(currentTone || 'reluctant-insider');
   const [saving, setSaving] = useState(false);
   const [approving, setApproving] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
@@ -79,7 +83,7 @@ export function ApproveControls({
       await fetch(`/api/projects/${projectId}/scripts/${scriptId}/regenerate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ feedback: feedback || undefined }),
+        body: JSON.stringify({ feedback: feedback || undefined, tone }),
       });
       onRegenerate?.();
     } catch (err) {
@@ -113,6 +117,14 @@ export function ApproveControls({
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Tone for Regeneration */}
+      <div>
+        <label className="mb-2 block font-[family-name:var(--font-display)] text-xs font-semibold uppercase tracking-wider text-text-secondary">
+          Tone for Regeneration
+        </label>
+        <ToneSelector value={tone} onChange={setTone} compact />
       </div>
 
       {/* Feedback */}

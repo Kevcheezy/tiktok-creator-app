@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/db';
 import { getPipelineQueue } from '@/lib/queue';
+import { TONE_IDS } from '@/lib/constants';
 import { z } from 'zod';
 
 const createProjectSchema = z.object({
@@ -8,6 +9,7 @@ const createProjectSchema = z.object({
   videoUrl: z.string().url().optional(),
   characterId: z.string().uuid().optional(),
   name: z.string().optional(),
+  tone: z.enum(TONE_IDS as [string, ...string[]]).optional().default('reluctant-insider'),
 });
 
 export async function GET() {
@@ -36,7 +38,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { productUrl, videoUrl, characterId, name } = parsed.data;
+    const { productUrl, videoUrl, characterId, name, tone } = parsed.data;
 
     const { data: newProject, error } = await supabase
       .from('project')
@@ -45,6 +47,7 @@ export async function POST(request: NextRequest) {
         video_url: videoUrl || null,
         character_id: characterId || null,
         name: name || null,
+        tone,
         input_mode: videoUrl ? 'video_analysis' : 'product_only',
         status: 'created',
       })

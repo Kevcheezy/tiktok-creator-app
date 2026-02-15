@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { SegmentCard } from './segment-card';
 import { ApproveControls } from './approve-controls';
+import { SCRIPT_TONES } from '@/lib/constants';
 
 interface Scene {
   id: string;
@@ -25,6 +26,7 @@ interface Script {
   version: number;
   hook_score: number | null;
   grade: string | null;
+  tone: string | null;
   is_favorite: boolean;
   feedback: string | null;
   full_text: string | null;
@@ -118,6 +120,11 @@ export function ScriptReview({
               Hook: {script.hook_score}
             </span>
           )}
+          {script.tone && (
+            <span className="rounded-md bg-surface-overlay px-2 py-0.5 font-[family-name:var(--font-display)] text-xs text-text-secondary">
+              {SCRIPT_TONES[script.tone as keyof typeof SCRIPT_TONES]?.label || script.tone}
+            </span>
+          )}
         </div>
       )}
 
@@ -147,6 +154,7 @@ export function ScriptReview({
           scriptId={script.id}
           currentGrade={script.grade}
           currentFeedback={script.feedback}
+          currentTone={script.tone || 'reluctant-insider'}
           onGradeChange={() => fetchScripts()}
           onApprove={() => onStatusChange?.()}
           onRegenerate={() => onStatusChange?.()}

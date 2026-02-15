@@ -1,6 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { BaseAgent } from './base-agent';
-import { API_COSTS, PIPELINE_CONFIG, ENERGY_ARC, PRODUCT_PLACEMENT_ARC } from '@/lib/constants';
+import { API_COSTS, PIPELINE_CONFIG, ENERGY_ARC, PRODUCT_PLACEMENT_ARC, SCRIPT_TONES, DEFAULT_TONE, type ScriptTone } from '@/lib/constants';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -90,7 +90,11 @@ function countTextSyllables(text: string): number {
 
 // ─── System Prompt ─────────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `You are a Script Architect for TikTok Shop UGC videos.
+function buildSystemPrompt(tone: ScriptTone): string {
+  const toneConfig = SCRIPT_TONES[tone];
+  return `You are a Script Architect for TikTok Shop UGC videos.
+
+${toneConfig.promptBlock}
 
 CREATE A 4-SEGMENT SCRIPT for a 60-second video.
 
@@ -156,6 +160,7 @@ OUTPUT FORMAT (valid JSON only, no markdown, no code fences):
   },
   "total_syllables": 345
 }`;
+}
 
 // ─── ScriptingAgent ────────────────────────────────────────────────────────────
 
@@ -182,6 +187,12 @@ export class ScriptingAgent extends BaseAgent {
       throw new Error(`Project ${projectId} has no product_data — run analysis first`);
     }
 
+    // Read tone from project (falls back to default)
+    const tone = (proj.tone as ScriptTone) in SCRIPT_TONES
+      ? (proj.tone as ScriptTone)
+      : DEFAULT_TONE;
+    this.log(`Using tone: ${tone}`);
+
     const productData = proj.product_data as {
       product_name: string;
       category: string;
@@ -199,7 +210,7 @@ export class ScriptingAgent extends BaseAgent {
     this.log('Calling WaveSpeed LLM for script generation...');
     let rawResponse: string;
     try {
-      rawResponse = await this.wavespeed.chatCompletion(SYSTEM_PROMPT, userPrompt, {
+      rawResponse = await this.wavespeed.chatCompletion(buildSystemPrompt(tone), userPrompt, {
         temperature: 0.7,
         maxTokens: 8192,
       });
@@ -235,6 +246,7 @@ export class ScriptingAgent extends BaseAgent {
         version,
         hook_score: script.hook_score.total,
         full_text: fullText,
+        tone,
       })
       .select()
       .single();

@@ -30,8 +30,8 @@ export async function POST(
       );
     }
 
-    // Store feedback on current script if provided
-    let body: { feedback?: string } = {};
+    // Store feedback on current script if provided, and optionally update tone
+    let body: { feedback?: string; tone?: string } = {};
     try {
       body = await request.json();
     } catch {
@@ -45,10 +45,19 @@ export async function POST(
         .eq('id', scriptId);
     }
 
-    // Set project status back to scripting
+    // Update project tone if a new tone was specified for regeneration
+    const projectUpdate: Record<string, string> = {
+      status: 'scripting',
+      updated_at: new Date().toISOString(),
+    };
+    if (body.tone) {
+      projectUpdate.tone = body.tone;
+    }
+
+    // Set project status back to scripting (and optionally update tone)
     await supabase
       .from('project')
-      .update({ status: 'scripting', updated_at: new Date().toISOString() })
+      .update(projectUpdate)
       .eq('id', id);
 
     // Re-enqueue scripting step
