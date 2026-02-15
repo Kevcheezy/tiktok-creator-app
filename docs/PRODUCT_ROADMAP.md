@@ -156,68 +156,13 @@ These are blocking items. Nothing else matters until a user can go from product 
 - [ ] Feed reference analysis into DirectorAgent (match camera work, transitions)
 - [ ] UI: Show reference video alongside generated output for comparison
 
-#### R1.4 - Pipeline Observability & Logging
-**Priority:** P0 - Critical
-**Effort:** Medium
-**Why:** Today the only debugging signal is a generic `error_message` on the project record. When image/video/audio generation fails, there is no record of what was sent, what was returned, how long it took, or how many retries occurred. Triaging server failures is guesswork. This is operational infrastructure required to stabilize and harden the pipeline (R1.1).
+#### ~~R1.4 - Pipeline Observability & Logging~~ DONE
+**Status:** Complete (2026-02-15)
+**Implemented:** Pino structured logging (`src/lib/logger.ts`), `generation_log` table with correlation IDs, API call audit trail with timing/cost, all `console.log/error` replaced across agents/workers/API routes/API clients. Debugger agent skill created for read-only investigation.
 
-**Structured logging foundation:**
-- [ ] Install structured logging library (Pino — lightweight, JSON output, Next.js compatible)
-- [ ] Replace all `console.log` / `console.error` calls with structured logger
-- [ ] Add log levels: `debug` (dev only), `info` (normal ops), `warn` (degraded), `error` (failures)
-- [ ] Add correlation IDs: generate a unique `traceId` per pipeline run, propagate across worker → agent → API client so every log line for a single project run is traceable end-to-end
-- [ ] Include app version in every log entry (see R1.5 below)
-
-**API call logging (WaveSpeed, ElevenLabs, Creatomate):**
-- [ ] Log outbound request: endpoint, payload summary (truncated to 1KB), timestamp
-- [ ] Log inbound response: status code, response summary (truncated), latency (ms)
-- [ ] Log polling: attempt count, interval, total wait time, final status
-- [ ] Log failures: full error response body, HTTP status, retry attempt number
-- [ ] Capture per-call cost (not just aggregate per project)
-
-**Asset generation audit trail (database):**
-- [ ] Create `generation_log` table: `id`, `project_id`, `asset_id` (nullable), `step` (casting/directing/voiceover/editing), `action` (request/response/poll/retry/failure), `provider`, `provider_task_id`, `request_payload` (JSONB, truncated), `response_payload` (JSONB, truncated), `latency_ms`, `cost_usd`, `error_message`, `app_version`, `trace_id`, `created_at`
-- [ ] Insert log rows at each API interaction point in CastingAgent, DirectorAgent, VoiceoverAgent
-- [ ] Queryable via admin: "show me all failed generations in the last 24h", "show me all API calls for project X"
-- [ ] Retention policy: auto-delete logs older than 30 days (configurable)
-
-**Pipeline health metrics:**
-- [ ] Log step duration: how long each pipeline stage takes (analyzing, scripting, casting, directing, voiceover, editing)
-- [ ] Log queue metrics: jobs waiting, jobs processing, jobs failed (BullMQ event listeners)
-- [ ] Success/failure rates per step (queryable from `generation_log`)
-- [ ] Surface pipeline health in an admin-only dashboard (future, not MVP)
-
-**Error context enrichment:**
-- [ ] On pipeline failure, capture: stack trace, last API call details, project state snapshot, agent name, step name, app version
-- [ ] Store enriched error context in `generation_log`, not just `project.error_message`
-- [ ] Make error details viewable on the project detail page (expandable section for admin/debug)
-
-#### R1.5 - Product Versioning
-**Priority:** P0 - Critical
-**Effort:** Small
-**Depends on:** None (can be done independently, but should land before or alongside R1.4)
-**Why:** Without version tracking, bug reports and log entries have no deployment context. "It broke" means nothing if you don't know which version was running. Version tagging is a prerequisite for meaningful observability.
-
-**Semantic versioning:**
-- [ ] Adopt semantic versioning (`MAJOR.MINOR.PATCH`) — current version is `0.1.0` in `package.json`
-- [ ] Bump version on every release: patch for bug fixes, minor for features, major for breaking changes
-- [ ] Create `src/lib/version.ts` that exports the current version (read from `package.json` or build-time constant)
-- [ ] Expose version via `GET /api/version` endpoint (returns `{ version, environment, commitHash }`)
-
-**Version in logs and errors:**
-- [ ] Include `app_version` in every structured log entry (R1.4)
-- [ ] Include `app_version` in `generation_log` table rows
-- [ ] Include `app_version` in `project.error_message` or enriched error context when pipeline fails
-- [ ] Include `app_version` in worker startup log
-
-**Version in UI:**
-- [ ] Display app version in the navigation bar or footer (small, unobtrusive)
-- [ ] Include version in bug report context (if/when bug reporting is added)
-
-**Version in deployments:**
-- [ ] Tag git commits with version on release (`git tag v0.2.0`)
-- [ ] Include git commit hash in version output for exact deployment tracing
-- [ ] Set `APP_VERSION` env var at build time (Vercel + Railway) or read from `package.json`
+#### ~~R1.5 - Product Versioning~~ DONE
+**Status:** Complete (2026-02-15)
+**Implemented:** `src/lib/version.ts` (single source of truth), `GET /api/version` endpoint, version display in nav bar, version in worker startup log, build-time injection via `next.config.ts`, `package.json` bumped to v0.2.0, git tag `v0.2.0` created.
 
 ---
 
@@ -432,8 +377,8 @@ DONE       Tier 0: Critical Bugs
            All bugs fixed (B0.1-B0.11)
 
 NOW        Tier 1: Complete Pipeline
-           R1.5 Versioning ──→ R1.4 Observability & Logging ──→ R1.1 Asset Generation ──→ R1.2 Video Composition ──→ R1.3 Reference Video Intel
-           (tag everything)    (see what's happening)            (finish what's started)    (ship the deliverable)    (core differentiator)
+           ~~R1.5 Versioning~~ ──→ ~~R1.4 Observability~~ ──→ R1.1 Asset Generation ──→ R1.2 Video Composition ──→ R1.3 Reference Video Intel
+           DONE                    DONE                        (finish what's started)    (ship the deliverable)    (core differentiator)
            ▲ R1.5 + R1.4 provide the debugging foundation for hardening R1.1-R1.3
 
 POLISH     Tier 1.5: UX Hardening
