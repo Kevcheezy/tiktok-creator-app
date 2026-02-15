@@ -1,4 +1,5 @@
 import { config } from 'dotenv';
+// Load .env.local for local dev; Railway/production sets env vars directly
 config({ path: '.env.local' });
 import { Worker, Job } from 'bullmq';
 import { createClient } from '@supabase/supabase-js';
@@ -18,8 +19,12 @@ const supabase = createClient(
 );
 
 // Set up standalone Redis connection
-const connection = new IORedis(process.env.REDIS_CONNECTION_URL || 'redis://localhost:6379', {
+const redisUrl = process.env.REDIS_CONNECTION_URL || 'redis://localhost:6379';
+const parsedRedis = new URL(redisUrl);
+const isLocalhost = parsedRedis.hostname === 'localhost' || parsedRedis.hostname === '127.0.0.1';
+const connection = new IORedis(redisUrl, {
   maxRetriesPerRequest: null,
+  ...(isLocalhost ? {} : { tls: {} }),
 });
 
 console.log('Pipeline worker starting...');
@@ -54,6 +59,7 @@ const worker = new Worker(
       username: connection.options.username,
       db: connection.options.db,
       maxRetriesPerRequest: null,
+      ...(isLocalhost ? {} : { tls: {} }),
     },
     concurrency: 2,
   }

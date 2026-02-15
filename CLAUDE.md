@@ -7,10 +7,10 @@ Full-stack app for producing 60-second TikTok Shop UGC videos using AI agents.
 - **Language**: TypeScript
 - **Styling**: Tailwind CSS v4
 - **Database**: Supabase (PostgreSQL) + `@supabase/supabase-js` client
-- **Queue**: BullMQ + Redis
+- **Queue**: BullMQ + Upstash Redis (TLS)
 - **AI**: WaveSpeed API (Gemini LLM, Nano Banana Pro images, Kling 3.0 Pro video)
-- **Voice**: ElevenLabs (future phases)
-- **Rendering**: Creatomate (future phases)
+- **Voice**: ElevenLabs
+- **Rendering**: Creatomate
 
 ## Run Commands
 - `npm run dev` -- Start Next.js dev server (localhost:3000)
@@ -22,12 +22,38 @@ Full-stack app for producing 60-second TikTok Shop UGC videos using AI agents.
 ## Architecture
 ```
 Browser -> Next.js App Router (API Routes) -> BullMQ Queue -> Worker Process
+              (Vercel)                      (Upstash Redis)   (Railway)
                                                               |
                                               WaveSpeed API (LLM, images, video)
                                               Supabase (PostgreSQL via supabase-js)
 ```
 
 Worker runs as a separate Node.js process, not inside Next.js.
+
+## Deployment
+- **Frontend/API**: Vercel -- https://tiktok-creator-app.vercel.app
+- **Worker**: Railway -- runs `npm run worker` as persistent process
+- **Database**: Supabase (project: `yuiwwmkalyplhcwgwcap`)
+- **Queue**: Upstash Redis (`fast-kite-57923.upstash.io`, TLS required)
+
+### Environment Variables (set on both Vercel + Railway)
+```
+NEXT_PUBLIC_SUPABASE_URL          # Supabase project URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY     # Supabase anon key (public)
+SUPABASE_SERVICE_ROLE_KEY         # Supabase service role (secret)
+DATABASE_URL                      # PostgreSQL connection string
+WAVESPEED_API_KEY                 # WaveSpeed API
+ELEVENLABS_API_KEY                # ElevenLabs TTS
+CREATOMATE_API_KEY                # Creatomate video rendering
+REDIS_CONNECTION_URL              # Upstash Redis (redis://...upstash.io:6379)
+```
+
+### Deploy Commands
+- `npx vercel --prod` -- Deploy frontend to Vercel production
+- Worker deploys via Railway dashboard (connected to GitHub, runs `npm run worker`)
+
+### Redis TLS
+Upstash requires TLS. Both `src/lib/queue.ts` and `src/workers/pipeline.worker.ts` auto-enable TLS for non-localhost Redis hosts.
 
 ## Database Tables
 - `ai_character` -- Persona library (11 characters)
