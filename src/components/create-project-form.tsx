@@ -19,9 +19,8 @@ export function CreateProjectForm() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    // Fetch characters for dropdown
     fetch('/api/characters')
-      .then((res) => res.ok ? res.json() : [])
+      .then((res) => (res.ok ? res.json() : []))
       .then(setCharacters)
       .catch(() => setCharacters([]));
   }, []);
@@ -59,14 +58,18 @@ export function CreateProjectForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {error && (
-        <div className="rounded-md bg-red-50 p-4">
-          <p className="text-sm text-red-700">{error}</p>
+        <div className="rounded-lg border border-magenta/30 bg-magenta/10 px-4 py-3">
+          <p className="text-sm text-magenta">{error}</p>
         </div>
       )}
 
+      {/* Product URL */}
       <div>
-        <label htmlFor="productUrl" className="block text-sm font-medium text-gray-700">
-          Product URL <span className="text-red-500">*</span>
+        <label
+          htmlFor="productUrl"
+          className="mb-2 block font-[family-name:var(--font-display)] text-sm font-medium text-text-primary"
+        >
+          Product URL <span className="text-magenta">*</span>
         </label>
         <input
           type="url"
@@ -75,13 +78,18 @@ export function CreateProjectForm() {
           value={productUrl}
           onChange={(e) => setProductUrl(e.target.value)}
           placeholder="https://www.tiktok.com/shop/pdp/..."
-          className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          className="block w-full rounded-lg border border-border bg-surface-raised px-4 py-3 text-sm text-text-primary placeholder:text-text-muted transition-all focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric"
         />
       </div>
 
+      {/* Video URL */}
       <div>
-        <label htmlFor="videoUrl" className="block text-sm font-medium text-gray-700">
-          Reference Video URL <span className="text-gray-400">(optional)</span>
+        <label
+          htmlFor="videoUrl"
+          className="mb-2 block font-[family-name:var(--font-display)] text-sm font-medium text-text-primary"
+        >
+          Reference Video URL{' '}
+          <span className="font-normal text-text-muted">(optional)</span>
         </label>
         <input
           type="url"
@@ -89,35 +97,86 @@ export function CreateProjectForm() {
           value={videoUrl}
           onChange={(e) => setVideoUrl(e.target.value)}
           placeholder="https://www.tiktok.com/@user/video/..."
-          className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          className="block w-full rounded-lg border border-border bg-surface-raised px-4 py-3 text-sm text-text-primary placeholder:text-text-muted transition-all focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric"
         />
       </div>
 
+      {/* Character */}
       <div>
-        <label htmlFor="character" className="block text-sm font-medium text-gray-700">
-          Character <span className="text-gray-400">(optional)</span>
-        </label>
-        <select
-          id="character"
-          value={characterId}
-          onChange={(e) => setCharacterId(e.target.value)}
-          className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        <label
+          htmlFor="character"
+          className="mb-2 block font-[family-name:var(--font-display)] text-sm font-medium text-text-primary"
         >
-          <option value="">Auto-detect from product category</option>
-          {characters.map((char) => (
-            <option key={char.id} value={char.id}>
-              {char.name} ({char.avatarPersona})
-            </option>
-          ))}
-        </select>
+          Character{' '}
+          <span className="font-normal text-text-muted">(optional)</span>
+        </label>
+        <div className="relative">
+          <select
+            id="character"
+            value={characterId}
+            onChange={(e) => setCharacterId(e.target.value)}
+            className="block w-full appearance-none rounded-lg border border-border bg-surface-raised px-4 py-3 pr-10 text-sm text-text-primary transition-all focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric"
+          >
+            <option value="">Auto-detect from product category</option>
+            {characters.map((char) => (
+              <option key={char.id} value={char.id}>
+                {char.name} ({char.avatarPersona})
+              </option>
+            ))}
+          </select>
+          {/* Custom dropdown arrow */}
+          <svg
+            viewBox="0 0 16 16"
+            fill="none"
+            className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <polyline points="4 6 8 10 12 6" />
+          </svg>
+        </div>
       </div>
 
+      {/* Submit */}
       <button
         type="submit"
         disabled={loading}
-        className="w-full rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="group relative w-full overflow-hidden rounded-lg bg-electric px-4 py-3 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:shadow-[0_0_32px_rgba(0,240,255,0.25)] disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {loading ? 'Creating...' : 'Create Project'}
+        {loading ? (
+          <span className="flex items-center justify-center gap-2">
+            <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+              <circle
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="3"
+                strokeDasharray="60"
+                strokeDashoffset="15"
+                strokeLinecap="round"
+              />
+            </svg>
+            Creating...
+          </span>
+        ) : (
+          <span className="flex items-center justify-center gap-2">
+            <svg
+              viewBox="0 0 16 16"
+              fill="none"
+              className="h-4 w-4"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+            >
+              <line x1="8" y1="3" x2="8" y2="13" />
+              <line x1="3" y1="8" x2="13" y2="8" />
+            </svg>
+            Create Project
+          </span>
+        )}
       </button>
     </form>
   );

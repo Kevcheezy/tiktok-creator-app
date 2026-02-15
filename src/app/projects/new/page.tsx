@@ -3,14 +3,19 @@ import { CreateProjectForm } from '@/components/create-project-form';
 
 export default function NewProjectPage() {
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
       <Nav />
-      <main className="mx-auto max-w-lg px-4 py-8 sm:px-6 lg:px-8">
-        <h1 className="text-2xl font-bold text-gray-900">New Project</h1>
-        <p className="mt-2 text-sm text-gray-600">
-          Enter a TikTok Shop product URL to analyze and generate a UGC video.
-        </p>
-        <div className="mt-6 rounded-lg border border-gray-200 bg-white p-6">
+      <main className="mx-auto max-w-lg px-6 py-10 lg:px-8">
+        <div className="animate-fade-in-up">
+          <h1 className="font-[family-name:var(--font-display)] text-2xl font-bold tracking-tight text-text-primary">
+            New Project
+          </h1>
+          <p className="mt-2 text-sm text-text-secondary">
+            Enter a TikTok Shop product URL to analyze and generate a UGC video.
+          </p>
+        </div>
+
+        <div className="mt-8 animate-fade-in-up rounded-xl border border-border bg-surface p-6" style={{ animationDelay: '100ms' }}>
           <CreateProjectForm />
         </div>
       </main>

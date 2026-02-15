@@ -1,20 +1,63 @@
-const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
-  created: { label: 'Created', className: 'bg-gray-100 text-gray-700' },
-  analyzing: { label: 'Analyzing', className: 'bg-amber-100 text-amber-700 animate-pulse' },
-  analysis_review: { label: 'Review Analysis', className: 'bg-emerald-100 text-emerald-700' },
-  scripting: { label: 'Scripting', className: 'bg-blue-100 text-blue-700 animate-pulse' },
-  script_review: { label: 'Review Script', className: 'bg-emerald-100 text-emerald-700' },
-  casting: { label: 'Casting', className: 'bg-purple-100 text-purple-700 animate-pulse' },
-  directing: { label: 'Directing', className: 'bg-orange-100 text-orange-700 animate-pulse' },
-  editing: { label: 'Editing', className: 'bg-cyan-100 text-cyan-700 animate-pulse' },
-  completed: { label: 'Completed', className: 'bg-green-100 text-green-700' },
-  failed: { label: 'Failed', className: 'bg-red-100 text-red-700' },
+const STATUS_CONFIG: Record<string, { label: string; color: string; pulse?: boolean }> = {
+  created: {
+    label: 'Created',
+    color: 'bg-text-muted/20 text-text-muted border-text-muted/30',
+  },
+  analyzing: {
+    label: 'Analyzing',
+    color: 'bg-electric/10 text-electric border-electric/30',
+    pulse: true,
+  },
+  analysis_review: {
+    label: 'Review Analysis',
+    color: 'bg-amber-hot/10 text-amber-hot border-amber-hot/30',
+  },
+  scripting: {
+    label: 'Scripting',
+    color: 'bg-electric/10 text-electric border-electric/30',
+    pulse: true,
+  },
+  script_review: {
+    label: 'Review Script',
+    color: 'bg-amber-hot/10 text-amber-hot border-amber-hot/30',
+  },
+  casting: {
+    label: 'Casting',
+    color: 'bg-magenta/10 text-magenta border-magenta/30',
+    pulse: true,
+  },
+  directing: {
+    label: 'Directing',
+    color: 'bg-magenta/10 text-magenta border-magenta/30',
+    pulse: true,
+  },
+  editing: {
+    label: 'Editing',
+    color: 'bg-electric/10 text-electric border-electric/30',
+    pulse: true,
+  },
+  completed: {
+    label: 'Completed',
+    color: 'bg-lime/10 text-lime border-lime/30',
+  },
+  failed: {
+    label: 'Failed',
+    color: 'bg-magenta/10 text-magenta border-magenta/30',
+  },
 };
 
 export function StatusBadge({ status }: { status: string }) {
   const config = STATUS_CONFIG[status] || STATUS_CONFIG.created;
   return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${config.className}`}>
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-[family-name:var(--font-display)] text-[11px] font-semibold uppercase tracking-wider ${config.color}`}
+    >
+      {config.pulse && (
+        <span className="relative flex h-1.5 w-1.5">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-current opacity-75" />
+          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-current" />
+        </span>
+      )}
       {config.label}
     </span>
   );

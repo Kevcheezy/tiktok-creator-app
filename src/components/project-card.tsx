@@ -28,38 +28,6 @@ function timeAgo(date: string | null): string {
   return `${days}d ago`;
 }
 
-export function ProjectCard({ project }: ProjectCardProps) {
-  const displayName = project.product_name || project.name || truncateUrl(project.product_url);
-
-  return (
-    <Link href={`/projects/${project.id}`} className="block">
-      <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md">
-        <div className="flex items-start justify-between">
-          <h3 className="text-sm font-semibold text-gray-900 line-clamp-2">
-            {displayName}
-          </h3>
-          <StatusBadge status={project.status} />
-        </div>
-        <div className="mt-3 flex items-center gap-2">
-          {project.product_category && (
-            <span className="inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-600 ring-1 ring-inset ring-gray-500/10">
-              {project.product_category}
-            </span>
-          )}
-          {project.cost_usd && parseFloat(project.cost_usd) > 0 && (
-            <span className="text-xs text-gray-500">
-              ${parseFloat(project.cost_usd).toFixed(2)}
-            </span>
-          )}
-        </div>
-        <p className="mt-2 text-xs text-gray-400">
-          {timeAgo(project.created_at)}
-        </p>
-      </div>
-    </Link>
-  );
-}
-
 function truncateUrl(url: string): string {
   try {
     const parsed = new URL(url);
@@ -69,4 +37,75 @@ function truncateUrl(url: string): string {
   } catch {
     return url.substring(0, 40) + (url.length > 40 ? '...' : '');
   }
+}
+
+const STATUS_ACCENT: Record<string, string> = {
+  analyzing: 'group-hover:border-electric/40',
+  analysis_review: 'group-hover:border-amber-hot/40',
+  scripting: 'group-hover:border-electric/40',
+  script_review: 'group-hover:border-amber-hot/40',
+  casting: 'group-hover:border-magenta/40',
+  directing: 'group-hover:border-magenta/40',
+  editing: 'group-hover:border-electric/40',
+  completed: 'group-hover:border-lime/40',
+  failed: 'group-hover:border-magenta/40',
+};
+
+export function ProjectCard({ project }: ProjectCardProps) {
+  const displayName = project.product_name || project.name || truncateUrl(project.product_url);
+  const accent = STATUS_ACCENT[project.status] || 'group-hover:border-border-bright';
+
+  return (
+    <Link href={`/projects/${project.id}`} className="group block">
+      <div
+        className={`relative overflow-hidden rounded-xl border border-border bg-surface p-5 transition-all duration-300 hover:bg-surface-raised hover:shadow-lg hover:shadow-black/20 ${accent}`}
+      >
+        {/* Top gradient line */}
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border-bright to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
+
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3">
+          <h3 className="font-[family-name:var(--font-display)] text-sm font-semibold leading-tight text-text-primary line-clamp-2">
+            {displayName}
+          </h3>
+          <div className="flex-shrink-0">
+            <StatusBadge status={project.status} />
+          </div>
+        </div>
+
+        {/* Meta */}
+        <div className="mt-4 flex items-center gap-3">
+          {project.product_category && (
+            <span className="rounded-md bg-surface-overlay px-2 py-0.5 font-[family-name:var(--font-mono)] text-[11px] text-text-secondary">
+              {project.product_category}
+            </span>
+          )}
+          {project.cost_usd && parseFloat(project.cost_usd) > 0 && (
+            <span className="font-[family-name:var(--font-mono)] text-[11px] text-text-muted">
+              ${parseFloat(project.cost_usd).toFixed(2)}
+            </span>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="mt-3 flex items-center justify-between">
+          <p className="font-[family-name:var(--font-mono)] text-[11px] text-text-muted">
+            {timeAgo(project.created_at)}
+          </p>
+          <svg
+            viewBox="0 0 16 16"
+            fill="none"
+            className="h-3.5 w-3.5 text-text-muted transition-all group-hover:translate-x-0.5 group-hover:text-text-secondary"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <line x1="3" y1="8" x2="13" y2="8" />
+            <polyline points="9 4 13 8 9 12" />
+          </svg>
+        </div>
+      </div>
+    </Link>
+  );
 }
