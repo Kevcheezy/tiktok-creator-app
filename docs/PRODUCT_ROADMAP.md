@@ -168,9 +168,8 @@ These are blocking items. Nothing else matters until a user can go from product 
 **Status:** Complete (2026-02-15)
 **Implemented:** `src/lib/version.ts` (single source of truth), `GET /api/version` endpoint, version display in nav bar, version in worker startup log, build-time injection via `next.config.ts`, `package.json` bumped to v0.2.0, git tag `v0.2.0` created.
 
-#### R1.6 - Products as First-Class Entity
-**Priority:** P0 - Critical
-**Effort:** Medium
+#### ~~R1.6 - Products as First-Class Entity~~ DONE
+**Status:** Complete (2026-02-15)
 **Depends on:** None (can run in parallel with R1.1 — different pipeline stages)
 **Spec:** `docs/plans/2026-02-15-r1.6-products-entity-spec.md`
 **Why:** Product data is denormalized into the `project` table. Every project re-runs ProductAnalyzerAgent from scratch — even for the same product URL. This wastes API costs ($0.01/analysis), wastes user time (re-approve same analysis), and prevents cross-project product insights. Products should be a first-class entity: analyze once, use across many projects.
@@ -197,12 +196,12 @@ These are blocking items. Nothing else matters until a user can go from product 
 - [x] Project creation with existing product: copy denormalized fields, skip analysis
 
 **Frontend:**
-- [ ] Products tab in navigation (between Projects and Influencers)
-- [ ] Products list page (`/products`): cards with name, image, category, status, project count
-- [ ] Product detail page (`/products/[id]`): analysis results, image upload/replace, project list, re-analyze, delete
-- [ ] Inline editing for all analysis fields (text: click-to-edit, arrays: add/remove/reorder, category: dropdown)
-- [ ] "Edited" badge on overridden fields, "Reset to original" per-field action
-- [ ] Create project form: product selector (existing) + new URL input (creates product)
+- [x] Products tab in navigation (between Dashboard and Influencers)
+- [x] Products list page (`/products`): cards with image, name, brand, category badge, status badge with pulse, project count, delete with guard
+- [x] Product detail page (`/products/[id]`): analysis results, image upload/replace, re-analyze button, delete with confirmation, analyzing spinner, failed state with retry
+- [x] Inline editing for all analysis fields: text fields click-to-edit with Enter/Escape, arrays with add/remove, category dropdown
+- [x] "Edited" badge on overridden fields, "Reset to original" per-field action via OverrideBadge component
+- [x] Create project form: product selector dropdown (shows analyzed products, skips analysis) + new URL input (hidden when product selected)
 
 ---
 

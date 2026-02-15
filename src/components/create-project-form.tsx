@@ -4,6 +4,15 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ToneSelector } from './tone-selector';
 
+interface Product {
+  id: string;
+  name: string | null;
+  url: string;
+  status: string;
+  category: string | null;
+  image_url: string | null;
+}
+
 interface Influencer {
   id: string;
   name: string;
@@ -19,16 +28,22 @@ interface Character {
 export function CreateProjectForm() {
   const router = useRouter();
   const [productUrl, setProductUrl] = useState('');
+  const [selectedProductId, setSelectedProductId] = useState('');
   const [videoUrl, setVideoUrl] = useState('');
   const [influencerId, setInfluencerId] = useState('');
   const [characterId, setCharacterId] = useState('');
   const [tone, setTone] = useState('reluctant-insider');
+  const [products, setProducts] = useState<Product[]>([]);
   const [influencers, setInfluencers] = useState<Influencer[]>([]);
   const [characters, setCharacters] = useState<Character[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
+    fetch('/api/products')
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: Product[]) => setProducts(data.filter((p) => p.status === 'analyzed')))
+      .catch(() => setProducts([]));
     fetch('/api/influencers')
       .then((res) => (res.ok ? res.json() : []))
       .then(setInfluencers)
@@ -49,7 +64,8 @@ export function CreateProjectForm() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          productUrl,
+          productUrl: selectedProductId ? undefined : productUrl,
+          productId: selectedProductId || undefined,
           videoUrl: videoUrl || undefined,
           influencerId: influencerId || undefined,
           characterId: characterId || undefined,
@@ -80,24 +96,60 @@ export function CreateProjectForm() {
         </div>
       )}
 
-      {/* Product URL */}
-      <div>
-        <label
-          htmlFor="productUrl"
-          className="mb-2 block font-[family-name:var(--font-display)] text-sm font-medium text-text-primary"
-        >
-          Product URL <span className="text-magenta">*</span>
-        </label>
-        <input
-          type="url"
-          id="productUrl"
-          required
-          value={productUrl}
-          onChange={(e) => setProductUrl(e.target.value)}
-          placeholder="https://www.tiktok.com/shop/pdp/..."
-          className="block w-full rounded-lg border border-border bg-surface-raised px-4 py-3 text-sm text-text-primary placeholder:text-text-muted transition-all focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric"
-        />
-      </div>
+      {/* Product: existing or new URL */}
+      {products.length > 0 && (
+        <div>
+          <label
+            htmlFor="existingProduct"
+            className="mb-2 block font-[family-name:var(--font-display)] text-sm font-medium text-text-primary"
+          >
+            Existing Product{' '}
+            <span className="font-normal text-text-muted">(skip analysis)</span>
+          </label>
+          <div className="relative">
+            <select
+              id="existingProduct"
+              value={selectedProductId}
+              onChange={(e) => {
+                setSelectedProductId(e.target.value);
+                if (e.target.value) setProductUrl('');
+              }}
+              className="block w-full appearance-none rounded-lg border border-border bg-surface-raised px-4 py-3 pr-10 text-sm text-text-primary transition-all focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric"
+            >
+              <option value="">Enter new URL instead</option>
+              {products.map((prod) => (
+                <option key={prod.id} value={prod.id}>
+                  {prod.name || prod.url}{prod.category ? ` (${prod.category})` : ''}
+                </option>
+              ))}
+            </select>
+            <svg viewBox="0 0 16 16" fill="none" className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="4 6 8 10 12 6" />
+            </svg>
+          </div>
+        </div>
+      )}
+
+      {/* Product URL (hidden when existing product selected) */}
+      {!selectedProductId && (
+        <div>
+          <label
+            htmlFor="productUrl"
+            className="mb-2 block font-[family-name:var(--font-display)] text-sm font-medium text-text-primary"
+          >
+            Product URL <span className="text-magenta">*</span>
+          </label>
+          <input
+            type="url"
+            id="productUrl"
+            required={!selectedProductId}
+            value={productUrl}
+            onChange={(e) => setProductUrl(e.target.value)}
+            placeholder="https://www.tiktok.com/shop/pdp/..."
+            className="block w-full rounded-lg border border-border bg-surface-raised px-4 py-3 text-sm text-text-primary placeholder:text-text-muted transition-all focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric"
+          />
+        </div>
+      )}
 
       {/* Video URL */}
       <div>

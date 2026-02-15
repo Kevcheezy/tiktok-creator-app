@@ -47,6 +47,12 @@ export async function Nav() {
               Dashboard
             </Link>
             <Link
+              href="/products"
+              className="font-[family-name:var(--font-display)] text-sm font-medium text-text-secondary transition-colors hover:text-electric"
+            >
+              Products
+            </Link>
+            <Link
               href="/influencers"
               className="font-[family-name:var(--font-display)] text-sm font-medium text-text-secondary transition-colors hover:text-electric"
             >
