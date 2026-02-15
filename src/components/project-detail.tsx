@@ -104,6 +104,9 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       const res = await fetch(`/api/projects/${projectId}`, { method: 'DELETE' });
       if (res.ok) {
         router.push('/');
+      } else {
+        setDeleting(false);
+        setShowDeleteConfirm(false);
       }
     } catch {
       setDeleting(false);
