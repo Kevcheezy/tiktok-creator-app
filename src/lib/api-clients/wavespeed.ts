@@ -79,7 +79,7 @@ export class WaveSpeedClient {
       body: JSON.stringify({
         prompt,
         aspect_ratio: aspectRatio,
-        num_images: 1,
+        num_images: 2,
         output_format: 'png',
         enable_sync_mode: false,
       }),
