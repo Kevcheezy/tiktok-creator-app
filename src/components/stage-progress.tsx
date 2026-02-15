@@ -12,7 +12,16 @@ interface ProgressData {
   label: string;
   currentStep: string;
   startedAt: string | null;
+  costUsd: number;
 }
+
+// Expected max duration per stage (seconds) before showing warning
+const STAGE_TIMEOUT: Record<string, number> = {
+  casting: 300,     // 5 min
+  directing: 1200,  // 20 min
+  voiceover: 300,   // 5 min
+  editing: 600,     // 10 min
+};
 
 interface StageProgressProps {
   projectId: string;
@@ -107,9 +116,16 @@ export function StageProgress({ projectId, stage, color = 'magenta' }: StageProg
             <h3 className={`font-[family-name:var(--font-display)] text-sm font-semibold ${textColor}`}>
               {stageLabels[stage] || stage}
             </h3>
-            <span className="flex-shrink-0 font-[family-name:var(--font-mono)] text-xs text-text-muted">
-              {formatElapsed(elapsed)}
-            </span>
+            <div className="flex items-center gap-3 flex-shrink-0">
+              {progress && progress.costUsd > 0 && (
+                <span className="font-[family-name:var(--font-mono)] text-[11px] text-text-muted">
+                  ${progress.costUsd.toFixed(2)}
+                </span>
+              )}
+              <span className="font-[family-name:var(--font-mono)] text-xs text-text-muted">
+                {formatElapsed(elapsed)}
+              </span>
+            </div>
           </div>
 
           {/* Progress bar */}
@@ -147,6 +163,21 @@ export function StageProgress({ projectId, stage, color = 'magenta' }: StageProg
             <p className="mt-2 text-xs text-amber-hot">
               {progress.failed} asset{progress.failed > 1 ? 's' : ''} failed — agent will retry or skip
             </p>
+          )}
+
+          {/* Timeout warning for stuck pipelines */}
+          {elapsed > (STAGE_TIMEOUT[stage] || 600) && (
+            <div className="mt-3 flex items-center gap-2 rounded-lg border border-amber-hot/30 bg-amber-hot/5 px-3 py-2">
+              <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5 flex-shrink-0 text-amber-hot" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round">
+                <circle cx="8" cy="8" r="6.5" />
+                <path d="M8 4.5v4" />
+                <circle cx="8" cy="11" r="0.5" fill="currentColor" />
+              </svg>
+              <p className="text-[11px] text-amber-hot">
+                This stage is taking longer than expected. The worker may have crashed.
+                Use the retry/rollback controls if the project becomes stuck.
+              </p>
+            </div>
           )}
         </div>
       </div>

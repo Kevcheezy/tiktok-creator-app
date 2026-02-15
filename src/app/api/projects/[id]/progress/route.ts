@@ -31,7 +31,7 @@ export async function GET(
   try {
     const { data: proj, error: projError } = await supabase
       .from('project')
-      .select('id, status, updated_at')
+      .select('id, status, updated_at, cost_usd')
       .eq('id', id)
       .single();
 
@@ -99,6 +99,7 @@ export async function GET(
       currentStep,
       items,
       startedAt: proj.updated_at,
+      costUsd: proj.cost_usd ? parseFloat(proj.cost_usd) : 0,
     });
   } catch (error) {
     logger.error({ err: error, route: '/api/projects/[id]/progress' }, 'Error fetching progress');

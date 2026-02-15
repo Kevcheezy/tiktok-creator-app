@@ -68,7 +68,8 @@ export class CastingAgent extends BaseAgent {
       | { segment: number; visibility: string; description: string; notes?: string }[]
       | null;
 
-    // 6. For each segment, generate start + end keyframes
+    // 6. For each segment, generate start + end keyframes (with per-segment error recovery)
+    let segmentsCompleted = 0;
     for (const segIdx of SEGMENTS) {
       const scene = latestScenes.get(segIdx);
       if (!scene) {
@@ -89,66 +90,97 @@ export class CastingAgent extends BaseAgent {
         : defaultPlacement;
       const energyArc = ENERGY_ARC[segIdx];
 
-      // Use LLM to generate detailed prompts for start and end frames
-      const promptPair = await this.generateVisualPrompts(
-        appearance, wardrobe, setting,
-        scene, placement, energyArc,
-        project.product_name || 'the product',
-        projectId,
-        useInfluencer,
-      );
+      const maxRetries = 1;
+      let segmentSuccess = false;
 
-      // Save visual prompts to scene
-      await this.supabase
-        .from('scene')
-        .update({ visual_prompt: promptPair })
-        .eq('id', scene.id);
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          if (attempt > 0) {
+            this.log(`Retry ${attempt}/${maxRetries} for segment ${segIdx} after 5s delay...`);
+            await new Promise(resolve => setTimeout(resolve, 5000));
+          }
 
-      if (useInfluencer) {
-        // Image-to-image: edit the influencer's reference photo
-        this.log(`Using influencer reference: ${influencer.name}`);
+          // Use LLM to generate detailed prompts for start and end frames
+          const promptPair = await this.generateVisualPrompts(
+            appearance, wardrobe, setting,
+            scene, placement, energyArc,
+            project.product_name || 'the product',
+            projectId,
+            useInfluencer,
+          );
 
-        this.log(`Generating start keyframe (edit) for segment ${segIdx}`);
-        const startResult = await this.wavespeed.editImage([influencer.image_url], promptPair.start, { aspectRatio: '9:16' });
-        await this.createAsset(projectId, scene.id, 'keyframe_start', startResult.taskId, 'nano-banana-pro-edit');
+          // Save visual prompts to scene
+          await this.supabase
+            .from('scene')
+            .update({ visual_prompt: promptPair })
+            .eq('id', scene.id);
 
-        this.log(`Generating end keyframe (edit) for segment ${segIdx}`);
-        const endResult = await this.wavespeed.editImage([influencer.image_url], promptPair.end, { aspectRatio: '9:16' });
-        await this.createAsset(projectId, scene.id, 'keyframe_end', endResult.taskId, 'nano-banana-pro-edit');
+          if (useInfluencer) {
+            // Image-to-image: edit the influencer's reference photo
+            this.log(`Using influencer reference: ${influencer.name}`);
 
-        // Poll both tasks
-        this.log(`Polling start keyframe task ${startResult.taskId}`);
-        const startPoll = await this.wavespeed.pollResult(startResult.taskId, { maxWait: 120000, initialInterval: 5000 });
-        await this.updateAssetUrl(startResult.taskId, startPoll.url || '');
+            this.log(`Generating start keyframe (edit) for segment ${segIdx} (attempt ${attempt + 1})`);
+            const startResult = await this.wavespeed.editImage([influencer.image_url], promptPair.start, { aspectRatio: '9:16' });
+            await this.createAsset(projectId, scene.id, 'keyframe_start', startResult.taskId, 'nano-banana-pro-edit');
 
-        this.log(`Polling end keyframe task ${endResult.taskId}`);
-        const endPoll = await this.wavespeed.pollResult(endResult.taskId, { maxWait: 120000, initialInterval: 5000 });
-        await this.updateAssetUrl(endResult.taskId, endPoll.url || '');
+            this.log(`Generating end keyframe (edit) for segment ${segIdx}`);
+            const endResult = await this.wavespeed.editImage([influencer.image_url], promptPair.end, { aspectRatio: '9:16' });
+            await this.createAsset(projectId, scene.id, 'keyframe_end', endResult.taskId, 'nano-banana-pro-edit');
 
-        // Track cost: 2 edit images
-        await this.trackCost(projectId, API_COSTS.nanoBananaProEdit * 2);
-      } else {
-        // Text-to-image: existing flow
-        this.log(`Generating start keyframe for segment ${segIdx}`);
-        const startResult = await this.wavespeed.generateImage(promptPair.start);
-        await this.createAsset(projectId, scene.id, 'keyframe_start', startResult.taskId);
+            // Poll both tasks
+            this.log(`Polling start keyframe task ${startResult.taskId}`);
+            const startPoll = await this.wavespeed.pollResult(startResult.taskId, { maxWait: 120000, initialInterval: 5000 });
+            await this.updateAssetUrl(startResult.taskId, startPoll.url || '');
 
-        this.log(`Generating end keyframe for segment ${segIdx}`);
-        const endResult = await this.wavespeed.generateImage(promptPair.end);
-        await this.createAsset(projectId, scene.id, 'keyframe_end', endResult.taskId);
+            this.log(`Polling end keyframe task ${endResult.taskId}`);
+            const endPoll = await this.wavespeed.pollResult(endResult.taskId, { maxWait: 120000, initialInterval: 5000 });
+            await this.updateAssetUrl(endResult.taskId, endPoll.url || '');
 
-        // Poll both tasks
-        this.log(`Polling start keyframe task ${startResult.taskId}`);
-        const startPoll = await this.wavespeed.pollResult(startResult.taskId, { maxWait: 120000, initialInterval: 5000 });
-        await this.updateAssetUrl(startResult.taskId, startPoll.url || '');
+            // Track cost: 2 edit images
+            await this.trackCost(projectId, API_COSTS.nanoBananaProEdit * 2);
+          } else {
+            // Text-to-image: existing flow
+            this.log(`Generating start keyframe for segment ${segIdx} (attempt ${attempt + 1})`);
+            const startResult = await this.wavespeed.generateImage(promptPair.start);
+            await this.createAsset(projectId, scene.id, 'keyframe_start', startResult.taskId);
 
-        this.log(`Polling end keyframe task ${endResult.taskId}`);
-        const endPoll = await this.wavespeed.pollResult(endResult.taskId, { maxWait: 120000, initialInterval: 5000 });
-        await this.updateAssetUrl(endResult.taskId, endPoll.url || '');
+            this.log(`Generating end keyframe for segment ${segIdx}`);
+            const endResult = await this.wavespeed.generateImage(promptPair.end);
+            await this.createAsset(projectId, scene.id, 'keyframe_end', endResult.taskId);
 
-        // Track cost: 2 text-to-image generations
-        await this.trackCost(projectId, API_COSTS.nanoBananaPro * 2);
+            // Poll both tasks
+            this.log(`Polling start keyframe task ${startResult.taskId}`);
+            const startPoll = await this.wavespeed.pollResult(startResult.taskId, { maxWait: 120000, initialInterval: 5000 });
+            await this.updateAssetUrl(startResult.taskId, startPoll.url || '');
+
+            this.log(`Polling end keyframe task ${endResult.taskId}`);
+            const endPoll = await this.wavespeed.pollResult(endResult.taskId, { maxWait: 120000, initialInterval: 5000 });
+            await this.updateAssetUrl(endResult.taskId, endPoll.url || '');
+
+            // Track cost: 2 text-to-image generations
+            await this.trackCost(projectId, API_COSTS.nanoBananaPro * 2);
+          }
+
+          segmentSuccess = true;
+          segmentsCompleted++;
+          break;
+        } catch (error) {
+          const errMsg = error instanceof Error ? error.message : String(error);
+          this.log(`Casting failed for segment ${segIdx} (attempt ${attempt + 1}): ${errMsg}`);
+        }
       }
+
+      if (!segmentSuccess) {
+        this.log(`All retries exhausted for segment ${segIdx}, creating failed assets`);
+        await this.supabase.from('asset').insert([
+          { project_id: projectId, scene_id: scene.id, type: 'keyframe_start', provider: useInfluencer ? 'nano-banana-pro-edit' : 'nano-banana-pro', status: 'failed', cost_usd: 0 },
+          { project_id: projectId, scene_id: scene.id, type: 'keyframe_end', provider: useInfluencer ? 'nano-banana-pro-edit' : 'nano-banana-pro', status: 'failed', cost_usd: 0 },
+        ]);
+      }
+    }
+
+    if (segmentsCompleted === 0) {
+      throw new Error('All segments failed during casting');
     }
 
     const durationMs = Date.now() - stageStart;

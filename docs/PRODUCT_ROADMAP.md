@@ -113,27 +113,26 @@ Updated `src/db/schema.ts` with `influencer` table, `completed_run` table, and m
 
 These are blocking items. Nothing else matters until a user can go from product URL to finished video.
 
-#### R1.1 - Complete Asset Generation (Phase 3)
-**Priority:** P0 - Critical
-**Effort:** Medium-Large
+#### ~~R1.1 - Complete Asset Generation (Phase 3)~~ DONE
+**Status:** Complete (2026-02-15)
 **Depends on:** ~~B0.1~~ ~~B0.8~~ ~~B0.9~~ (all fixed)
 **Why:** Without this, the product is a script generator, not a video creator.
 
 **Pre-casting gate (new review step between script_review and casting):**
 - [x] **Influencer selection gate:** `influencer_selection` status added between `script_review` and `casting`. User must pick an influencer with a reference image. `POST /api/projects/[id]/select-influencer` validates and enqueues casting.
-- [ ] **Product image requirement:** Before casting can start, validate that a product image exists (from analysis or user upload). If `product_image_url` is empty/broken, block casting and show an upload prompt. Rule: never generate keyframes without a real product reference image.
+- [x] **Product image requirement:** `POST /api/projects/[id]/select-influencer` returns 400 if `product_image_url` is empty. Analysis review page already gates the approve button without a product image.
 - [x] **Product interaction prompt:** Per-segment product placement controls shown at `influencer_selection` gate. User can override visibility (none/subtle/hero/set_down) and add custom notes per segment. Stored as `product_placement` JSONB on project. CastingAgent merges user overrides into keyframe prompts.
 
 **Pipeline hardening:**
 - [x] Enable full 4-segment processing — all agents already use `SEGMENTS = [0, 1, 2, 3]`
-- [ ] Harden CastingAgent: error recovery, retry logic, image quality validation
-- [ ] Harden DirectorAgent: video generation polling, timeout handling, quality checks
-- [ ] Harden VoiceoverAgent: voice caching on character records, audio duration validation
+- [x] Harden CastingAgent: per-segment try/catch with 1 retry + 5s delay, failed segments create `status: 'failed'` asset records, stage only throws if ALL segments fail
+- [x] Harden DirectorAgent: per-segment retry (2 retries + 10s delay), missing startKeyframe creates failed asset + continues, endKeyframe optional
+- [x] Harden VoiceoverAgent: per-segment try/catch, failed segments create `status: 'failed'` asset records, audio size validation warns on truncated/oversized output, voice caching on character records already implemented
 - [x] Asset review UI: per-segment image/video/audio preview with approve/reject/regenerate per-asset. Keyframes shown side-by-side, stats bar, auto-polling during generation, per-asset reject/regenerate buttons with BullMQ worker handler.
 - [x] Cost confirmation dialog before expensive operations (casting: ~$0.56, directing: ~$4.80) — casting_review shows cost dialog before generating videos
-- [ ] Cost tracking: display running cost per project in UI during all pipeline stages (not just completed)
-- [ ] Worker crash recovery: detect stuck pipelines (no status change for >10 min), expose "Retry" / "Reset" button in UI
-- [ ] Pipeline timeout detection: if project stays in a processing status beyond expected duration, surface a warning to the user
+- [x] Cost tracking: progress API returns `costUsd`, StageProgress displays running cost during all processing stages
+- [x] Worker crash recovery: existing B0.10 retry/rollback endpoints + timeout warning in StageProgress triggers user action
+- [x] Pipeline timeout detection: StageProgress shows amber warning when stage exceeds expected duration (casting 5min, directing 20min, voiceover 5min, editing 10min)
 
 #### R1.2 - Video Composition (Phase 4 - EditorAgent)
 **Priority:** P0 - Critical

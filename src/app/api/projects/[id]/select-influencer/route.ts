@@ -26,10 +26,10 @@ export async function POST(
       );
     }
 
-    // Verify project is in the right status
+    // Verify project is in the right status and has product image
     const { data: proj, error: projError } = await supabase
       .from('project')
-      .select('id, status')
+      .select('id, status, product_image_url')
       .eq('id', id)
       .single();
 
@@ -40,6 +40,13 @@ export async function POST(
     if (proj.status !== 'influencer_selection') {
       return NextResponse.json(
         { error: `Project is not awaiting influencer selection (current: ${proj.status})` },
+        { status: 400 }
+      );
+    }
+
+    if (!proj.product_image_url) {
+      return NextResponse.json(
+        { error: 'A product image is required before casting. Upload one on the analysis review page.' },
         { status: 400 }
       );
     }

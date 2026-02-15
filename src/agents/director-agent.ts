@@ -60,7 +60,16 @@ export class DirectorAgent extends BaseAgent {
       const endKeyframe = keyframes?.find((a: any) => a.type === 'keyframe_end');
 
       if (!startKeyframe?.url) {
-        throw new Error(`Start keyframe not found for segment ${segIdx}`);
+        this.log(`Start keyframe not found for segment ${segIdx}, creating failed video asset`);
+        await this.supabase.from('asset').insert({
+          project_id: projectId,
+          scene_id: scene.id,
+          type: 'video',
+          provider: 'kling-3.0-pro',
+          status: 'failed',
+          cost_usd: 0,
+        });
+        continue;
       }
 
       // Build multi_prompt from shot_scripts

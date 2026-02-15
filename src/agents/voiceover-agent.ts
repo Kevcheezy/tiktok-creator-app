@@ -56,62 +56,90 @@ export class VoiceoverAgent extends BaseAgent {
       }
     }
 
-    // 4. Generate TTS for each segment
+    // 4. Generate TTS for each segment (with per-segment error recovery)
+    let segmentsCompleted = 0;
     for (const segIdx of SEGMENTS) {
       const scene = latestScenes.get(segIdx);
-      if (!scene?.script_text) {
+      if (!scene?.script_text?.trim()) {
         this.log(`Scene or script_text for segment ${segIdx} not found, skipping`);
         continue;
       }
 
-      this.log(`Generating TTS for segment ${segIdx} (${scene.script_text.length} chars)`);
+      try {
+        this.log(`Generating TTS for segment ${segIdx} (${scene.script_text.length} chars)`);
 
-      // Generate audio
-      const audioBuffer = await this.elevenlabs.textToSpeech(voiceId, scene.script_text);
+        // Generate audio
+        const audioBuffer = await this.elevenlabs.textToSpeech(voiceId, scene.script_text);
 
-      // Upload to Supabase Storage
-      const fileName = `projects/${projectId}/audio/segment-${segIdx}.mp3`;
-      const { error: uploadError } = await this.supabase.storage
-        .from('assets')
-        .upload(fileName, audioBuffer, {
-          contentType: 'audio/mpeg',
-          upsert: true,
-        });
+        // Validate audio duration: MP3 at ~128kbps, 15s segment ≈ 240KB
+        // Warn if audio is unexpectedly short (<5KB) or very long (>1MB for 15s)
+        const sizeKB = audioBuffer.length / 1024;
+        if (sizeKB < 5) {
+          this.log(`Warning: Audio for segment ${segIdx} is very small (${sizeKB.toFixed(1)}KB) — may be truncated`);
+        } else if (sizeKB > 1024) {
+          this.log(`Warning: Audio for segment ${segIdx} is large (${sizeKB.toFixed(1)}KB) — may exceed 15s target`);
+        }
 
-      if (uploadError) {
-        this.log(`Storage upload failed: ${uploadError.message}. Storing as data URI instead.`);
-        // Fallback: store as base64 data URI
-        const base64 = audioBuffer.toString('base64');
-        const dataUri = `data:audio/mpeg;base64,${base64}`;
-
-        await this.supabase.from('asset').insert({
-          project_id: projectId,
-          scene_id: scene.id,
-          type: 'audio',
-          provider: 'elevenlabs',
-          status: 'completed',
-          url: dataUri,
-          cost_usd: API_COSTS.elevenLabsTts,
-        });
-      } else {
-        // Get public URL
-        const { data: urlData } = this.supabase.storage
+        // Upload to Supabase Storage
+        const fileName = `projects/${projectId}/audio/segment-${segIdx}.mp3`;
+        const { error: uploadError } = await this.supabase.storage
           .from('assets')
-          .getPublicUrl(fileName);
+          .upload(fileName, audioBuffer, {
+            contentType: 'audio/mpeg',
+            upsert: true,
+          });
 
+        if (uploadError) {
+          this.log(`Storage upload failed: ${uploadError.message}. Storing as data URI instead.`);
+          // Fallback: store as base64 data URI
+          const base64 = audioBuffer.toString('base64');
+          const dataUri = `data:audio/mpeg;base64,${base64}`;
+
+          await this.supabase.from('asset').insert({
+            project_id: projectId,
+            scene_id: scene.id,
+            type: 'audio',
+            provider: 'elevenlabs',
+            status: 'completed',
+            url: dataUri,
+            cost_usd: API_COSTS.elevenLabsTts,
+          });
+        } else {
+          // Get public URL
+          const { data: urlData } = this.supabase.storage
+            .from('assets')
+            .getPublicUrl(fileName);
+
+          await this.supabase.from('asset').insert({
+            project_id: projectId,
+            scene_id: scene.id,
+            type: 'audio',
+            provider: 'elevenlabs',
+            status: 'completed',
+            url: urlData.publicUrl,
+            cost_usd: API_COSTS.elevenLabsTts,
+          });
+        }
+
+        await this.trackCost(projectId, API_COSTS.elevenLabsTts);
+        segmentsCompleted++;
+        this.log(`TTS complete for segment ${segIdx}`);
+      } catch (error) {
+        const errMsg = error instanceof Error ? error.message : String(error);
+        this.log(`TTS failed for segment ${segIdx}: ${errMsg}`);
         await this.supabase.from('asset').insert({
           project_id: projectId,
           scene_id: scene.id,
           type: 'audio',
           provider: 'elevenlabs',
-          status: 'completed',
-          url: urlData.publicUrl,
-          cost_usd: API_COSTS.elevenLabsTts,
+          status: 'failed',
+          cost_usd: 0,
         });
       }
+    }
 
-      await this.trackCost(projectId, API_COSTS.elevenLabsTts);
-      this.log(`TTS complete for segment ${segIdx}`);
+    if (segmentsCompleted === 0) {
+      throw new Error('All segments failed during voiceover generation');
     }
 
     const durationMs = Date.now() - stageStart;
