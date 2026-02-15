@@ -164,6 +164,37 @@ These are blocking items. Nothing else matters until a user can go from product 
 **Status:** Complete (2026-02-15)
 **Implemented:** `src/lib/version.ts` (single source of truth), `GET /api/version` endpoint, version display in nav bar, version in worker startup log, build-time injection via `next.config.ts`, `package.json` bumped to v0.2.0, git tag `v0.2.0` created.
 
+#### R1.6 - Products as First-Class Entity
+**Priority:** P0 - Critical
+**Effort:** Medium
+**Depends on:** None (can run in parallel with R1.1 — different pipeline stages)
+**Spec:** `docs/plans/2026-02-15-r1.6-products-entity-spec.md`
+**Why:** Product data is denormalized into the `project` table. Every project re-runs ProductAnalyzerAgent from scratch — even for the same product URL. This wastes API costs ($0.01/analysis), wastes user time (re-approve same analysis), and prevents cross-project product insights. Products should be a first-class entity: analyze once, use across many projects.
+
+**Data model:**
+- [ ] New `product` table (url, name, brand, category, selling_points, image_url, analysis_data, status, etc.)
+- [ ] Add `product_id` FK to `project` table
+- [ ] Backward compat: old projects without `product_id` continue reading from their own `product_*` columns
+
+**API:**
+- [ ] Full CRUD: `GET/POST /api/products`, `GET/PATCH/DELETE /api/products/[id]`
+- [ ] Product image upload/replace: `POST /api/products/[id]/image`
+- [ ] Re-analyze endpoint: `POST /api/products/[id]/reanalyze`
+- [ ] Duplicate URL detection: if URL already analyzed, return existing product (no re-analysis)
+- [ ] `POST /api/projects` accepts `productId` — skips analysis for analyzed products
+- [ ] Delete guard: 409 if product referenced by projects
+
+**Pipeline:**
+- [ ] ProductAnalyzerAgent writes to `product` table (not `project`)
+- [ ] Worker updates both `product` and `project` after analysis
+- [ ] Project creation with existing product: copy denormalized fields, skip analysis
+
+**Frontend:**
+- [ ] Products tab in navigation (between Projects and Influencers)
+- [ ] Products list page (`/products`): cards with name, image, category, status, project count
+- [ ] Product detail page (`/products/[id]`): analysis results, image upload/replace, project list, re-analyze, delete
+- [ ] Create project form: product selector (existing) + new URL input (creates product)
+
 ---
 
 ### Tier 1.5: UX Hardening (Polish before scaling)
@@ -377,9 +408,11 @@ DONE       Tier 0: Critical Bugs
            All bugs fixed (B0.1-B0.11)
 
 NOW        Tier 1: Complete Pipeline
-           ~~R1.5 Versioning~~ ──→ ~~R1.4 Observability~~ ──→ R1.1 Asset Generation ──→ R1.2 Video Composition ──→ R1.3 Reference Video Intel
-           DONE                    DONE                        (finish what's started)    (ship the deliverable)    (core differentiator)
-           ▲ R1.5 + R1.4 provide the debugging foundation for hardening R1.1-R1.3
+           ~~R1.5 Versioning~~ ──→ ~~R1.4 Observability~~ ──→ R1.6 Products Entity ─┬─→ R1.2 Video Composition ──→ R1.3 Reference Video Intel
+           DONE                    DONE                        (analyze once, reuse)  │    (ship the deliverable)    (core differentiator)
+                                                               R1.1 Asset Generation ─┘
+                                                               (finish what's started)
+           ▲ R1.6 + R1.1 can run in parallel (different pipeline stages)
 
 POLISH     Tier 1.5: UX Hardening
            R1.5.1 Influencer CRUD ──→ R1.5.2 Project editing ──→ R1.5.3 Navigation ──→ R1.5.4 Error handling
