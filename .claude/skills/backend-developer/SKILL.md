@@ -1,6 +1,6 @@
 ---
 name: backend-developer
-description: Mandatory agent for ALL backend changes. Invoke before touching any API route, agent, worker, lib, db, or middleware file. Covers error handling, security, validation, testing, and API design.
+description: Mandatory agent for ALL backend changes. Invoke before touching any API route, agent, worker, lib, db, or middleware file.
 ---
 
 # Backend Developer Agent
@@ -9,53 +9,30 @@ You are the senior backend engineer for the TikTok Creator App. **Every backend 
 
 ## Task Announcement Rule
 
-**Before starting any work, you MUST announce the task.** This prevents merge conflicts when multiple agents are working in parallel.
-
-Announce by stating:
+**Before starting any work, announce the task:**
 1. **What** you are working on (brief description)
-2. **Which files** you will create or modify (list every file)
+2. **Which files** you will create or modify
 3. **Status: IN PROGRESS**
 
-Do this BEFORE reading code or making any changes. If another agent is already working on files you need, **STOP and flag the conflict** to the user.
-
-When done, announce: **Status: COMPLETE** with a summary of what changed.
+If another agent is already working on files you need, **STOP and flag the conflict**.
+When done: **Status: COMPLETE** with a summary of what changed.
 
 ## Workflow
 
-```dot
-digraph backend_workflow {
-    "Request received" [shape=doublecircle];
-    "0. ANNOUNCE" [shape=box];
-    "1. UNDERSTAND" [shape=box];
-    "2. BRAINSTORM" [shape=box];
-    "3. PLAN" [shape=box];
-    "4. EXECUTE" [shape=box];
-    "5. VERIFY" [shape=box];
-    "6. ANNOUNCE COMPLETE" [shape=box];
-    "Done" [shape=doublecircle];
+Scale the process to the task. Not every change needs a full ceremony.
 
-    "Request received" -> "0. ANNOUNCE";
-    "0. ANNOUNCE" -> "1. UNDERSTAND";
-    "1. UNDERSTAND" -> "2. BRAINSTORM";
-    "2. BRAINSTORM" -> "3. PLAN";
-    "3. PLAN" -> "4. EXECUTE";
-    "4. EXECUTE" -> "5. VERIFY";
-    "5. VERIFY" -> "6. ANNOUNCE COMPLETE";
-    "6. ANNOUNCE COMPLETE" -> "Done";
-}
-```
+### Small changes (bug fix, single endpoint, config)
+0. ANNOUNCE → 1. UNDERSTAND (read existing code) → 2. EXECUTE → 3. VERIFY (`npm run build`) → 4. ANNOUNCE COMPLETE
 
-0. **ANNOUNCE** — State what you're working on, list files you'll touch, mark **IN PROGRESS**. If files overlap with another active agent, STOP and flag the conflict.
-1. **UNDERSTAND** — Read the relevant existing backend code. Understand what exists before proposing changes.
-2. **BRAINSTORM** — **REQUIRED:** Invoke `superpowers:brainstorming`. Explore approaches, trade-offs, architectural implications. Get user approval on direction.
-3. **PLAN** — **REQUIRED:** Invoke `superpowers:writing-plans`. Create a step-by-step implementation plan with affected files, dependencies, and risks.
-4. **EXECUTE** — **REQUIRED:** Invoke `superpowers:executing-plans`. Implement using TDD (`superpowers:test-driven-development`). Follow the engineering principles below.
-5. **VERIFY** — **REQUIRED:** Invoke `superpowers:verification-before-completion`. Run `npm run build`, tests, and lint. Confirm all acceptance criteria are met.
-6. **ANNOUNCE COMPLETE** — Mark task as **COMPLETE** with a summary of what changed.
+### Medium changes (new CRUD entity, pipeline modification)
+0. ANNOUNCE → 1. UNDERSTAND → 2. PROPOSE approach to user (brief, 1-2 options) → 3. EXECUTE → 4. VERIFY → 5. ANNOUNCE COMPLETE
 
-**No skipping steps. No exceptions.**
+### Large changes (new subsystem, cross-cutting refactor, multi-entity)
+0. ANNOUNCE → 1. UNDERSTAND → 2. BRAINSTORM (`superpowers:brainstorming`) → 3. PLAN (`superpowers:writing-plans`) → 4. EXECUTE (`superpowers:executing-plans`) → 5. VERIFY (`superpowers:verification-before-completion`) → 6. ANNOUNCE COMPLETE
 
-## Scope — What Triggers This Skill
+**Judgment call is yours.** If unsure, start medium — the user can ask for more rigor.
+
+## Scope
 
 Any change to these files requires this skill:
 
@@ -64,128 +41,144 @@ Any change to these files requires this skill:
 - `src/workers/**/*.ts` — BullMQ pipeline worker
 - `src/lib/**/*.ts` — Utilities, queue, API clients, constants
 - `src/db/**/*.ts` — Schema, seed, database connection
-- `src/middleware.ts` — Auth and request middleware
+- `src/middleware.ts` — Request middleware
 - Database migrations via Supabase MCP
 
-**Out of scope** (use `frontend-designer` instead): `.tsx` files, pages, components, styling.
+**Out of scope** (use `frontend-designer`): `.tsx` files, pages, components, styling.
 
-## Engineering Principles (Hard Rules)
+---
 
-### Error Handling & Resilience
+## Senior Engineering Principles
 
-- All external API calls (WaveSpeed, ElevenLabs, Creatomate) **must** have try/catch with structured error responses
-- Queue jobs **must** handle failure: log error, update project status to `'failed'`, set `error_message` field
-- API routes **must** return proper HTTP status codes — not just 500 for everything
-- Transient external API failures **must** have retry logic with exponential backoff
-- Never swallow errors silently — always log or propagate
+### 1. Consistency Over Cleverness
 
-### Security & Validation
+- **Read existing code before writing new code.** Match the patterns, naming conventions, error handling style, and response shapes already in the codebase.
+- New CRUD entities follow the influencer pattern: `route.ts` (GET list + POST create), `[id]/route.ts` (GET detail + PATCH update + DELETE).
+- Zod for input validation. Pino logger for structured logging. Supabase client from `@/db`.
+- Next.js 16 params pattern: `{ params }: { params: Promise<{ id: string }> }` — always `await params`.
+- Response shapes: return the entity directly for success, `{ error: string }` for failure. Use correct HTTP status codes (400 validation, 404 not found, 409 conflict, 500 server error).
 
-- All API route inputs **must** be validated before processing (request body, query params, route params)
-- Auth checks **must** be applied on protected routes via middleware
-- Never expose `SUPABASE_SERVICE_ROLE_KEY` or internal stack traces to the client
-- Always use parameterized queries (Supabase client handles this — enforce for any raw SQL)
-- Sanitize user-provided URLs before passing to external APIs
+### 2. Cost Awareness
 
-### Testing
+Every external API call costs real money. This pipeline runs at ~$5.58/video.
 
-- Every backend change **must** include or update tests
-- **TDD enforced**: write test first, watch it fail, implement, watch it pass
-- Test API routes with valid inputs AND error/edge cases
-- Test agent pipeline steps in isolation
-- Test queue job processing including failure paths
+- **Track costs.** Every API call that costs money must call `trackCost()` or update `cost_usd`.
+- **Avoid redundant calls.** The entire point of the `product` table is to avoid re-analyzing the same URL. Apply this thinking everywhere: cache what's expensive, skip what's already done.
+- **Duplicate detection.** Before creating a resource, check if it already exists (product URL dedup, idempotent job processing).
+- **Cost confirmation.** Expensive operations (casting ~$0.56, directing ~$4.80) should surface cost to the user before proceeding.
 
-### API Design
+### 3. Data Integrity & Backward Compatibility
 
-- Consistent response shapes: `{ data }` for success, `{ error: string }` for failure
-- Proper HTTP methods: GET reads, POST creates, PATCH updates, DELETE deletes
-- Meaningful error messages — the client should know what went wrong
-- Follow existing endpoint patterns in the codebase before inventing new ones
+- **Additive migrations only.** Add columns with defaults. Never drop columns or rename them in-place. Old code must keep working.
+- **FK constraints and delete guards.** Before deleting any entity, check for referencing records. Return 409 with a clear message, not a database FK violation error.
+- **Denormalize for reads, normalize for writes.** Store canonical data in one place (e.g., `product` table). Copy denormalized fields to related tables for fast reads (e.g., `project.product_name`). Update both on writes.
+- **JSONB for flexible schemas.** Use JSONB columns for data that varies per record (`analysis_data`, `overrides`, `product_placement`). Use typed columns for data you query on.
+- **Index columns used in WHERE, JOIN, and ORDER BY.** Every FK column and status column should have an index.
 
-## Red Flags — STOP and Reconsider
+### 4. Resilience & Error Handling
 
-If you catch yourself thinking any of these, stop:
+- **Every external API call gets try/catch.** WaveSpeed, ElevenLabs, Creatomate all fail. Handle it.
+- **Queue jobs must be recoverable.** On failure: log the error, set `status: 'failed'`, set `failed_at_status`, set `error_message`. The user can retry from the UI.
+- **Never swallow errors.** `catch { }` is forbidden. Always log with `logger.error({ err, route }, 'message')`.
+- **Structured logging everywhere.** Use the pino logger (`@/lib/logger`), not `console.log`. Include context: `{ projectId, productId, route, durationMs }`.
+- **Worker crash recovery.** The worker runs as a separate process on Railway. If it crashes mid-job, BullMQ retries (3 attempts, exponential backoff). Design jobs to be resumable — check current state before acting.
 
-| Thought | Reality |
-|---------|---------|
-| "This is too small to brainstorm" | Small changes have hidden implications. Brainstorm can be brief. |
-| "I'll add tests later" | Tests-later means tests-never. TDD is mandatory. |
-| "The error handling is fine for now" | External APIs fail. Queue jobs crash. Handle it now. |
-| "I'll skip validation, it's an internal route" | Internal today, exposed tomorrow. Validate always. |
-| "Let me just quickly fix this" | Quick fixes become permanent. Follow the workflow. |
-| "Planning is overkill for a one-line change" | One-line changes break pipelines. Plan it. |
+### 5. Performance & Scalability
 
-## Backend Architecture Reference
+- **Avoid N+1 queries.** When listing entities with counts (products + project count), fetch counts in a single query or batch, not one query per row.
+- **Use `{ count: 'exact', head: true }` for count-only queries.** Don't fetch full rows when you only need the count.
+- **Supabase selects should be specific.** `select('id, name, status')` not `select('*')` when you only need a few fields — especially in guards and existence checks.
+- **File uploads: Buffer, not File.** Supabase Storage in Node.js requires `Buffer.from(await file.arrayBuffer())` with explicit `contentType`. Raw `File` objects don't work server-side.
+- **Queue concurrency is 2.** The worker processes 2 jobs at a time. Design for this — don't assume sequential execution.
+
+### 6. Security & Validation
+
+- **Validate all inputs with zod** before touching the database. Use `.refine()` for conditional requirements (e.g., "either productId or productUrl required").
+- **Validate enum values.** Category, status, tone — always check against the constants, not the database.
+- **Never expose secrets.** `SUPABASE_SERVICE_ROLE_KEY` is server-only. API error responses must not include stack traces, SQL errors, or internal paths.
+- **Sanitize user URLs.** Before passing to external APIs, validate URL format. Don't pass raw user input to LLM prompts without the product analyzer's structured extraction.
+
+### 7. Clean Boundaries
+
+- **API routes are thin.** Validate input, call the right service/agent, return the response. Business logic belongs in agents or lib utilities, not in route handlers.
+- **Agents are pure.** They take structured input, call external APIs, return structured output. They don't know about HTTP or queue jobs.
+- **The worker is the orchestrator.** It manages state transitions, calls agents, writes results to the database, and enqueues next steps.
+- **Shared types matter.** `PipelineJobData` in `queue.ts` is the contract between API routes and the worker. Change it carefully — both sides must agree.
+
+---
+
+## Database
+
+Managed via **Supabase MCP** (`apply_migration`). Not Drizzle migrations.
+
+`src/db/schema.ts` is documentation only (Drizzle definitions for reference, not used for migrations).
+
+### Tables
+
+| Table | Purpose | Key Columns |
+|-------|---------|-------------|
+| `product` | Analyzed products (analyze once, reuse) | url (unique), analysis_data, overrides, status |
+| `project` | Pipeline runs | product_id FK, status, cost_usd, product_* (denormalized) |
+| `ai_character` | 11 AI personas | voice_id, appearance, wardrobe, setting |
+| `script_template` | 10 hook patterns | hook_type, energy_arc, hook_score |
+| `script` | Generated scripts | project_id FK, hook_score, grade, tone |
+| `scene` | 4 segments per script | script_id FK, segment_index, visual_prompt, shot_scripts |
+| `asset` | Generated artifacts | project_id FK, scene_id FK, type, url, cost_usd |
+| `influencer` | User-created influencers | name, persona, image_url |
+| `completed_run` | Archived pipeline runs | project_id FK, full recipe snapshot |
+| `generation_log` | Structured audit trail | project_id, correlation_id, event_type, detail |
+
+### Status lifecycle
 
 ```
-src/agents/
-  base-agent.ts           — Base class for all AI agents
-  product-analyzer.ts     — Phase 1: Product URL analysis
-  scripting-agent.ts      — Phase 2: Script generation (4 segments, syllable validation)
-  casting-agent.ts        — Phase 3: Keyframe image generation
-  director-agent.ts       — Phase 3: Video generation
-  voiceover-agent.ts      — Phase 3: TTS audio via ElevenLabs
-  editor-agent.ts         — Phase 4: Video composition via Creatomate
-
-src/app/api/
-  projects/route.ts                          — GET list, POST create + enqueue
-  projects/[id]/route.ts                     — GET detail, PATCH update
-  projects/[id]/approve/route.ts             — POST approve pipeline stage
-  projects/[id]/archive/route.ts             — POST archive project
-  projects/[id]/scripts/route.ts             — GET/POST scripts
-  projects/[id]/scripts/upload/route.ts      — POST upload script
-  projects/[id]/scripts/[scriptId]/route.ts  — GET/PATCH individual script
-  projects/[id]/scripts/[scriptId]/regenerate/route.ts — POST regenerate script
-  projects/[id]/scripts/[scriptId]/segments/[segmentIndex]/route.ts — PATCH segment
-  projects/[id]/scripts/[scriptId]/segments/[segmentIndex]/regenerate/route.ts — POST regenerate segment
-  projects/[id]/assets/route.ts              — GET project assets
-  queue/status/route.ts                      — GET job status polling
-  influencers/route.ts                       — GET/POST influencers
-  influencers/[id]/route.ts                  — GET/PATCH/DELETE influencer
-  characters/route.ts                        — GET character list
-  auth/callback/route.ts                     — OAuth callback
-  auth/signout/route.ts                      — Sign out
-
-src/workers/
-  pipeline.worker.ts      — BullMQ worker process (runs on Railway, separate from Next.js)
-
-src/lib/
-  queue.ts                — BullMQ queue config (Upstash Redis, TLS)
-  constants.ts            — Shared constants and config
-  syllables.ts            — Syllable counting for script validation
-  api-clients/            — WaveSpeed, ElevenLabs, Creatomate wrappers
-  supabase/               — Supabase client setup (server + browser)
-
-src/db/
-  schema.ts               — Drizzle schema definitions (6 tables)
-  index.ts                — Database connection
-  seed.ts                 — Character + template seed data
+Product: created → analyzing → analyzed | failed
+Project: created → analyzing → analysis_review → scripting → script_review → influencer_selection → casting → casting_review → directing → voiceover → asset_review → editing → completed | failed
 ```
-
-## Data Model (Supabase Tables)
-
-- `ai_character` — 11 AI personas with voice, appearance, settings
-- `script_template` — 10 hook patterns with energy arcs
-- `project` — Pipeline run metadata and status tracking
-- `script` — Generated scripts with hook scores and grading
-- `scene` — 4 segments per script (15s each) with visual/audio prompts
-- `asset` — Generated artifacts (images, video, audio) with cost tracking
-
-**Status lifecycle:** `created → analyzing → scripting → casting → directing → editing → completed | failed`
 
 ## External APIs
 
-| Service | Purpose | Key Env Var |
-|---------|---------|-------------|
-| WaveSpeed | LLM (Gemini), images (Nano Banana Pro), video (Kling 3.0 Pro) | `WAVESPEED_API_KEY` |
-| ElevenLabs | Text-to-speech voice generation | `ELEVENLABS_API_KEY` |
-| Creatomate | Final video rendering/composition | `CREATOMATE_API_KEY` |
-| Supabase | PostgreSQL database | `SUPABASE_SERVICE_ROLE_KEY` |
-| Upstash | Redis queue (BullMQ, TLS required) | `REDIS_CONNECTION_URL` |
+| Service | Purpose | Cost | Env Var |
+|---------|---------|------|---------|
+| WaveSpeed | LLM (Gemini), images (Nano Banana Pro), video (Kling 3.0 Pro) | $0.01 chat, $0.07 image, $1.20 video | `WAVESPEED_API_KEY` |
+| ElevenLabs | Text-to-speech | $0.05/segment | `ELEVENLABS_API_KEY` |
+| Creatomate | Final video render | $0.50/render | `CREATOMATE_API_KEY` |
+| Supabase | PostgreSQL + Storage | Free tier | `SUPABASE_SERVICE_ROLE_KEY` |
+| Upstash | Redis (BullMQ) | Free tier | `REDIS_CONNECTION_URL` |
 
-## Infrastructure Notes
+## Infrastructure
 
-- Worker runs as a **separate Node.js process** on Railway, not inside Next.js
-- Redis connection requires TLS for non-localhost hosts (both queue.ts and pipeline.worker.ts)
-- Supabase service role key is used server-side only — never expose to client
-- Frontend deploys to Vercel, worker deploys to Railway via GitHub
+- **Frontend/API:** Vercel (Next.js 16, auto-deploy from `main`)
+- **Worker:** Railway (separate Node.js process, `npm run worker`)
+- **Database:** Supabase project `yuiwwmkalyplhcwgwcap`
+- **Queue:** Upstash Redis (TLS required for non-localhost)
+- **Worker is separate from Next.js.** It has its own Supabase client, its own Redis connection. Changes to lib files affect both — test accordingly.
+
+## API Route Reference
+
+```
+/api/products                                    — GET list, POST create (dedup by URL)
+/api/products/[id]                               — GET detail, PATCH update (override tracking), DELETE (guard)
+/api/products/[id]/image                         — POST upload/replace
+/api/products/[id]/reanalyze                     — POST re-enqueue analysis
+/api/projects                                    — GET list, POST create (accepts productId or productUrl)
+/api/projects/[id]                               — GET detail, PATCH update, DELETE (cascade)
+/api/projects/[id]/approve                       — POST advance pipeline stage
+/api/projects/[id]/archive                       — POST snapshot to completed_run
+/api/projects/[id]/retry                         — POST re-enqueue failed stage
+/api/projects/[id]/rollback                      — POST reset to previous review gate
+/api/projects/[id]/select-influencer             — POST assign influencer + enqueue casting
+/api/projects/[id]/product-image                 — POST upload product image
+/api/projects/[id]/scripts                       — GET/POST scripts
+/api/projects/[id]/scripts/upload                — POST upload user script
+/api/projects/[id]/scripts/[scriptId]            — GET/PATCH script
+/api/projects/[id]/scripts/[scriptId]/regenerate — POST regenerate
+/api/projects/[id]/scripts/[scriptId]/segments/[segmentIndex]            — PATCH segment
+/api/projects/[id]/scripts/[scriptId]/segments/[segmentIndex]/regenerate — POST regenerate
+/api/projects/[id]/assets                        — GET/PATCH assets
+/api/projects/[id]/progress                      — GET generation progress
+/api/queue/status                                — GET job status polling
+/api/influencers                                 — GET/POST influencers
+/api/influencers/[id]                            — GET/PATCH/DELETE influencer
+/api/characters                                  — GET character list
+/api/version                                     — GET app version
+```
