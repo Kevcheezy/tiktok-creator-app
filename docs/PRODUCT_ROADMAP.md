@@ -176,14 +176,17 @@ These are blocking items. Nothing else matters until a user can go from product 
 **Why:** Product data is denormalized into the `project` table. Every project re-runs ProductAnalyzerAgent from scratch — even for the same product URL. This wastes API costs ($0.01/analysis), wastes user time (re-approve same analysis), and prevents cross-project product insights. Products should be a first-class entity: analyze once, use across many projects.
 
 **Data model:**
-- [ ] New `product` table (url, name, brand, category, selling_points, image_url, analysis_data, status, etc.)
+- [ ] New `product` table (url, name, brand, category, selling_points, image_url, analysis_data, overrides, status, etc.)
 - [ ] Add `product_id` FK to `project` table
+- [ ] `overrides` JSONB column tracks which fields user has manually edited
 - [ ] Backward compat: old projects without `product_id` continue reading from their own `product_*` columns
 
 **API:**
 - [ ] Full CRUD: `GET/POST /api/products`, `GET/PATCH/DELETE /api/products/[id]`
+- [ ] PATCH accepts all analysis fields as overrides: selling_points, key_claims, benefits, usage, hook_angle, avatar_description, image_description, name, brand, category, etc.
+- [ ] PATCH tracks overridden fields in `overrides` column; reset-to-original per field
 - [ ] Product image upload/replace: `POST /api/products/[id]/image`
-- [ ] Re-analyze endpoint: `POST /api/products/[id]/reanalyze`
+- [ ] Re-analyze endpoint: `POST /api/products/[id]/reanalyze` — preserves user-overridden fields
 - [ ] Duplicate URL detection: if URL already analyzed, return existing product (no re-analysis)
 - [ ] `POST /api/projects` accepts `productId` — skips analysis for analyzed products
 - [ ] Delete guard: 409 if product referenced by projects
@@ -197,6 +200,8 @@ These are blocking items. Nothing else matters until a user can go from product 
 - [ ] Products tab in navigation (between Projects and Influencers)
 - [ ] Products list page (`/products`): cards with name, image, category, status, project count
 - [ ] Product detail page (`/products/[id]`): analysis results, image upload/replace, project list, re-analyze, delete
+- [ ] Inline editing for all analysis fields (text: click-to-edit, arrays: add/remove/reorder, category: dropdown)
+- [ ] "Edited" badge on overridden fields, "Reset to original" per-field action
 - [ ] Create project form: product selector (existing) + new URL input (creates product)
 
 ---
