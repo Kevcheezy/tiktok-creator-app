@@ -1,9 +1,12 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { StatusBadge } from './status-badge';
 import { PipelineProgress } from './pipeline-progress';
 import { ScriptReview } from './script-review';
+import { AssetReview } from './asset-review';
+import { ConfirmDialog } from './confirm-dialog';
 
 interface ProjectData {
   id: string;
@@ -35,9 +38,14 @@ interface ProjectData {
 }
 
 export function ProjectDetail({ projectId }: { projectId: string }) {
+  const router = useRouter();
   const [project, setProject] = useState<ProjectData | null>(null);
   const [loading, setLoading] = useState(true);
   const [approving, setApproving] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [finalVideoUrl, setFinalVideoUrl] = useState('');
+  const [archived, setArchived] = useState(false);
 
   const fetchProject = useCallback(async () => {
     try {
@@ -60,12 +68,43 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   // Poll while in processing state
   useEffect(() => {
     if (!project) return;
-    const processingStatuses = ['created', 'analyzing', 'scripting', 'casting', 'directing', 'editing'];
+    const processingStatuses = ['created', 'analyzing', 'scripting', 'casting', 'directing', 'voiceover', 'editing'];
     if (!processingStatuses.includes(project.status)) return;
 
     const interval = setInterval(fetchProject, 2000);
     return () => clearInterval(interval);
   }, [project?.status, fetchProject]);
+
+  // Fetch final video URL when project is completed
+  useEffect(() => {
+    if (project?.status === 'completed') {
+      fetch(`/api/projects/${project.id}/assets`)
+        .then(r => r.json())
+        .then(data => {
+          const segments = data.segments || [];
+          for (const seg of segments) {
+            for (const asset of (seg as { assets?: { type: string; url?: string }[] }).assets || []) {
+              if (asset.type === 'final_video' && asset.url) {
+                setFinalVideoUrl(asset.url);
+              }
+            }
+          }
+        });
+    }
+  }, [project?.status, project?.id]);
+
+  async function handleDelete() {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, { method: 'DELETE' });
+      if (res.ok) {
+        router.push('/');
+      }
+    } catch {
+      setDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  }
 
   async function handleApproveAnalysis() {
     if (!project) return;
@@ -78,6 +117,12 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
     } finally {
       setApproving(false);
     }
+  }
+
+  async function handleArchive() {
+    if (!project) return;
+    const res = await fetch(`/api/projects/${project.id}/archive`, { method: 'POST' });
+    if (res.ok) setArchived(true);
   }
 
   if (loading) {
@@ -116,7 +161,23 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
             {project.product_url}
           </p>
         </div>
-        <StatusBadge status={project.status} />
+        <div className="flex flex-shrink-0 items-center gap-3">
+          <StatusBadge status={project.status} />
+          <button
+            type="button"
+            onClick={() => setShowDeleteConfirm(true)}
+            className="rounded-lg border border-border p-2.5 text-text-muted transition-all hover:border-magenta/40 hover:bg-magenta/5 hover:text-magenta"
+            title="Delete project"
+          >
+            <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M2 4h12" />
+              <path d="M5 4V2.5A.5.5 0 015.5 2h5a.5.5 0 01.5.5V4" />
+              <path d="M12.5 4v9.5a1 1 0 01-1 1h-7a1 1 0 01-1-1V4" />
+              <line x1="6.5" y1="7" x2="6.5" y2="11" />
+              <line x1="9.5" y1="7" x2="9.5" y2="11" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Pipeline Progress */}
@@ -218,15 +279,168 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
         </>
       )}
 
+      {/* Casting processing indicator */}
+      {project.status === 'casting' && (
+        <div className="rounded-xl border border-magenta/20 bg-magenta/5 p-6">
+          <div className="flex items-center gap-4">
+            <div className="relative h-8 w-8 flex-shrink-0">
+              <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-magenta" />
+              <div className="absolute inset-1 animate-spin rounded-full border-2 border-transparent border-b-magenta/50" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }} />
+            </div>
+            <div>
+              <h3 className="font-[family-name:var(--font-display)] text-sm font-semibold text-magenta">
+                Generating Keyframes
+              </h3>
+              <p className="mt-0.5 text-sm text-text-secondary">
+                Creating character keyframe images with Nano Banana Pro...
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Directing processing indicator */}
+      {project.status === 'directing' && (
+        <div className="rounded-xl border border-magenta/20 bg-magenta/5 p-6">
+          <div className="flex items-center gap-4">
+            <div className="relative h-8 w-8 flex-shrink-0">
+              <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-magenta" />
+              <div className="absolute inset-1 animate-spin rounded-full border-2 border-transparent border-b-magenta/50" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }} />
+            </div>
+            <div>
+              <h3 className="font-[family-name:var(--font-display)] text-sm font-semibold text-magenta">
+                Generating Videos
+              </h3>
+              <p className="mt-0.5 text-sm text-text-secondary">
+                Creating 15-second video segments with Kling 3.0 Pro. This may take up to 5 minutes...
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Voiceover processing indicator */}
+      {project.status === 'voiceover' && (
+        <div className="rounded-xl border border-magenta/20 bg-magenta/5 p-6">
+          <div className="flex items-center gap-4">
+            <div className="relative h-8 w-8 flex-shrink-0">
+              <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-magenta" />
+              <div className="absolute inset-1 animate-spin rounded-full border-2 border-transparent border-b-magenta/50" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }} />
+            </div>
+            <div>
+              <h3 className="font-[family-name:var(--font-display)] text-sm font-semibold text-magenta">
+                Generating Voiceovers
+              </h3>
+              <p className="mt-0.5 text-sm text-text-secondary">
+                Creating voiceover audio with ElevenLabs...
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Editing processing indicator */}
+      {project.status === 'editing' && (
+        <div className="flex items-center gap-3 rounded-xl border border-electric/20 bg-electric/5 px-6 py-4">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-electric border-t-transparent" />
+          <span className="text-sm text-text-secondary">Composing final video...</span>
+        </div>
+      )}
+
       {/* Script Review */}
       {project.status === 'script_review' && (
         <ScriptReview projectId={projectId} onStatusChange={fetchProject} />
       )}
 
-      {/* Completed - show analysis results */}
-      {project.status === 'completed' && data && (
-        <AnalysisResults data={data} costUsd={project.cost_usd} character={project.character} />
+      {/* Casting Review */}
+      {project.status === 'casting_review' && (
+        <AssetReview
+          projectId={projectId}
+          onStatusChange={fetchProject}
+          confirmBeforeApprove={{
+            title: 'Generate Videos?',
+            description: 'This will generate video segments using Kling 3.0 Pro and voiceover audio using ElevenLabs. Video generation takes 2-5 minutes per segment.',
+            cost: '~$1.25',
+          }}
+        />
       )}
+
+      {/* Asset Review */}
+      {project.status === 'asset_review' && (
+        <AssetReview projectId={projectId} onStatusChange={fetchProject} />
+      )}
+
+      {/* Completed - Final Review */}
+      {project.status === 'completed' && (
+        <div className="space-y-6">
+          <h2 className="font-[family-name:var(--font-display)] text-xl font-bold text-text-primary">
+            Final Video
+          </h2>
+
+          {finalVideoUrl ? (
+            <div className="mx-auto max-w-sm">
+              <video
+                src={finalVideoUrl}
+                controls
+                className="w-full rounded-xl border border-border aspect-[9/16]"
+              />
+            </div>
+          ) : (
+            <p className="text-text-muted text-sm">No final video found.</p>
+          )}
+
+          <div className="flex gap-3">
+            {finalVideoUrl && (
+              <a
+                href={finalVideoUrl}
+                download
+                className="inline-flex items-center gap-2 rounded-lg bg-electric px-4 py-2.5 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:bg-electric/90 hover:shadow-[0_0_24px_rgba(0,240,255,0.3)]"
+              >
+                <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+                  <path d="M8 2v9M4 7l4 4 4-4M2 13h12" />
+                </svg>
+                Download Video
+              </a>
+            )}
+            <button
+              onClick={handleArchive}
+              disabled={archived}
+              className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2.5 font-[family-name:var(--font-display)] text-sm font-medium text-text-secondary transition-colors hover:text-electric hover:border-electric/30 disabled:opacity-50"
+            >
+              {archived ? 'Archived' : 'Archive Run'}
+            </button>
+          </div>
+
+          <div className="glass rounded-xl border border-border p-6">
+            <h3 className="mb-4 font-[family-name:var(--font-display)] text-xs font-semibold text-text-muted uppercase tracking-wider">
+              Recipe
+            </h3>
+            <dl className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <dt className="text-text-muted">Product</dt>
+                <dd className="text-text-primary">{project.product_name || '\u2014'}</dd>
+              </div>
+              <div>
+                <dt className="text-text-muted">Category</dt>
+                <dd className="text-text-primary">{project.product_category || '\u2014'}</dd>
+              </div>
+              <div>
+                <dt className="text-text-muted">Total Cost</dt>
+                <dd className="text-electric font-medium">${parseFloat(project.cost_usd || '0').toFixed(2)}</dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        title="Delete Project"
+        description={`Are you sure you want to delete "${project.product_name || project.name || 'this project'}"? All scripts, assets, and generated content will be permanently removed.`}
+        onConfirm={handleDelete}
+        onCancel={() => setShowDeleteConfirm(false)}
+        loading={deleting}
+      />
     </div>
   );
 }
