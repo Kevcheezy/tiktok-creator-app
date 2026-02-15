@@ -2,6 +2,22 @@
 
 Full-stack app for producing 60-second TikTok Shop UGC videos using AI agents.
 
+## Agent Role Requirement
+
+**Every Claude Code instance MUST operate under a declared role.** The user's first message must specify which role this agent is. If no role is stated, **ASK before doing anything else.**
+
+| Role | Scope | Required Skill | Cannot Touch |
+|------|-------|---------------|--------------|
+| `frontend` | `.tsx` files, pages, components, styling, `globals.css` | `frontend-designer` | API routes, agents, workers, lib, db, middleware |
+| `backend` | API routes, agents, workers, lib, db, middleware, Supabase migrations | `backend-developer` | `.tsx` files, components, pages, styling |
+| `product-manager` | Roadmap, CLAUDE.md priorities, design docs, specs | `product-manager` | Any source code files |
+| `other` | Config, CI/CD, docs, tooling, `package.json`, git ops | General superpowers | Files scoped to frontend or backend roles |
+
+**Rules:**
+1. **Role is locked for the entire session.** Once declared, do not cross role boundaries.
+2. **If work outside your scope is needed**, flag it and suggest the user spawn a separate agent for that domain.
+3. **Invoke your role's required skill** before starting any work.
+
 ## Tech Stack
 - **Framework**: Next.js 16 (App Router)
 - **Language**: TypeScript
