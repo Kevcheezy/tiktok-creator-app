@@ -37,10 +37,24 @@ export async function POST(
       );
     }
 
+    // script_review -> influencer_selection (user picks influencer before casting)
+    if (proj.status === 'script_review') {
+      await supabase
+        .from('project')
+        .update({ status: 'influencer_selection', updated_at: new Date().toISOString() })
+        .eq('id', id);
+
+      return NextResponse.json({
+        message: 'Script approved. Please select an influencer before casting.',
+        projectId: id,
+        previousStatus: 'script_review',
+        nextStep: 'influencer_selection',
+      });
+    }
+
     // Map review status to next pipeline step
     const nextStepMap: Record<string, { step: string; jobName: string }> = {
       analysis_review: { step: 'scripting', jobName: 'scripting' },
-      script_review: { step: 'casting', jobName: 'casting' },
       casting_review: { step: 'directing', jobName: 'directing' },
     };
 

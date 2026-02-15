@@ -3,6 +3,7 @@ const STAGES = [
   { key: 'analysis_review', label: 'Review' },
   { key: 'scripting', label: 'Script' },
   { key: 'script_review', label: 'Review' },
+  { key: 'influencer_selection', label: 'Select' },
   { key: 'casting', label: 'Cast' },
   { key: 'casting_review', label: 'Review' },
   { key: 'directing', label: 'Direct' },

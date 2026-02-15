@@ -9,7 +9,7 @@ export async function GET(
 
   const { data: proj, error } = await supabase
     .from('project')
-    .select('*, character:ai_character(*), script_template:script_template(*)')
+    .select('*, character:ai_character(*), script_template:script_template(*), influencer:influencer(*)')
     .eq('id', id)
     .single();
 

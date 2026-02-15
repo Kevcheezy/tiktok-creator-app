@@ -37,6 +37,8 @@ interface ProjectData {
   failed_at_status: string | null;
   created_at: string | null;
   character: { name: string; avatar_persona: string | null } | null;
+  influencer_id: string | null;
+  influencer: { id: string; name: string; persona: string | null; image_url: string | null } | null;
 }
 
 export function ProjectDetail({ projectId }: { projectId: string }) {
@@ -353,6 +355,15 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       {/* Script Review */}
       {project.status === 'script_review' && (
         <ScriptReview projectId={projectId} onStatusChange={fetchProject} />
+      )}
+
+      {/* Influencer Selection Gate */}
+      {project.status === 'influencer_selection' && (
+        <InfluencerSelection
+          projectId={projectId}
+          currentInfluencerId={project.influencer_id}
+          onSelected={fetchProject}
+        />
       )}
 
       {/* Casting Review */}
@@ -744,6 +755,214 @@ function ProductImageSection({ projectId, productImageUrl, onImageUpdated }: Pro
 }
 
 /* ==============================
+   Influencer Selection Gate
+   ============================== */
+
+interface InfluencerOption {
+  id: string;
+  name: string;
+  persona: string | null;
+  image_url: string | null;
+}
+
+interface InfluencerSelectionProps {
+  projectId: string;
+  currentInfluencerId: string | null;
+  onSelected: () => void;
+}
+
+function InfluencerSelection({ projectId, currentInfluencerId, onSelected }: InfluencerSelectionProps) {
+  const [influencers, setInfluencers] = useState<InfluencerOption[]>([]);
+  const [selectedId, setSelectedId] = useState(currentInfluencerId || '');
+  const [loadingList, setLoadingList] = useState(true);
+  const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    fetch('/api/influencers')
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        setInfluencers(data);
+        // Pre-select current if set, otherwise first with an image
+        if (!currentInfluencerId && data.length > 0) {
+          const withImage = data.find((i: InfluencerOption) => i.image_url);
+          if (withImage) setSelectedId(withImage.id);
+        }
+      })
+      .catch(() => setInfluencers([]))
+      .finally(() => setLoadingList(false));
+  }, [currentInfluencerId]);
+
+  async function handleConfirm() {
+    if (!selectedId) return;
+    setConfirming(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/projects/${projectId}/select-influencer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ influencerId: selectedId }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to select influencer');
+      }
+      onSelected();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to select influencer');
+    } finally {
+      setConfirming(false);
+    }
+  }
+
+  const selected = influencers.find((i) => i.id === selectedId);
+
+  if (loadingList) {
+    return (
+      <div className="rounded-xl border border-border bg-surface p-6">
+        <div className="flex items-center gap-3">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-electric border-t-transparent" />
+          <span className="text-sm text-text-secondary">Loading influencers...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (influencers.length === 0) {
+    return (
+      <div className="rounded-xl border border-amber-hot/30 bg-amber-hot/5 p-6">
+        <h3 className="font-[family-name:var(--font-display)] text-sm font-semibold text-amber-hot">
+          No Influencers Available
+        </h3>
+        <p className="mt-1 text-sm text-text-secondary">
+          Create an influencer with a reference image before generating keyframes.
+        </p>
+        <a
+          href="/influencers/new"
+          className="mt-3 inline-flex items-center gap-2 rounded-lg bg-amber-hot px-4 py-2 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:shadow-[0_0_24px_rgba(255,160,0,0.3)]"
+        >
+          Create Influencer
+        </a>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="rounded-xl border border-electric/20 bg-surface p-5">
+        <h2 className="mb-1 font-[family-name:var(--font-display)] text-sm font-semibold uppercase tracking-wider text-electric">
+          Select Influencer for Keyframes
+        </h2>
+        <p className="mb-5 text-sm text-text-secondary">
+          Choose the AI influencer whose likeness will be used to generate keyframe images. Their reference photo will be edited into each scene.
+        </p>
+
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          {influencers.map((inf) => {
+            const isSelected = selectedId === inf.id;
+            const hasImage = !!inf.image_url;
+            return (
+              <button
+                key={inf.id}
+                type="button"
+                onClick={() => hasImage && setSelectedId(inf.id)}
+                disabled={!hasImage}
+                className={`group relative overflow-hidden rounded-xl border-2 transition-all text-left ${
+                  isSelected
+                    ? 'border-electric bg-electric/5 ring-1 ring-electric/30'
+                    : hasImage
+                      ? 'border-border bg-surface-raised hover:border-border-bright'
+                      : 'border-border/50 bg-surface-raised opacity-50 cursor-not-allowed'
+                }`}
+              >
+                {/* Image */}
+                <div className="aspect-[3/4] w-full overflow-hidden bg-void">
+                  {inf.image_url ? (
+                    <img
+                      src={inf.image_url}
+                      alt={inf.name}
+                      className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center">
+                      <svg viewBox="0 0 24 24" fill="none" className="h-8 w-8 text-text-muted" stroke="currentColor" strokeWidth={1.5}>
+                        <circle cx="12" cy="8" r="4" />
+                        <path d="M4 20c0-4 4-7 8-7s8 3 8 7" />
+                      </svg>
+                    </div>
+                  )}
+                </div>
+                {/* Info */}
+                <div className="p-2.5">
+                  <p className="font-[family-name:var(--font-display)] text-xs font-semibold text-text-primary truncate">
+                    {inf.name}
+                  </p>
+                  {inf.persona && (
+                    <p className="mt-0.5 text-[10px] text-text-muted truncate">{inf.persona}</p>
+                  )}
+                  {!hasImage && (
+                    <p className="mt-0.5 text-[10px] text-magenta">No image</p>
+                  )}
+                </div>
+                {/* Selection checkmark */}
+                {isSelected && (
+                  <div className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-electric">
+                    <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5 text-void" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="3.5 8 6.5 11 12.5 5" />
+                    </svg>
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Cost estimate + confirm */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="text-sm text-text-muted">
+          {selected && (
+            <span>
+              Selected: <span className="text-text-primary font-medium">{selected.name}</span>
+              {' '}&middot;{' '}
+              <span className="text-text-muted">Estimated cost: ~$0.56 for keyframes</span>
+            </span>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={handleConfirm}
+          disabled={!selectedId || confirming}
+          className="inline-flex items-center gap-2 rounded-lg bg-lime px-6 py-3 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:shadow-[0_0_32px_rgba(184,255,0,0.25)] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {confirming ? (
+            <>
+              <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="60" strokeDashoffset="15" strokeLinecap="round" />
+              </svg>
+              Confirming...
+            </>
+          ) : (
+            <>
+              <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3.5 8 6.5 11 12.5 5" />
+              </svg>
+              Confirm &amp; Generate Keyframes
+            </>
+          )}
+        </button>
+      </div>
+
+      {error && (
+        <div className="rounded-lg border border-magenta/30 bg-magenta/10 px-4 py-3">
+          <p className="text-sm text-magenta">{error}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ==============================
    Failed Recovery Sub-component
    ============================== */
 
@@ -759,7 +978,7 @@ const STAGE_LABELS: Record<string, string> = {
 const ROLLBACK_LABELS: Record<string, string> = {
   analyzing: 'Start',
   scripting: 'Analysis Review',
-  casting: 'Script Review',
+  casting: 'Influencer Selection',
   directing: 'Casting Review',
   voiceover: 'Casting Review',
   editing: 'Asset Review',
