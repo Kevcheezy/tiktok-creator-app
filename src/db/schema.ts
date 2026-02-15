@@ -47,6 +47,38 @@ export const influencerRelations = relations(influencer, ({ many }) => ({
   projects: many(project),
 }));
 
+// ─── Product ────────────────────────────────────────────────────────────────
+
+export const product = pgTable('product', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  url: text('url').notNull().unique(),
+  name: text('name'),
+  brand: text('brand'),
+  category: text('category'),
+  productType: text('product_type'),
+  productSize: text('product_size'),
+  productPrice: text('product_price'),
+  sellingPoints: jsonb('selling_points').default([]),
+  keyClaims: jsonb('key_claims').default([]),
+  benefits: jsonb('benefits').default([]),
+  usage: text('usage'),
+  hookAngle: text('hook_angle'),
+  avatarDescription: text('avatar_description'),
+  imageDescription: text('image_description'),
+  imageUrl: text('image_url'),
+  analysisData: jsonb('analysis_data'),
+  overrides: jsonb('overrides').default({}),
+  status: text('status').notNull().default('created'),
+  errorMessage: text('error_message'),
+  costUsd: numeric('cost_usd', { precision: 10, scale: 4 }).default('0'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const productRelations = relations(product, ({ many }) => ({
+  projects: many(project),
+}));
+
 // ─── Script Template ─────────────────────────────────────────────────────────
 
 export const scriptTemplate = pgTable('script_template', {
@@ -78,6 +110,7 @@ export const project = pgTable('project', {
   productCategory: text('product_category'),
   productData: jsonb('product_data'),
   productImageUrl: text('product_image_url'),
+  productId: uuid('product_id').references(() => product.id),
   characterId: uuid('character_id').references(() => aiCharacter.id),
   scriptTemplateId: uuid('script_template_id').references(() => scriptTemplate.id),
   tone: text('tone').default('reluctant-insider'),
@@ -95,6 +128,10 @@ export const project = pgTable('project', {
 });
 
 export const projectRelations = relations(project, ({ one, many }) => ({
+  product: one(product, {
+    fields: [project.productId],
+    references: [product.id],
+  }),
   character: one(aiCharacter, {
     fields: [project.characterId],
     references: [aiCharacter.id],

@@ -41,14 +41,14 @@ log.info({ version: APP_VERSION, commit: GIT_COMMIT }, 'Pipeline worker starting
 const worker = new Worker(
   'pipeline',
   async (job: Job) => {
-    const { projectId, step } = job.data;
+    const { projectId, productId, step } = job.data;
     const correlationId = crypto.randomUUID();
-    const jobLog = createLogger({ agentName: 'PipelineWorker', jobId: job.id, correlationId, projectId });
+    const jobLog = createLogger({ agentName: 'PipelineWorker', jobId: job.id, correlationId, projectId: projectId || productId });
 
-    jobLog.info({ step }, 'Processing job');
+    jobLog.info({ step, projectId, productId }, 'Processing job');
 
     if (step === 'product_analysis') {
-      await handleProductAnalysis(projectId, correlationId, jobLog);
+      await handleProductAnalysis(projectId, correlationId, jobLog, productId);
     } else if (step === 'scripting') {
       await handleScripting(projectId, correlationId, jobLog);
     } else if (step === 'casting') {
@@ -79,9 +79,70 @@ const worker = new Worker(
   }
 );
 
-async function handleProductAnalysis(projectId: string, correlationId: string, jobLog: ReturnType<typeof createLogger>) {
+async function handleProductAnalysis(projectId: string | undefined, correlationId: string, jobLog: ReturnType<typeof createLogger>, productId?: string) {
   const stage = 'analyzing';
   const stageStart = Date.now();
+
+  // Standalone product analysis (no project) — triggered by POST /api/products
+  if (!projectId && productId) {
+    try {
+      await logToGenerationLog(supabase, {
+        project_id: productId, correlation_id: correlationId,
+        event_type: 'stage_start', agent_name: 'ProductAnalyzerAgent', stage,
+      });
+
+      // Fetch product URL to build a temporary project-like object for the agent
+      const { data: prod } = await supabase.from('product').select('*').eq('id', productId).single();
+      if (!prod) throw new Error(`Product not found: ${productId}`);
+
+      const agent = new ProductAnalyzerAgent(supabase);
+      agent.setCorrelationId(correlationId);
+
+      // Create a temporary project for the agent to analyze
+      // The agent reads product_url from the project, so we pass it through
+      const { data: tempProject } = await supabase
+        .from('project')
+        .insert({
+          product_id: productId,
+          product_url: prod.url,
+          status: 'analyzing',
+          name: `_temp_analysis_${productId}`,
+        })
+        .select()
+        .single();
+
+      if (!tempProject) throw new Error('Failed to create temp project for analysis');
+
+      const analysis = await agent.run(tempProject.id);
+
+      // Write to product table (respecting overrides)
+      await writeAnalysisToProduct(productId, analysis, jobLog);
+
+      // Clean up temp project
+      await supabase.from('project').delete().eq('id', tempProject.id);
+
+      const durationMs = Date.now() - stageStart;
+      await logToGenerationLog(supabase, {
+        project_id: productId, correlation_id: correlationId,
+        event_type: 'stage_complete', agent_name: 'ProductAnalyzerAgent', stage,
+        detail: { durationMs },
+      });
+      jobLog.info({ durationMs, productId }, 'Standalone product analysis complete');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      jobLog.error({ err: error, productId }, 'Standalone product analysis failed');
+
+      await supabase
+        .from('product')
+        .update({ status: 'failed', error_message: errorMessage, updated_at: new Date().toISOString() })
+        .eq('id', productId);
+
+      throw error;
+    }
+    return;
+  }
+
+  // Standard project-linked analysis
   try {
     await supabase
       .from('project')
@@ -89,14 +150,26 @@ async function handleProductAnalysis(projectId: string, correlationId: string, j
       .eq('id', projectId);
 
     await logToGenerationLog(supabase, {
-      project_id: projectId, correlation_id: correlationId,
+      project_id: projectId!, correlation_id: correlationId,
       event_type: 'stage_start', agent_name: 'ProductAnalyzerAgent', stage,
     });
 
     const agent = new ProductAnalyzerAgent(supabase);
     agent.setCorrelationId(correlationId);
-    const analysis = await agent.run(projectId);
+    const analysis = await agent.run(projectId!);
 
+    // Write to product table if project has a product_id
+    const { data: proj } = await supabase
+      .from('project')
+      .select('product_id')
+      .eq('id', projectId)
+      .single();
+
+    if (proj?.product_id) {
+      await writeAnalysisToProduct(proj.product_id, analysis, jobLog);
+    }
+
+    // Write denormalized fields to project (backward compat)
     const updateData: Record<string, unknown> = {
       status: 'analysis_review',
       product_data: analysis,
@@ -115,7 +188,7 @@ async function handleProductAnalysis(projectId: string, correlationId: string, j
 
     const durationMs = Date.now() - stageStart;
     await logToGenerationLog(supabase, {
-      project_id: projectId, correlation_id: correlationId,
+      project_id: projectId!, correlation_id: correlationId,
       event_type: 'stage_complete', agent_name: 'ProductAnalyzerAgent', stage,
       detail: { durationMs },
     });
@@ -126,7 +199,7 @@ async function handleProductAnalysis(projectId: string, correlationId: string, j
     jobLog.error({ err: error, durationMs }, 'Product analysis failed');
 
     await logToGenerationLog(supabase, {
-      project_id: projectId, correlation_id: correlationId,
+      project_id: projectId!, correlation_id: correlationId,
       event_type: 'stage_error', agent_name: 'ProductAnalyzerAgent', stage,
       detail: { error: errorMessage, durationMs },
     });
@@ -141,8 +214,76 @@ async function handleProductAnalysis(projectId: string, correlationId: string, j
       })
       .eq('id', projectId);
 
+    // Also mark product as failed if linked
+    if (productId) {
+      await supabase
+        .from('product')
+        .update({ status: 'failed', error_message: errorMessage, updated_at: new Date().toISOString() })
+        .eq('id', productId);
+    }
+
     throw error;
   }
+}
+
+/**
+ * Write analysis results to the product table, respecting user overrides.
+ */
+async function writeAnalysisToProduct(
+  productId: string,
+  analysis: import('../agents/product-analyzer').ProductAnalysis,
+  jobLog: ReturnType<typeof createLogger>
+) {
+  const { data: existing } = await supabase
+    .from('product')
+    .select('overrides')
+    .eq('id', productId)
+    .single();
+
+  const overrides = (existing?.overrides || {}) as Record<string, boolean>;
+
+  const productUpdate: Record<string, unknown> = {
+    analysis_data: analysis,
+    status: 'analyzed',
+    cost_usd: API_COSTS.wavespeedChat,
+    updated_at: new Date().toISOString(),
+  };
+
+  // Map analysis fields to product columns, skip overridden ones
+  const fieldMap: [string, unknown][] = [
+    ['name', analysis.product_name],
+    ['brand', analysis.brand],
+    ['category', analysis.category],
+    ['product_type', analysis.product_type],
+    ['product_size', analysis.product_size],
+    ['product_price', analysis.product_price],
+    ['selling_points', analysis.selling_points],
+    ['key_claims', analysis.key_claims],
+    ['benefits', analysis.benefits],
+    ['usage', analysis.usage],
+    ['hook_angle', analysis.hook_angle],
+    ['avatar_description', analysis.avatar_description],
+    ['image_description', analysis.image_description_for_nano_banana_pro],
+  ];
+
+  for (const [field, value] of fieldMap) {
+    if (!overrides[field]) {
+      productUpdate[field] = value;
+    } else {
+      jobLog.info({ field, productId }, 'Skipping overridden field on reanalyze');
+    }
+  }
+
+  if (analysis.product_image_url && !overrides['image_url']) {
+    productUpdate.image_url = analysis.product_image_url;
+  }
+
+  await supabase
+    .from('product')
+    .update(productUpdate)
+    .eq('id', productId);
+
+  jobLog.info({ productId }, 'Product table updated with analysis');
 }
 
 async function handleScripting(projectId: string, correlationId: string, jobLog: ReturnType<typeof createLogger>) {

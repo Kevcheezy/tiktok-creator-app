@@ -1,7 +1,8 @@
 import { Queue } from 'bullmq';
 
 export type PipelineJobData = {
-  projectId: string;
+  projectId?: string;
+  productId?: string;
   step: 'product_analysis' | 'scripting' | 'casting' | 'directing' | 'voiceover' | 'editing' | 'regenerate_asset';
   assetId?: string;
 };
