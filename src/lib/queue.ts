@@ -7,6 +7,7 @@ export type PipelineJobData = {
 
 function parseRedisUrl(url: string) {
   const parsed = new URL(url);
+  const isLocalhost = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
   return {
     host: parsed.hostname || 'localhost',
     port: parseInt(parsed.port || '6379', 10),
@@ -14,6 +15,7 @@ function parseRedisUrl(url: string) {
     username: parsed.username || undefined,
     db: parsed.pathname ? parseInt(parsed.pathname.slice(1), 10) || 0 : 0,
     maxRetriesPerRequest: null as null,
+    ...(!isLocalhost && { tls: {} }),
   };
 }
 
