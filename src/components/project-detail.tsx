@@ -37,6 +37,7 @@ interface ProjectData {
   error_message: string | null;
   failed_at_status: string | null;
   created_at: string | null;
+  updated_at: string | null;
   character: { name: string; avatar_persona: string | null } | null;
   influencer_id: string | null;
   influencer: { id: string; name: string; persona: string | null; image_url: string | null } | null;
@@ -228,22 +229,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
 
       {/* Scripting processing indicator */}
       {project.status === 'scripting' && (
-        <div className="rounded-xl border border-electric/20 bg-electric/5 p-6">
-          <div className="flex items-center gap-4">
-            <div className="relative h-8 w-8 flex-shrink-0">
-              <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-electric" />
-              <div className="absolute inset-1 animate-spin rounded-full border-2 border-transparent border-b-electric-dim" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }} />
-            </div>
-            <div>
-              <h3 className="font-[family-name:var(--font-display)] text-sm font-semibold text-electric">
-                Generating Script
-              </h3>
-              <p className="mt-0.5 text-sm text-text-secondary">
-                Crafting a 60-second TikTok script with hooks, shots, and energy arcs...
-              </p>
-            </div>
-          </div>
-        </div>
+        <ScriptingProgress startedAt={project.updated_at} />
       )}
 
       {/* Analysis Review */}
@@ -1116,6 +1102,53 @@ function FailedRecovery({ projectId, errorMessage, failedAtStatus, onRecovered }
               </button>
             </div>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ==============================
+   Scripting Progress Sub-component
+   ============================== */
+
+function ScriptingProgress({ startedAt }: { startedAt: string | null }) {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    const start = startedAt ? new Date(startedAt).getTime() : Date.now();
+
+    function tick() {
+      setElapsed(Math.floor((Date.now() - start) / 1000));
+    }
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [startedAt]);
+
+  const mins = Math.floor(elapsed / 60);
+  const secs = elapsed % 60;
+  const display = elapsed < 60 ? `${elapsed}s` : `${mins}m ${secs.toString().padStart(2, '0')}s`;
+
+  return (
+    <div className="rounded-xl border border-electric/20 bg-electric/5 p-6">
+      <div className="flex items-start gap-4">
+        <div className="relative h-8 w-8 flex-shrink-0">
+          <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-electric" />
+          <div className="absolute inset-1 animate-spin rounded-full border-2 border-transparent border-b-electric-dim" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="font-[family-name:var(--font-display)] text-sm font-semibold text-electric">
+              Generating Script
+            </h3>
+            <span className="font-[family-name:var(--font-mono)] text-xs text-text-muted flex-shrink-0">
+              {display}
+            </span>
+          </div>
+          <p className="mt-0.5 text-sm text-text-secondary">
+            Crafting a 60-second TikTok script with hooks, shots, and energy arcs...
+          </p>
         </div>
       </div>
     </div>
