@@ -118,7 +118,10 @@ export const PROJECT_STATUSES = [
   'scripting',
   'script_review',
   'casting',
+  'casting_review',
   'directing',
+  'voiceover',
+  'asset_review',
   'editing',
   'completed',
   'failed',
@@ -347,7 +350,9 @@ export const CREATOMATE_TEMPLATE_ID = '85021700-850c-49cf-a65f-06aa50e720e6';
 // Cost per API call (from cost_config.json)
 export const API_COSTS = {
   wavespeedChat: 0.01,
-  nanoBananaPro: 0.02,
+  nanoBananaPro: 0.07,
+  nanoBananaProEdit: 0.07,
   klingVideo: 1.20,
   elevenLabsTts: 0.05,
+  creatomateRender: 0.50,
 } as const;
