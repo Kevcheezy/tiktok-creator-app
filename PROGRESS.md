@@ -45,3 +45,30 @@
 - Fixed dotenv to load `.env.local` (worker + seed scripts)
 - Fixed WaveSpeed API endpoint: `/api/v3/wavespeed-ai/any-llm` (was `/v1/chat/completions`)
 - Migrated DB layer from Drizzle ORM to Supabase JS client (12 files)
+
+---
+
+## Phase 2: ScriptingAgent + Frontend Overhaul
+
+### Agent A: Backend
+- [x] A1: Updated pipeline status lifecycle (added `analysis_review`, `script_review`)
+- [x] A2: Created ScriptingAgent with syllable validation, hook scoring, template selection
+- [x] A3: Added scripting handler to pipeline worker
+- [x] A4: Created API routes (approve, scripts list, grade/feedback, regenerate)
+- [x] A5: Script versioning (increment on regeneration)
+- [x] A6: Backend build verification (`npm run build` passes)
+
+### Agent B: Frontend Overhaul
+- [x] B1-B7: Complete frontend redesign — dark cinematic theme with neon accents
+- [x] New fonts: Space Grotesk (display), DM Sans (body), JetBrains Mono (mono)
+- [x] New components: pipeline-progress, script-review, segment-card, approve-controls
+- [x] Redesigned: nav, status-badge, project-card, project-list, project-detail, create-project-form
+- [x] All pages render without console errors, `npm run build` passes
+
+### Agent C: Integration + E2E Verification
+- [x] Full pipeline flow verified: create → analyze → analysis_review → approve → scripting → script_review
+- [x] Script grading and regeneration verified (v1 → grade B → regenerate → v2 with improved syllables)
+- [x] Script versioning confirmed working (v1: 255 syllables, v2: 305 syllables after feedback)
+- [x] All API endpoints tested: approve, scripts list, grade, regenerate
+- [x] Production build passes (`npm run build`)
+- [x] Pushed to GitHub
