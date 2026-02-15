@@ -10,6 +10,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [confirmEmail, setConfirmEmail] = useState(false);
   const router = useRouter();
   const supabase = createClient();
 
@@ -20,11 +21,16 @@ export default function LoginPage() {
 
     try {
       if (isSignUp) {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
         });
         if (error) throw error;
+        // If email confirmation is required, user won't have a session yet
+        if (data.user && !data.session) {
+          setConfirmEmail(true);
+          return;
+        }
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email,
@@ -55,6 +61,16 @@ export default function LoginPage() {
             TikTok<span className="text-electric">Creator</span>
           </h1>
         </div>
+
+        {/* Email confirmation message */}
+        {confirmEmail && (
+          <div className="mb-6 rounded-xl border border-electric/30 bg-electric/10 p-6 text-center">
+            <p className="text-sm font-medium text-electric">Check your email</p>
+            <p className="mt-1 text-sm text-text-muted">
+              We sent a confirmation link to <span className="text-text-secondary">{email}</span>
+            </p>
+          </div>
+        )}
 
         {/* Card */}
         <div className="glass rounded-2xl border border-border p-8">

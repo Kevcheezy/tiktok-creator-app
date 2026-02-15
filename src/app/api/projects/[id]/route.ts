@@ -49,3 +49,41 @@ export async function PATCH(
     );
   }
 }
+
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+
+  try {
+    // Delete related records first (assets, scenes, scripts)
+    await supabase.from('asset').delete().eq('project_id', id);
+
+    const { data: scripts } = await supabase
+      .from('script')
+      .select('id')
+      .eq('project_id', id);
+
+    if (scripts && scripts.length > 0) {
+      const scriptIds = scripts.map((s) => s.id);
+      await supabase.from('scene').delete().in('script_id', scriptIds);
+      await supabase.from('script').delete().eq('project_id', id);
+    }
+
+    const { error } = await supabase
+      .from('project')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('Error deleting project:', error);
+      return NextResponse.json({ error: 'Failed to delete project' }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting project:', error);
+    return NextResponse.json({ error: 'Failed to delete project' }, { status: 500 });
+  }
+}

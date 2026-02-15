@@ -4,7 +4,10 @@ const STAGES = [
   { key: 'scripting', label: 'Script' },
   { key: 'script_review', label: 'Review' },
   { key: 'casting', label: 'Cast' },
+  { key: 'casting_review', label: 'Review' },
   { key: 'directing', label: 'Direct' },
+  { key: 'voiceover', label: 'Voice' },
+  { key: 'asset_review', label: 'Review' },
   { key: 'editing', label: 'Edit' },
   { key: 'completed', label: 'Done' },
 ] as const;

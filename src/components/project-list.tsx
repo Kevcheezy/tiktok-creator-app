@@ -1,5 +1,9 @@
+'use client';
+
+import { useState } from 'react';
 import Link from 'next/link';
 import { ProjectCard } from './project-card';
+import { ConfirmDialog } from './confirm-dialog';
 
 interface Project {
   id: string;
@@ -12,7 +16,27 @@ interface Project {
   cost_usd: string | null;
 }
 
-export function ProjectList({ projects }: { projects: Project[] }) {
+export function ProjectList({ projects: initialProjects }: { projects: Project[] }) {
+  const [projects, setProjects] = useState(initialProjects);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const deleteTarget = projects.find((p) => p.id === deleteTargetId);
+
+  async function handleDelete() {
+    if (!deleteTargetId) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/projects/${deleteTargetId}`, { method: 'DELETE' });
+      if (res.ok) {
+        setProjects((prev) => prev.filter((p) => p.id !== deleteTargetId));
+      }
+    } finally {
+      setDeleting(false);
+      setDeleteTargetId(null);
+    }
+  }
+
   if (projects.length === 0) {
     return (
       <div className="relative overflow-hidden rounded-2xl border border-dashed border-border-bright bg-surface/50 px-8 py-20 text-center">
@@ -68,10 +92,25 @@ export function ProjectList({ projects }: { projects: Project[] }) {
   }
 
   return (
-    <div className="stagger-children grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {projects.map((project) => (
-        <ProjectCard key={project.id} project={project} />
-      ))}
-    </div>
+    <>
+      <div className="stagger-children grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {projects.map((project) => (
+          <ProjectCard
+            key={project.id}
+            project={project}
+            onDelete={setDeleteTargetId}
+          />
+        ))}
+      </div>
+
+      <ConfirmDialog
+        open={!!deleteTargetId}
+        title="Delete Project"
+        description={`Are you sure you want to delete "${deleteTarget?.product_name || deleteTarget?.name || 'this project'}"? All scripts, assets, and generated content will be permanently removed.`}
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteTargetId(null)}
+        loading={deleting}
+      />
+    </>
   );
 }

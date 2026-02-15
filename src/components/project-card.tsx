@@ -1,3 +1,5 @@
+'use client';
+
 import Link from 'next/link';
 import { StatusBadge } from './status-badge';
 
@@ -12,6 +14,7 @@ interface ProjectCardProps {
     created_at: string | null;
     cost_usd: string | null;
   };
+  onDelete?: (id: string) => void;
 }
 
 function timeAgo(date: string | null): string {
@@ -51,7 +54,7 @@ const STATUS_ACCENT: Record<string, string> = {
   failed: 'group-hover:border-magenta/40',
 };
 
-export function ProjectCard({ project }: ProjectCardProps) {
+export function ProjectCard({ project, onDelete }: ProjectCardProps) {
   const displayName = project.product_name || project.name || truncateUrl(project.product_url);
   const accent = STATUS_ACCENT[project.status] || 'group-hover:border-border-bright';
 
@@ -92,18 +95,38 @@ export function ProjectCard({ project }: ProjectCardProps) {
           <p className="font-[family-name:var(--font-mono)] text-[11px] text-text-muted">
             {timeAgo(project.created_at)}
           </p>
-          <svg
-            viewBox="0 0 16 16"
-            fill="none"
-            className="h-3.5 w-3.5 text-text-muted transition-all group-hover:translate-x-0.5 group-hover:text-text-secondary"
-            stroke="currentColor"
-            strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <line x1="3" y1="8" x2="13" y2="8" />
-            <polyline points="9 4 13 8 9 12" />
-          </svg>
+          <div className="flex items-center gap-2">
+            {onDelete && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onDelete(project.id);
+                }}
+                className="rounded-md p-1.5 text-text-muted opacity-0 transition-all hover:bg-magenta/10 hover:text-magenta group-hover:opacity-100"
+                title="Delete project"
+              >
+                <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M2 4h12" />
+                  <path d="M5 4V2.5A.5.5 0 015.5 2h5a.5.5 0 01.5.5V4" />
+                  <path d="M12.5 4v9.5a1 1 0 01-1 1h-7a1 1 0 01-1-1V4" />
+                </svg>
+              </button>
+            )}
+            <svg
+              viewBox="0 0 16 16"
+              fill="none"
+              className="h-3.5 w-3.5 text-text-muted transition-all group-hover:translate-x-0.5 group-hover:text-text-secondary"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <line x1="3" y1="8" x2="13" y2="8" />
+              <polyline points="9 4 13 8 9 12" />
+            </svg>
+          </div>
         </div>
       </div>
     </Link>

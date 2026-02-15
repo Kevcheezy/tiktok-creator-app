@@ -4,6 +4,12 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ToneSelector } from './tone-selector';
 
+interface Influencer {
+  id: string;
+  name: string;
+  persona: string | null;
+}
+
 interface Character {
   id: string;
   name: string;
@@ -14,13 +20,19 @@ export function CreateProjectForm() {
   const router = useRouter();
   const [productUrl, setProductUrl] = useState('');
   const [videoUrl, setVideoUrl] = useState('');
+  const [influencerId, setInfluencerId] = useState('');
   const [characterId, setCharacterId] = useState('');
   const [tone, setTone] = useState('reluctant-insider');
+  const [influencers, setInfluencers] = useState<Influencer[]>([]);
   const [characters, setCharacters] = useState<Character[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
+    fetch('/api/influencers')
+      .then((res) => (res.ok ? res.json() : []))
+      .then(setInfluencers)
+      .catch(() => setInfluencers([]));
     fetch('/api/characters')
       .then((res) => (res.ok ? res.json() : []))
       .then(setCharacters)
@@ -39,6 +51,7 @@ export function CreateProjectForm() {
         body: JSON.stringify({
           productUrl,
           videoUrl: videoUrl || undefined,
+          influencerId: influencerId || undefined,
           characterId: characterId || undefined,
           tone,
         }),
@@ -102,6 +115,44 @@ export function CreateProjectForm() {
           placeholder="https://www.tiktok.com/@user/video/..."
           className="block w-full rounded-lg border border-border bg-surface-raised px-4 py-3 text-sm text-text-primary placeholder:text-text-muted transition-all focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric"
         />
+      </div>
+
+      {/* Influencer */}
+      <div>
+        <label
+          htmlFor="influencer"
+          className="mb-2 block font-[family-name:var(--font-display)] text-sm font-medium text-text-primary"
+        >
+          Influencer{' '}
+          <span className="font-normal text-text-muted">(optional)</span>
+        </label>
+        <div className="relative">
+          <select
+            id="influencer"
+            value={influencerId}
+            onChange={(e) => setInfluencerId(e.target.value)}
+            className="block w-full appearance-none rounded-lg border border-border bg-surface-raised px-4 py-3 pr-10 text-sm text-text-primary transition-all focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric"
+          >
+            <option value="">No influencer selected</option>
+            {influencers.map((inf) => (
+              <option key={inf.id} value={inf.id}>
+                {inf.name}{inf.persona ? ` (${inf.persona})` : ''}
+              </option>
+            ))}
+          </select>
+          {/* Custom dropdown arrow */}
+          <svg
+            viewBox="0 0 16 16"
+            fill="none"
+            className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <polyline points="4 6 8 10 12 6" />
+          </svg>
+        </div>
       </div>
 
       {/* Character */}

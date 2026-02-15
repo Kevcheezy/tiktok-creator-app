@@ -7,6 +7,7 @@ import { z } from 'zod';
 const createProjectSchema = z.object({
   productUrl: z.string().url('Must be a valid URL'),
   videoUrl: z.string().url().optional(),
+  influencerId: z.string().uuid().optional(),
   characterId: z.string().uuid().optional(),
   name: z.string().optional(),
   tone: z.enum(TONE_IDS as [string, ...string[]]).optional().default('reluctant-insider'),
@@ -38,13 +39,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { productUrl, videoUrl, characterId, name, tone } = parsed.data;
+    const { productUrl, videoUrl, influencerId, characterId, name, tone } = parsed.data;
 
     const { data: newProject, error } = await supabase
       .from('project')
       .insert({
         product_url: productUrl,
         video_url: videoUrl || null,
+        influencer_id: influencerId || null,
         character_id: characterId || null,
         name: name || null,
         tone,

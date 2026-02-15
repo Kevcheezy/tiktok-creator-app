@@ -26,10 +26,23 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; pulse?: bool
     color: 'bg-magenta/10 text-magenta border-magenta/30',
     pulse: true,
   },
+  casting_review: {
+    label: 'Review Assets',
+    color: 'bg-amber-hot/10 text-amber-hot border-amber-hot/30',
+  },
   directing: {
     label: 'Directing',
     color: 'bg-magenta/10 text-magenta border-magenta/30',
     pulse: true,
+  },
+  voiceover: {
+    label: 'Voiceover',
+    color: 'bg-magenta/10 text-magenta border-magenta/30',
+    pulse: true,
+  },
+  asset_review: {
+    label: 'Review Assets',
+    color: 'bg-amber-hot/10 text-amber-hot border-amber-hot/30',
   },
   editing: {
     label: 'Editing',
