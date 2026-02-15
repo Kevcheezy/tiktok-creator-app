@@ -88,6 +88,7 @@ export const project = pgTable('project', {
   renderUrl: text('render_url'),
   costUsd: numeric('cost_usd', { precision: 10, scale: 4 }).default('0'),
   errorMessage: text('error_message'),
+  failedAtStatus: text('failed_at_status'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });

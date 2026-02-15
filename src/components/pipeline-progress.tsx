@@ -20,9 +20,12 @@ function getStageIndex(status: string): number {
   return idx;
 }
 
-export function PipelineProgress({ status }: { status: string }) {
-  const currentIndex = getStageIndex(status);
+export function PipelineProgress({ status, failedAtStatus }: { status: string; failedAtStatus?: string | null }) {
   const isFailed = status === 'failed';
+  // When failed, show progress up to the failed stage
+  const effectiveStatus = isFailed && failedAtStatus ? failedAtStatus : status;
+  const currentIndex = getStageIndex(effectiveStatus);
+  const failedIndex = isFailed && failedAtStatus ? getStageIndex(failedAtStatus) : -1;
 
   return (
     <div className="w-full overflow-x-auto">
@@ -30,21 +33,23 @@ export function PipelineProgress({ status }: { status: string }) {
         {STAGES.map((stage, i) => {
           const isCompleted = currentIndex > i;
           const isCurrent = currentIndex === i;
+          const isFailedStage = failedIndex === i && isFailed;
           const isFuture = !isCompleted && !isCurrent;
 
           let dotColor = 'bg-surface-overlay border-border';
           let textColor = 'text-text-muted';
           let lineColor = 'bg-border';
 
-          if (isCompleted) {
+          if (isFailedStage) {
+            dotColor = 'bg-magenta/20 border-magenta';
+            textColor = 'text-magenta';
+          } else if (isCompleted) {
             dotColor = 'bg-lime/20 border-lime';
             textColor = 'text-lime';
             lineColor = 'bg-lime/40';
           } else if (isCurrent && !isFailed) {
             dotColor = 'bg-electric/20 border-electric';
             textColor = 'text-electric';
-          } else if (isFailed) {
-            // keep future styling
           }
 
           return (
@@ -54,7 +59,12 @@ export function PipelineProgress({ status }: { status: string }) {
                 <div
                   className={`relative flex h-7 w-7 items-center justify-center rounded-full border-2 transition-all duration-300 ${dotColor}`}
                 >
-                  {isCompleted ? (
+                  {isFailedStage ? (
+                    <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5 text-magenta" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round">
+                      <line x1="5" y1="5" x2="11" y2="11" />
+                      <line x1="11" y1="5" x2="5" y2="11" />
+                    </svg>
+                  ) : isCompleted ? (
                     <svg
                       viewBox="0 0 16 16"
                       fill="none"

@@ -64,8 +64,8 @@ FK guard added: DELETE returns 409 if influencer is referenced by projects.
 #### ~~B0.3 - Project Deletion While Pipeline Is Running~~ FIXED
 Status guard added: DELETE returns 409 if project is in an active pipeline status.
 
-#### ~~B0.4 - Influencer CRUD Incomplete: No Edit~~ FIXED
-PATCH endpoint added for name/persona updates.
+#### ~~B0.4 - Influencer CRUD Incomplete: No Edit~~ PARTIAL FIX
+PATCH endpoint added for name/persona text updates only. Image re-upload/replacement still missing — see **B0.11**.
 
 #### ~~B0.8 - CastingAgent Crashes: WaveSpeed `num_images` Parameter~~ FIXED
 Changed `num_images` from 1 to 2 in `wavespeed.ts`. Poll result already picks first image from the pair via `outputs?.[0]`.
@@ -78,17 +78,25 @@ Changed `num_images` from 1 to 2 in `wavespeed.ts`. Poll result already picks fi
 - Broken/missing image shows upload prompt with amber warning styling
 - Hard gate: approve button disabled without a valid product image; API returns 400 if no image present
 
-#### B0.10 - Failed Pipeline Has No Recovery Path
-**Severity:** Critical - Complete dead end
-**What:** When the pipeline fails at any stage (e.g., casting crash from B0.8), the project status is set to `failed` and the user sees the error message, but there is no way to recover. No "Retry" button, no "Go back to last review stage" option. The only option is to delete the project and start from scratch, losing all prior work (analysis, approved script, etc.).
-**Impact:** Every pipeline failure forces the user to redo the entire workflow from product URL entry. For failures at late stages (directing, voiceover), this wastes minutes of work and real API costs ($0.01-$5+). This is the single biggest UX frustration for any user hitting a transient error.
+#### ~~B0.10 - Failed Pipeline Has No Recovery Path~~ FIXED
+- Added `failed_at_status` column to track which stage failed
+- Pipeline worker records failed stage in all 6 error handlers
+- `POST /api/projects/[id]/retry` — re-enqueues the failed stage
+- `POST /api/projects/[id]/rollback` — resets to previous review gate
+- Pipeline progress highlights failed stage in magenta with X icon
+- FailedRecovery component with "Retry [Stage]" and "Back to [Review Gate]" buttons
+- All existing work (scripts, assets, cost) preserved on both retry and rollback
+
+#### B0.11 - Influencer Image Re-upload / Replacement
+**Severity:** High - Incomplete CRUD on core entity, blocks casting quality
+**What:** The influencer PATCH endpoint (B0.4 fix) only handles text fields (name, persona). There is no way to replace or re-upload an influencer's reference image after creation. The POST creation route handles image upload via FormData + Supabase Storage, but this capability was never added to the update flow.
+**Impact:** If a user uploads a bad reference image (wrong person, low quality, wrong angle), they must delete the influencer and recreate from scratch — losing all project associations (projects with `influencer_id` pointing to the old record). Since the CastingAgent uses the influencer reference image for image-to-image keyframe generation, a bad reference image produces bad keyframes across every project using that influencer.
 **Fix scope:**
-- [ ] Add a "Retry" button on failed projects that re-enqueues the failed stage (e.g., if casting failed, retry casting with same inputs)
-- [ ] Add a "Back to [last review stage]" button that resets status to the previous human gate (e.g., failed at casting → go back to `script_review`, failed at directing → go back to `casting_review`)
-- [ ] Preserve all existing work: scripts, assets generated before failure, cost tracking
-- [ ] Show which stage failed in the pipeline progress UI (highlight the failed step in red, not just the generic "FAILED" badge)
-- [ ] API: `POST /api/projects/[id]/retry` — re-enqueue the last attempted stage
-- [ ] API: `POST /api/projects/[id]/rollback` — reset status to the previous review gate
+- [ ] Add image upload handling to `PATCH /api/influencers/[id]` — accept FormData with optional image file, upload to Supabase Storage (`influencers/{id}/`), update `image_url` on the record
+- [ ] If replacing an existing image, delete the old file from Supabase Storage to avoid orphaned blobs
+- [ ] Influencer detail page: add "Replace Image" button/zone that opens a file picker, shows preview of new image before confirming, then calls the PATCH endpoint
+- [ ] Show current image alongside the upload zone so users can compare before replacing
+- [ ] After successful replacement, refresh the displayed image without full page reload
 
 #### ~~B0.5 - Project List Stale After Creation~~ FIXED
 Added `router.refresh()` before navigation after project creation to invalidate the client-side Router Cache.
@@ -161,11 +169,12 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 #### R1.5.1 - Influencer Management Completion
 **Priority:** P0.5 - High (CRUD is incomplete)
 **Effort:** Small
-**Why:** Influencers are a core entity. Users can create and delete but can't edit. This is table-stakes CRUD.
+**Depends on:** B0.11 (image replacement must be fixed first)
+**Why:** Influencers are a core entity. Basic CRUD gaps remain after partial B0.4 fix. B0.11 covers image replacement; this item covers the remaining UX polish.
 
-- [ ] PATCH endpoint for influencers (edit name, persona)
-- [ ] Image re-upload / replacement on influencer detail page
-- [ ] Edit mode toggle on influencer detail page
+- [x] PATCH endpoint for influencers (edit name, persona) — done in B0.4
+- [x] Image re-upload / replacement — moved to B0.11 (Tier 0, higher priority)
+- [ ] Edit mode toggle on influencer detail page (inline editing for name, persona, with save/cancel)
 - [ ] Prevent deletion of influencers assigned to active projects (or show warning with project list)
 
 #### R1.5.2 - Project Settings Editing
@@ -361,9 +370,9 @@ These features separate "generates a video" from "generates a video that sells."
 
 ```
 FIRST      Tier 0: Critical Bugs
-           B0.10 Failed pipeline recovery
-           (retry/rollback on failure)
-           Note: B0.1-B0.9 all fixed
+           B0.11 Influencer image replacement
+           (complete CRUD, unblock casting quality)
+           Note: B0.1-B0.10 all fixed
 
 NOW        Tier 1: Complete Pipeline
            R1.1 Asset Generation ──→ R1.2 Video Composition + Run Archive ──→ R1.3 Reference Video Intel

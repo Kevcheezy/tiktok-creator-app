@@ -103,6 +103,7 @@ async function handleProductAnalysis(projectId: string) {
       .from('project')
       .update({
         status: 'failed',
+        failed_at_status: 'analyzing',
         error_message: errorMessage,
         updated_at: new Date().toISOString(),
       })
@@ -139,6 +140,7 @@ async function handleScripting(projectId: string) {
       .from('project')
       .update({
         status: 'failed',
+        failed_at_status: 'scripting',
         error_message: errorMessage,
         updated_at: new Date().toISOString(),
       })
@@ -172,6 +174,7 @@ async function handleCasting(projectId: string) {
       .from('project')
       .update({
         status: 'failed',
+        failed_at_status: 'casting',
         error_message: errorMessage,
         updated_at: new Date().toISOString(),
       })
@@ -206,6 +209,7 @@ async function handleDirecting(projectId: string) {
       .from('project')
       .update({
         status: 'failed',
+        failed_at_status: 'directing',
         error_message: errorMessage,
         updated_at: new Date().toISOString(),
       })
@@ -239,6 +243,7 @@ async function handleVoiceover(projectId: string) {
       .from('project')
       .update({
         status: 'failed',
+        failed_at_status: 'voiceover',
         error_message: errorMessage,
         updated_at: new Date().toISOString(),
       })
@@ -272,6 +277,7 @@ async function handleEditing(projectId: string) {
       .from('project')
       .update({
         status: 'failed',
+        failed_at_status: 'editing',
         error_message: errorMessage,
         updated_at: new Date().toISOString(),
       })

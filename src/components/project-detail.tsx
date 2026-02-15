@@ -34,6 +34,7 @@ interface ProjectData {
   } | null;
   cost_usd: string | null;
   error_message: string | null;
+  failed_at_status: string | null;
   created_at: string | null;
   character: { name: string; avatar_persona: string | null } | null;
 }
@@ -183,28 +184,17 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
 
       {/* Pipeline Progress */}
       <div className="rounded-xl border border-border bg-surface p-5">
-        <PipelineProgress status={project.status} />
+        <PipelineProgress status={project.status} failedAtStatus={project.failed_at_status} />
       </div>
 
-      {/* Error message */}
-      {project.status === 'failed' && project.error_message && (
-        <div className="rounded-xl border border-magenta/30 bg-magenta/5 p-5">
-          <div className="flex items-start gap-3">
-            <svg
-              viewBox="0 0 20 20"
-              className="mt-0.5 h-5 w-5 flex-shrink-0 text-magenta"
-              fill="currentColor"
-            >
-              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-            </svg>
-            <div>
-              <h3 className="font-[family-name:var(--font-display)] text-sm font-semibold text-magenta">
-                Pipeline Failed
-              </h3>
-              <p className="mt-1 text-sm text-text-secondary">{project.error_message}</p>
-            </div>
-          </div>
-        </div>
+      {/* Error message with recovery actions */}
+      {project.status === 'failed' && (
+        <FailedRecovery
+          projectId={projectId}
+          errorMessage={project.error_message}
+          failedAtStatus={project.failed_at_status}
+          onRecovered={fetchProject}
+        />
       )}
 
       {/* Processing indicator for created/analyzing */}
@@ -749,6 +739,141 @@ function ProductImageSection({ projectId, productImageUrl, onImageUpdated }: Pro
       {uploadError && (
         <p className="mt-2 text-sm text-magenta">{uploadError}</p>
       )}
+    </div>
+  );
+}
+
+/* ==============================
+   Failed Recovery Sub-component
+   ============================== */
+
+const STAGE_LABELS: Record<string, string> = {
+  analyzing: 'Product Analysis',
+  scripting: 'Script Generation',
+  casting: 'Keyframe Casting',
+  directing: 'Video Directing',
+  voiceover: 'Voiceover Generation',
+  editing: 'Video Composition',
+};
+
+const ROLLBACK_LABELS: Record<string, string> = {
+  analyzing: 'Start',
+  scripting: 'Analysis Review',
+  casting: 'Script Review',
+  directing: 'Casting Review',
+  voiceover: 'Casting Review',
+  editing: 'Asset Review',
+};
+
+interface FailedRecoveryProps {
+  projectId: string;
+  errorMessage: string | null;
+  failedAtStatus: string | null;
+  onRecovered: () => void;
+}
+
+function FailedRecovery({ projectId, errorMessage, failedAtStatus, onRecovered }: FailedRecoveryProps) {
+  const [retrying, setRetrying] = useState(false);
+  const [rollingBack, setRollingBack] = useState(false);
+
+  const stageLabel = failedAtStatus ? STAGE_LABELS[failedAtStatus] || failedAtStatus : 'Unknown';
+  const rollbackLabel = failedAtStatus ? ROLLBACK_LABELS[failedAtStatus] || 'previous stage' : 'previous stage';
+
+  async function handleRetry() {
+    setRetrying(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/retry`, { method: 'POST' });
+      if (res.ok) onRecovered();
+    } catch (err) {
+      console.error('Retry failed:', err);
+    } finally {
+      setRetrying(false);
+    }
+  }
+
+  async function handleRollback() {
+    setRollingBack(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/rollback`, { method: 'POST' });
+      if (res.ok) onRecovered();
+    } catch (err) {
+      console.error('Rollback failed:', err);
+    } finally {
+      setRollingBack(false);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-magenta/30 bg-magenta/5 p-5">
+      <div className="flex items-start gap-3">
+        <svg
+          viewBox="0 0 20 20"
+          className="mt-0.5 h-5 w-5 flex-shrink-0 text-magenta"
+          fill="currentColor"
+        >
+          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+        </svg>
+        <div className="flex-1">
+          <h3 className="font-[family-name:var(--font-display)] text-sm font-semibold text-magenta">
+            Pipeline Failed{failedAtStatus ? ` at ${stageLabel}` : ''}
+          </h3>
+          {errorMessage && (
+            <p className="mt-1 text-sm text-text-secondary">{errorMessage}</p>
+          )}
+
+          {failedAtStatus && (
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={handleRetry}
+                disabled={retrying || rollingBack}
+                className="inline-flex items-center gap-2 rounded-lg bg-electric px-4 py-2 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:shadow-[0_0_24px_rgba(0,240,255,0.3)] disabled:opacity-50"
+              >
+                {retrying ? (
+                  <>
+                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="60" strokeDashoffset="15" strokeLinecap="round" />
+                    </svg>
+                    Retrying...
+                  </>
+                ) : (
+                  <>
+                    <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M1 2v5h5" />
+                      <path d="M3.5 10a5 5 0 109-2.3" />
+                    </svg>
+                    Retry {stageLabel}
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleRollback}
+                disabled={retrying || rollingBack}
+                className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 font-[family-name:var(--font-display)] text-sm font-medium text-text-secondary transition-colors hover:border-electric/30 hover:text-electric disabled:opacity-50"
+              >
+                {rollingBack ? (
+                  <>
+                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="60" strokeDashoffset="15" strokeLinecap="round" />
+                    </svg>
+                    Rolling back...
+                  </>
+                ) : (
+                  <>
+                    <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M15 2v5h-5" />
+                      <path d="M12.5 10a5 5 0 11-9-2.3" />
+                    </svg>
+                    Back to {rollbackLabel}
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
