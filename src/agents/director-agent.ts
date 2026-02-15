@@ -77,41 +77,69 @@ export class DirectorAgent extends BaseAgent {
 
       const negativePrompt = 'watermark, text overlay, blurry, distorted, flickering, low quality, static, frozen';
 
-      this.log(`Generating video for segment ${segIdx}`);
+      // Generate video with retry logic
+      const maxRetries = 2;
+      let lastError: Error | null = null;
 
-      const result = await this.wavespeed.generateVideo({
-        image: startKeyframe.url,
-        tailImage: endKeyframe?.url,
-        prompt: mainPrompt,
-        negativePrompt,
-        multiPrompt,
-        duration: 15,
-        cfgScale: 0.5,
-      });
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          if (attempt > 0) {
+            this.log(`Retry ${attempt}/${maxRetries} for segment ${segIdx} after 10s delay...`);
+            await new Promise(resolve => setTimeout(resolve, 10000));
+          }
 
-      // Create asset row
-      await this.supabase.from('asset').insert({
-        project_id: projectId,
-        scene_id: scene.id,
-        type: 'video',
-        provider: 'kling-3.0-pro',
-        provider_task_id: result.taskId,
-        status: 'generating',
-        cost_usd: API_COSTS.klingVideo,
-      });
+          this.log(`Generating video for segment ${segIdx} (attempt ${attempt + 1})`);
 
-      // Poll until complete (up to 5 minutes)
-      this.log(`Polling video task ${result.taskId} (up to 5 min)...`);
-      const pollResult = await this.wavespeed.pollResult(result.taskId);
+          const result = await this.wavespeed.generateVideo({
+            image: startKeyframe.url,
+            tailImage: endKeyframe?.url,
+            prompt: mainPrompt,
+            negativePrompt,
+            multiPrompt,
+            duration: 15,
+            cfgScale: 0.5,
+          });
 
-      // Update asset with URL
-      await this.supabase
-        .from('asset')
-        .update({ url: pollResult.url || '', status: 'completed' })
-        .eq('provider_task_id', result.taskId);
+          await this.supabase.from('asset').insert({
+            project_id: projectId,
+            scene_id: scene.id,
+            type: 'video',
+            provider: 'kling-3.0-pro',
+            provider_task_id: result.taskId,
+            status: 'generating',
+            cost_usd: API_COSTS.klingVideo,
+          });
 
-      await this.trackCost(projectId, API_COSTS.klingVideo);
-      this.log(`Video complete for segment ${segIdx}: ${pollResult.url}`);
+          this.log(`Polling video task ${result.taskId} (up to 5 min)...`);
+          const pollResult = await this.wavespeed.pollResult(result.taskId);
+
+          await this.supabase
+            .from('asset')
+            .update({ url: pollResult.url || '', status: 'completed' })
+            .eq('provider_task_id', result.taskId);
+
+          await this.trackCost(projectId, API_COSTS.klingVideo);
+          this.log(`Video complete for segment ${segIdx}: ${pollResult.url}`);
+          lastError = null;
+          break;
+
+        } catch (error) {
+          lastError = error instanceof Error ? error : new Error(String(error));
+          this.log(`Video generation failed for segment ${segIdx}: ${lastError.message}`);
+        }
+      }
+
+      if (lastError) {
+        this.log(`All retries exhausted for segment ${segIdx}, marking as failed`);
+        await this.supabase.from('asset').insert({
+          project_id: projectId,
+          scene_id: scene.id,
+          type: 'video',
+          provider: 'kling-3.0-pro',
+          status: 'failed',
+          cost_usd: 0,
+        });
+      }
     }
 
     this.log(`Directing complete for project ${projectId}`);
