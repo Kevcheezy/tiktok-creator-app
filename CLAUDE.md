@@ -6,7 +6,7 @@ Full-stack app for producing 60-second TikTok Shop UGC videos using AI agents.
 - **Framework**: Next.js 16 (App Router)
 - **Language**: TypeScript
 - **Styling**: Tailwind CSS v4
-- **Database**: Supabase (PostgreSQL) + Drizzle ORM
+- **Database**: Supabase (PostgreSQL) + `@supabase/supabase-js` client
 - **Queue**: BullMQ + Redis
 - **AI**: WaveSpeed API (Gemini LLM, Nano Banana Pro images, Kling 3.0 Pro video)
 - **Voice**: ElevenLabs (future phases)
@@ -16,15 +16,15 @@ Full-stack app for producing 60-second TikTok Shop UGC videos using AI agents.
 - `npm run dev` -- Start Next.js dev server (localhost:3000)
 - `npm run build` -- Production build
 - `npm run worker` -- Start BullMQ pipeline worker (separate process)
-- `npx drizzle-kit push` -- Push schema to Supabase
 - `npx tsx src/db/seed.ts` -- Seed database with characters + templates
+- DB tables managed via Supabase MCP (no Drizzle migrations needed)
 
 ## Architecture
 ```
 Browser -> Next.js App Router (API Routes) -> BullMQ Queue -> Worker Process
                                                               |
                                               WaveSpeed API (LLM, images, video)
-                                              Supabase (PostgreSQL via Drizzle)
+                                              Supabase (PostgreSQL via supabase-js)
 ```
 
 Worker runs as a separate Node.js process, not inside Next.js.
