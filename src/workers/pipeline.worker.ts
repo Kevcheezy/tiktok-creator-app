@@ -4,6 +4,7 @@ import { Worker, Job } from 'bullmq';
 import { createClient } from '@supabase/supabase-js';
 import IORedis from 'ioredis';
 import { ProductAnalyzerAgent } from '../agents/product-analyzer';
+import { ScriptingAgent } from '../agents/scripting-agent';
 
 // Set up standalone Supabase client for the worker process
 const supabase = createClient(
@@ -26,6 +27,8 @@ const worker = new Worker(
 
     if (step === 'product_analysis') {
       await handleProductAnalysis(projectId);
+    } else if (step === 'scripting') {
+      await handleScripting(projectId);
     } else {
       console.log(`[Worker] Unknown step: ${step}, skipping`);
     }
@@ -71,6 +74,42 @@ async function handleProductAnalysis(projectId: string) {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error(`[Worker] Product analysis failed for project ${projectId}:`, errorMessage);
+
+    await supabase
+      .from('project')
+      .update({
+        status: 'failed',
+        error_message: errorMessage,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', projectId);
+
+    throw error; // Re-throw so BullMQ marks the job as failed
+  }
+}
+
+async function handleScripting(projectId: string) {
+  try {
+    // Update status to scripting
+    await supabase
+      .from('project')
+      .update({ status: 'scripting', updated_at: new Date().toISOString() })
+      .eq('id', projectId);
+
+    // Run the ScriptingAgent
+    const agent = new ScriptingAgent(supabase);
+    await agent.run(projectId);
+
+    // Update status to script_review on success
+    await supabase
+      .from('project')
+      .update({ status: 'script_review', updated_at: new Date().toISOString() })
+      .eq('id', projectId);
+
+    console.log(`[Worker] Scripting complete for project ${projectId}`);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`[Worker] Scripting failed for project ${projectId}:`, errorMessage);
 
     await supabase
       .from('project')
