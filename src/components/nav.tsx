@@ -1,6 +1,10 @@
 import Link from 'next/link';
+import { createClient } from '@/lib/supabase/server';
 
-export function Nav() {
+export async function Nav() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
   return (
     <nav className="glass sticky top-0 z-50 border-b border-border">
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
@@ -36,6 +40,12 @@ export function Nav() {
               Dashboard
             </Link>
             <Link
+              href="/influencers"
+              className="font-[family-name:var(--font-display)] text-sm font-medium text-text-secondary transition-colors hover:text-electric"
+            >
+              Influencers
+            </Link>
+            <Link
               href="/projects/new"
               className="group relative inline-flex items-center gap-2 overflow-hidden rounded-lg bg-electric px-4 py-2 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:bg-electric/90 hover:shadow-[0_0_24px_rgba(0,240,255,0.3)]"
             >
@@ -52,6 +62,24 @@ export function Nav() {
               </svg>
               New Project
             </Link>
+
+            {/* User menu */}
+            {user && (
+              <>
+                <div className="h-5 w-px bg-border" />
+                <span className="text-sm text-text-muted truncate max-w-[160px]">
+                  {user.email}
+                </span>
+                <form action="/auth/signout" method="post">
+                  <button
+                    type="submit"
+                    className="font-[family-name:var(--font-display)] text-sm font-medium text-text-muted transition-colors hover:text-magenta"
+                  >
+                    Log out
+                  </button>
+                </form>
+              </>
+            )}
           </div>
         </div>
       </div>
