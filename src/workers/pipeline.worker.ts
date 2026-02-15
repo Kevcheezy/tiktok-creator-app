@@ -11,6 +11,7 @@ import { DirectorAgent } from '../agents/director-agent';
 import { VoiceoverAgent } from '../agents/voiceover-agent';
 import { EditorAgent } from '../agents/editor-agent';
 import { getPipelineQueue } from '../lib/queue';
+import { APP_VERSION, GIT_COMMIT } from '../lib/version';
 
 // Set up standalone Supabase client for the worker process
 const supabase = createClient(
@@ -27,7 +28,7 @@ const connection = new IORedis(redisUrl, {
   ...(isLocalhost ? {} : { tls: {} }),
 });
 
-console.log('Pipeline worker starting...');
+console.log(`Pipeline worker v${APP_VERSION} (${GIT_COMMIT}) starting...`);
 
 const worker = new Worker(
   'pipeline',

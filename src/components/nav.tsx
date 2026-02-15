@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
+import { APP_VERSION, GIT_COMMIT } from '@/lib/version';
 
 export async function Nav() {
   const supabase = await createClient();
@@ -30,6 +31,12 @@ export async function Nav() {
               TikTok<span className="text-electric">Creator</span>
             </span>
           </Link>
+          <span
+            title={`commit ${GIT_COMMIT}`}
+            className="font-[family-name:var(--font-mono)] text-[10px] leading-none text-text-muted/60 select-none"
+          >
+            v{APP_VERSION}
+          </span>
 
           {/* Right side */}
           <div className="flex items-center gap-6">
