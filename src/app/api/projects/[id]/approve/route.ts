@@ -7,7 +7,9 @@ import { getPipelineQueue } from '@/lib/queue';
  *
  * Approves the current review stage and enqueues the next pipeline step.
  * - analysis_review -> enqueue 'scripting'
- * - script_review   -> enqueue 'casting' (future)
+ * - script_review   -> enqueue 'casting'
+ * - casting_review  -> enqueue 'directing'
+ * - asset_review    -> set status to 'editing' (Phase 4 placeholder)
  */
 export async function POST(
   request: NextRequest,
@@ -31,9 +33,25 @@ export async function POST(
     const nextStepMap: Record<string, { step: string; jobName: string }> = {
       analysis_review: { step: 'scripting', jobName: 'scripting' },
       script_review: { step: 'casting', jobName: 'casting' },
+      casting_review: { step: 'directing', jobName: 'directing' },
     };
 
     const next = nextStepMap[proj.status];
+
+    if (proj.status === 'asset_review') {
+      await getPipelineQueue().add('editing', {
+        projectId: id,
+        step: 'editing',
+      });
+
+      return NextResponse.json({
+        message: 'Approved. Enqueued "editing" step.',
+        projectId: id,
+        previousStatus: proj.status,
+        nextStep: 'editing',
+      });
+    }
+
     if (!next) {
       return NextResponse.json(
         { error: `Project is not in a review state (current: ${proj.status})` },
@@ -44,7 +62,7 @@ export async function POST(
     // Enqueue next pipeline step
     await getPipelineQueue().add(next.jobName, {
       projectId: id,
-      step: next.step as 'scripting' | 'casting',
+      step: next.step as 'scripting' | 'casting' | 'directing',
     });
 
     return NextResponse.json({

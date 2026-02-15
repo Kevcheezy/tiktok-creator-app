@@ -5,6 +5,11 @@ import { createClient } from '@supabase/supabase-js';
 import IORedis from 'ioredis';
 import { ProductAnalyzerAgent } from '../agents/product-analyzer';
 import { ScriptingAgent } from '../agents/scripting-agent';
+import { CastingAgent } from '../agents/casting-agent';
+import { DirectorAgent } from '../agents/director-agent';
+import { VoiceoverAgent } from '../agents/voiceover-agent';
+import { EditorAgent } from '../agents/editor-agent';
+import { getPipelineQueue } from '../lib/queue';
 
 // Set up standalone Supabase client for the worker process
 const supabase = createClient(
@@ -29,6 +34,14 @@ const worker = new Worker(
       await handleProductAnalysis(projectId);
     } else if (step === 'scripting') {
       await handleScripting(projectId);
+    } else if (step === 'casting') {
+      await handleCasting(projectId);
+    } else if (step === 'directing') {
+      await handleDirecting(projectId);
+    } else if (step === 'voiceover') {
+      await handleVoiceover(projectId);
+    } else if (step === 'editing') {
+      await handleEditing(projectId);
     } else {
       console.log(`[Worker] Unknown step: ${step}, skipping`);
     }
@@ -121,6 +134,139 @@ async function handleScripting(projectId: string) {
       .eq('id', projectId);
 
     throw error; // Re-throw so BullMQ marks the job as failed
+  }
+}
+
+async function handleCasting(projectId: string) {
+  try {
+    await supabase
+      .from('project')
+      .update({ status: 'casting', updated_at: new Date().toISOString() })
+      .eq('id', projectId);
+
+    const agent = new CastingAgent(supabase);
+    await agent.run(projectId);
+
+    await supabase
+      .from('project')
+      .update({ status: 'casting_review', updated_at: new Date().toISOString() })
+      .eq('id', projectId);
+
+    console.log(`[Worker] Casting complete for project ${projectId}`);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`[Worker] Casting failed for project ${projectId}:`, errorMessage);
+
+    await supabase
+      .from('project')
+      .update({
+        status: 'failed',
+        error_message: errorMessage,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', projectId);
+
+    throw error;
+  }
+}
+
+async function handleDirecting(projectId: string) {
+  try {
+    await supabase
+      .from('project')
+      .update({ status: 'directing', updated_at: new Date().toISOString() })
+      .eq('id', projectId);
+
+    const agent = new DirectorAgent(supabase);
+    await agent.run(projectId);
+
+    // Auto-enqueue voiceover (no review gate between directing and voiceover)
+    await getPipelineQueue().add('voiceover', {
+      projectId,
+      step: 'voiceover',
+    });
+
+    console.log(`[Worker] Directing complete for project ${projectId}, voiceover enqueued`);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`[Worker] Directing failed for project ${projectId}:`, errorMessage);
+
+    await supabase
+      .from('project')
+      .update({
+        status: 'failed',
+        error_message: errorMessage,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', projectId);
+
+    throw error;
+  }
+}
+
+async function handleVoiceover(projectId: string) {
+  try {
+    await supabase
+      .from('project')
+      .update({ status: 'voiceover', updated_at: new Date().toISOString() })
+      .eq('id', projectId);
+
+    const agent = new VoiceoverAgent(supabase);
+    await agent.run(projectId);
+
+    await supabase
+      .from('project')
+      .update({ status: 'asset_review', updated_at: new Date().toISOString() })
+      .eq('id', projectId);
+
+    console.log(`[Worker] Voiceover complete for project ${projectId}`);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`[Worker] Voiceover failed for project ${projectId}:`, errorMessage);
+
+    await supabase
+      .from('project')
+      .update({
+        status: 'failed',
+        error_message: errorMessage,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', projectId);
+
+    throw error;
+  }
+}
+
+async function handleEditing(projectId: string) {
+  try {
+    await supabase
+      .from('project')
+      .update({ status: 'editing', updated_at: new Date().toISOString() })
+      .eq('id', projectId);
+
+    const agent = new EditorAgent(supabase);
+    await agent.run(projectId);
+
+    await supabase
+      .from('project')
+      .update({ status: 'completed', updated_at: new Date().toISOString() })
+      .eq('id', projectId);
+
+    console.log(`[Worker] Editing complete for project ${projectId}`);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`[Worker] Editing failed for project ${projectId}:`, errorMessage);
+
+    await supabase
+      .from('project')
+      .update({
+        status: 'failed',
+        error_message: errorMessage,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', projectId);
+
+    throw error;
   }
 }
 
