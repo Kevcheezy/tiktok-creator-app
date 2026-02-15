@@ -55,40 +55,42 @@ TikTok Creator App is an AI-powered pipeline that produces 60-second TikTok Shop
 
 These are shipped features that are broken or create data integrity risks. They erode trust and block testing of the existing pipeline.
 
-#### B0.1 - Asset Grading Endpoint Missing
-**Severity:** Critical - Feature completely broken
-**What:** `AssetReview` component calls `PATCH /api/projects/[id]/assets` with `{ assetId, grade }` but this endpoint doesn't exist. The assets GET route exists, but there's no PATCH handler. Asset grading is non-functional.
-**Impact:** Users cannot grade individual assets at the `casting_review` or `asset_review` stages.
+#### ~~B0.1 - Asset Grading Endpoint Missing~~ FIXED
+PATCH handler added to `/api/projects/[id]/assets` — accepts `{ assetId, grade }`, verifies asset ownership, updates grade.
 
-#### B0.2 - Influencer Deletion Doesn't Check Project References
-**Severity:** Critical - Data integrity
-**What:** Deleting an influencer that's assigned to one or more projects causes orphaned `influencer_id` foreign keys. No pre-deletion check or cascade strategy.
-**Impact:** Projects referencing a deleted influencer will break when loading (null joins, missing data).
+#### ~~B0.2 - Influencer Deletion Doesn't Check Project References~~ FIXED
+FK guard added: DELETE returns 409 if influencer is referenced by projects.
 
-#### B0.3 - Project Deletion While Pipeline Is Running
-**Severity:** High - Data integrity
-**What:** No status guard on project deletion. If a project is deleted while the worker is processing it (e.g. `casting`, `directing`), the worker will crash or fail silently trying to update a non-existent project. Orphaned BullMQ jobs remain in queue.
-**Impact:** Worker instability, orphaned queue jobs.
+#### ~~B0.3 - Project Deletion While Pipeline Is Running~~ FIXED
+Status guard added: DELETE returns 409 if project is in an active pipeline status.
 
-#### B0.4 - Influencer CRUD Incomplete: No Edit
-**Severity:** High - Broken workflow
-**What:** Users can create and delete influencers but cannot edit name, persona, or re-upload the reference image after creation. No PATCH endpoint, no edit UI.
-**Impact:** Users must delete and recreate to fix a typo or change a photo.
+#### ~~B0.4 - Influencer CRUD Incomplete: No Edit~~ FIXED
+PATCH endpoint added for name/persona updates.
 
-#### B0.5 - Project List Stale After Creation
-**Severity:** Medium - UX bug
-**What:** Dashboard fetches projects server-side and passes to `ProjectList` via props. After creating a new project on `/projects/new`, the user redirects to `/projects/[id]` but if they navigate back to the dashboard, the list uses stale initial state.
-**Impact:** New projects don't appear in the list without a full page refresh.
+#### B0.8 - CastingAgent Crashes: WaveSpeed `num_images` Parameter
+**Severity:** Critical - Pipeline completely blocked at casting stage
+**What:** `src/lib/api-clients/wavespeed.ts` sends `num_images: 1` to the Nano Banana Pro API, but the API only accepts `num_images: 2`. Every attempt to generate keyframes returns a 400 error: `"Error at /num_images: value is not one of the allowed values [2]"`.
+**Impact:** The entire pipeline is dead from `script_review` onward. No user can progress past scripting. Since the API returns 2 images, the response handler also needs to pick the best image from the pair.
 
-#### B0.6 - Cost Not Tracked on Regeneration
-**Severity:** Medium - Financial accuracy
-**What:** Script regeneration and per-segment regeneration both call the LLM ($0.01 each) but don't call `trackCost()`. The `cost_usd` total on the project understates actual spend.
-**Impact:** Users see inaccurate costs. At scale, undercounting adds up.
+#### B0.9 - No Product Image Captured During Analysis
+**Severity:** High - Missing data for downstream agents
+**What:** The ProductAnalyzerAgent extracts a `product_image_url` field and an `image_description_for_nano_banana_pro` text prompt, but: (a) the extracted URL is often empty or broken (TikTok product pages use dynamic image loading), (b) the image URL is stored in `product_data` JSONB but never validated or displayed to the user, (c) there's no fallback upload path if the URL is missing. The CastingAgent needs a real product image to generate accurate keyframes showing the product.
+**Impact:** Keyframes are generated with AI-imagined products instead of the real product. This produces off-brand, unrecognizable product shots that won't convert.
+**Fix scope:**
+- [ ] Display `product_image_url` in the analysis review UI (show the image, not just the URL)
+- [ ] If image URL is missing or broken (404), show a product image upload prompt at `analysis_review`
+- [ ] Store uploaded product images in Supabase Storage (`products/{project_id}/product.{ext}`)
+- [ ] Add `product_image_url` as a validated field on the project record (not just buried in JSONB)
+- [ ] **Hard gate:** Do not allow progression past `analysis_review` without a valid product image (either extracted or uploaded)
 
-#### B0.7 - Schema Documentation Drift
-**Severity:** Low - Developer friction
-**What:** `src/db/schema.ts` is out of date: missing the `influencer` table, `tone` column on project/script, and `influencer_id` FK on project. Actual tables exist in Supabase but aren't documented in code.
-**Impact:** New developers (or AI agents) reference the wrong schema. Runtime errors if schema assumptions are wrong.
+#### ~~B0.5 - Project List Stale After Creation~~ FIXED
+Added `router.refresh()` before navigation after project creation to invalidate the client-side Router Cache.
+
+#### ~~B0.6 - Cost Not Tracked on Regeneration~~ FIXED
+Made `BaseAgent.trackCost()` atomic via Postgres `increment_project_cost` RPC function. All agents (including regeneration paths) now use race-condition-safe cost increments.
+
+#### ~~B0.7 - Schema Documentation Drift~~ FIXED
+Updated `src/db/schema.ts` with `influencer` table, `completed_run` table, and missing columns (`tone`, `influencer_id`, `source`, `version`).
 
 ---
 
@@ -98,10 +100,16 @@ These are blocking items. Nothing else matters until a user can go from product 
 
 #### R1.1 - Complete Asset Generation (Phase 3)
 **Priority:** P0 - Critical
-**Effort:** Medium
-**Depends on:** Tier 0 bugs fixed (especially B0.1 asset grading endpoint)
+**Effort:** Medium-Large
+**Depends on:** B0.1 (asset grading), B0.8 (num_images fix), B0.9 (product image)
 **Why:** Without this, the product is a script generator, not a video creator.
 
+**Pre-casting gate (new review step between script_review and casting):**
+- [ ] **Influencer selection gate:** When user approves a script, prompt them to select or confirm the AI influencer before casting begins. Show the influencer's reference image so the user knows what avatar the keyframes will use. If no influencer is assigned, require one before proceeding.
+- [ ] **Product image requirement:** Before casting can start, validate that a product image exists (from analysis or user upload). If `product_image_url` is empty/broken, block casting and show an upload prompt. Rule: never generate keyframes without a real product reference image.
+- [ ] **Product interaction prompt:** Let the user specify how the product appears in keyframes per segment. Options per the existing `PRODUCT_PLACEMENT_ARC`: (Seg 1: not visible, Seg 2: subtle background, Seg 3: hero shot - holding/showing, Seg 4: set down in frame). User should be able to override defaults and add notes (e.g., "influencer holds bottle at eye level", "product on desk next to laptop").
+
+**Pipeline hardening:**
 - [ ] Enable full 4-segment processing (remove single-segment test restriction)
 - [ ] Harden CastingAgent: error recovery, retry logic, image quality validation
 - [ ] Harden DirectorAgent: video generation polling, timeout handling, quality checks
@@ -346,8 +354,9 @@ These features separate "generates a video" from "generates a video that sells."
 
 ```
 FIRST      Tier 0: Critical Bugs
-           B0.1 Asset grading ──→ B0.2 FK integrity ──→ B0.3 Pipeline guards ──→ B0.4-B0.7
-           (broken feature)        (data corruption)     (worker stability)      (remaining fixes)
+           B0.8 num_images fix ──→ B0.9 Product image capture
+           (pipeline unblocked)    (required for casting)
+           Note: B0.1-B0.7 all fixed
 
 NOW        Tier 1: Complete Pipeline
            R1.1 Asset Generation ──→ R1.2 Video Composition + Run Archive ──→ R1.3 Reference Video Intel
