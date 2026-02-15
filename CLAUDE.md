@@ -52,5 +52,8 @@ Worker runs as a separate Node.js process, not inside Next.js.
 4. DirectorAgent (Phase 3)
 5. EditorAgent (Phase 4)
 
+## Frontend Design Rule
+**ALL frontend changes MUST use the `frontend-designer` skill.** Any work touching `.tsx` files, pages, components, or styling must invoke `/frontend-designer` first. This applies to both direct work and subagent-dispatched work. The skill is at `.claude/skills/frontend-designer/SKILL.md`.
+
 ## Predecessor
 This app replaces the n8n-based orchestration at `../tt_shop_content_creator/`.
