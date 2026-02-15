@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { SegmentCard } from './segment-card';
 import { ApproveControls } from './approve-controls';
+import { ScriptUpload } from './script-upload';
 import { SCRIPT_TONES } from '@/lib/constants';
 
 interface Scene {
@@ -17,6 +18,8 @@ interface Scene {
   audio_sync: Record<string, { word: string; time: string; action: string }> | null;
   text_overlay: string | null;
   product_visibility: string | null;
+  tone: string | null;
+  version: number;
   created_at: string;
 }
 
@@ -44,6 +47,7 @@ export function ScriptReview({
   const [scripts, setScripts] = useState<Script[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeScript, setActiveScript] = useState(0);
+  const [showUpload, setShowUpload] = useState(false);
 
   const fetchScripts = useCallback(async () => {
     try {
@@ -78,9 +82,28 @@ export function ScriptReview({
 
   if (scripts.length === 0) {
     return (
-      <div className="rounded-xl border border-border bg-surface p-8 text-center">
-        <p className="text-sm text-text-secondary">No scripts generated yet.</p>
-      </div>
+      <>
+        <div className="rounded-xl border border-border bg-surface p-8 text-center">
+          <p className="mb-4 text-sm text-text-secondary">No scripts generated yet.</p>
+          <button
+            type="button"
+            onClick={() => setShowUpload(true)}
+            className="inline-flex items-center rounded-lg border border-electric/30 bg-electric/10 px-4 py-2 font-[family-name:var(--font-display)] text-sm font-semibold text-electric transition-all hover:bg-electric/20"
+          >
+            <svg viewBox="0 0 16 16" className="mr-1.5 h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M8 11V3M4.5 5.5L8 2l3.5 3.5M2 14h12" />
+            </svg>
+            Upload Script
+          </button>
+        </div>
+        {showUpload && (
+          <ScriptUpload
+            projectId={projectId}
+            onSuccess={() => fetchScripts()}
+            onClose={() => setShowUpload(false)}
+          />
+        )}
+      </>
     );
   }
 
@@ -89,44 +112,56 @@ export function ScriptReview({
   return (
     <div className="space-y-6">
       {/* Script version selector */}
-      {scripts.length > 1 && (
-        <div className="flex items-center gap-2">
-          <span className="font-[family-name:var(--font-display)] text-xs font-semibold uppercase tracking-wider text-text-muted">
-            Version
-          </span>
-          <div className="flex gap-1">
-            {scripts.map((s, i) => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => setActiveScript(i)}
-                className={`flex h-8 w-8 items-center justify-center rounded-lg font-[family-name:var(--font-mono)] text-xs font-bold transition-all ${
-                  activeScript === i
-                    ? 'bg-electric/10 text-electric border border-electric/30'
-                    : 'bg-surface border border-border text-text-muted hover:text-text-secondary'
-                }`}
-              >
-                {s.version}
-              </button>
-            ))}
-          </div>
-          {script.grade && (
-            <span className="ml-2 rounded-md bg-surface-overlay px-2 py-0.5 font-[family-name:var(--font-display)] text-xs font-bold text-text-secondary">
-              Grade: {script.grade}
+      <div className="flex items-center gap-2">
+        {scripts.length > 1 && (
+          <>
+            <span className="font-[family-name:var(--font-display)] text-xs font-semibold uppercase tracking-wider text-text-muted">
+              Version
             </span>
-          )}
-          {script.hook_score !== null && (
-            <span className="rounded-md bg-surface-overlay px-2 py-0.5 font-[family-name:var(--font-mono)] text-xs text-text-muted">
-              Hook: {script.hook_score}
-            </span>
-          )}
-          {script.tone && (
-            <span className="rounded-md bg-surface-overlay px-2 py-0.5 font-[family-name:var(--font-display)] text-xs text-text-secondary">
-              {SCRIPT_TONES[script.tone as keyof typeof SCRIPT_TONES]?.label || script.tone}
-            </span>
-          )}
-        </div>
-      )}
+            <div className="flex gap-1">
+              {scripts.map((s, i) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setActiveScript(i)}
+                  className={`flex h-8 w-8 items-center justify-center rounded-lg font-[family-name:var(--font-mono)] text-xs font-bold transition-all ${
+                    activeScript === i
+                      ? 'bg-electric/10 text-electric border border-electric/30'
+                      : 'bg-surface border border-border text-text-muted hover:text-text-secondary'
+                  }`}
+                >
+                  {s.version}
+                </button>
+              ))}
+            </div>
+            {script.grade && (
+              <span className="ml-2 rounded-md bg-surface-overlay px-2 py-0.5 font-[family-name:var(--font-display)] text-xs font-bold text-text-secondary">
+                Grade: {script.grade}
+              </span>
+            )}
+            {script.hook_score !== null && (
+              <span className="rounded-md bg-surface-overlay px-2 py-0.5 font-[family-name:var(--font-mono)] text-xs text-text-muted">
+                Hook: {script.hook_score}
+              </span>
+            )}
+            {script.tone && (
+              <span className="rounded-md bg-surface-overlay px-2 py-0.5 font-[family-name:var(--font-display)] text-xs text-text-secondary">
+                {SCRIPT_TONES[script.tone as keyof typeof SCRIPT_TONES]?.label || script.tone}
+              </span>
+            )}
+          </>
+        )}
+        <button
+          type="button"
+          onClick={() => setShowUpload(true)}
+          className="ml-auto inline-flex items-center rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-text-muted transition-all hover:border-electric/30 hover:text-electric"
+        >
+          <svg viewBox="0 0 16 16" className="mr-1.5 h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M8 11V3M4.5 5.5L8 2l3.5 3.5M2 14h12" />
+          </svg>
+          Upload Script
+        </button>
+      </div>
 
       {/* Full script text */}
       {script.full_text && (
@@ -143,7 +178,14 @@ export function ScriptReview({
       {/* Segment cards grid */}
       <div className="stagger-children grid grid-cols-1 gap-4 lg:grid-cols-2">
         {script.scenes.map((scene) => (
-          <SegmentCard key={scene.id} scene={scene} />
+          <SegmentCard
+            key={scene.id}
+            scene={scene}
+            editable={true}
+            projectId={projectId}
+            scriptId={script.id}
+            onSegmentUpdate={() => fetchScripts()}
+          />
         ))}
       </div>
 
@@ -160,6 +202,15 @@ export function ScriptReview({
           onRegenerate={() => onStatusChange?.()}
         />
       </div>
+
+      {/* Upload Script Modal */}
+      {showUpload && (
+        <ScriptUpload
+          projectId={projectId}
+          onSuccess={() => fetchScripts()}
+          onClose={() => setShowUpload(false)}
+        />
+      )}
     </div>
   );
 }

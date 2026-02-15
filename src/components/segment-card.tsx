@@ -1,3 +1,10 @@
+'use client';
+
+import { useState } from 'react';
+import { countTextSyllables } from '@/lib/syllables';
+import { ToneSelector } from './tone-selector';
+import { DEFAULT_TONE } from '@/lib/constants';
+
 interface Scene {
   id: string;
   script_id: string;
@@ -10,7 +17,17 @@ interface Scene {
   audio_sync: Record<string, { word: string; time: string; action: string }> | null;
   text_overlay: string | null;
   product_visibility: string | null;
+  tone: string | null;
+  version: number;
   created_at: string;
+}
+
+interface SegmentCardProps {
+  scene: Scene;
+  editable?: boolean;
+  projectId?: string;
+  scriptId?: string;
+  onSegmentUpdate?: () => void;
 }
 
 const SECTION_COLORS: Record<string, { accent: string; bg: string; label: string }> = {
@@ -25,6 +42,7 @@ const ENERGY_LEVELS: Record<string, { width: string; color: string }> = {
   medium: { width: 'w-1/2', color: 'bg-electric' },
   'medium-high': { width: 'w-3/4', color: 'bg-amber-hot' },
   high: { width: 'w-full', color: 'bg-magenta' },
+  peak: { width: 'w-full', color: 'bg-magenta' },
 };
 
 function SyllableIndicator({ count }: { count: number | null }) {
@@ -97,12 +115,119 @@ function EnergyArc({ arc }: { arc: { start: string; middle: string; end: string 
   );
 }
 
-export function SegmentCard({ scene }: { scene: Scene }) {
+function LiveSyllableCount({ text }: { text: string }) {
+  const count = countTextSyllables(text);
+  let color: string;
+
+  if (count >= 82 && count <= 90) {
+    color = 'text-lime';
+  } else if (count >= 75 && count <= 95) {
+    color = 'text-amber-hot';
+  } else {
+    color = 'text-magenta';
+  }
+
+  return (
+    <span className={`font-[family-name:var(--font-mono)] text-xs ${color}`}>
+      {count} syllables
+    </span>
+  );
+}
+
+function Spinner() {
+  return (
+    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="60" strokeDashoffset="15" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export function SegmentCard({ scene, editable = false, projectId, scriptId, onSegmentUpdate }: SegmentCardProps) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editText, setEditText] = useState(scene.script_text || '');
+  const [saving, setSaving] = useState(false);
+
+  const [showRegenerate, setShowRegenerate] = useState(false);
+  const [segmentTone, setSegmentTone] = useState(scene.tone || DEFAULT_TONE);
+  const [regenFeedback, setRegenFeedback] = useState('');
+  const [regenerating, setRegenerating] = useState(false);
+
   const sectionConfig = SECTION_COLORS[scene.section] || {
     accent: 'text-text-secondary',
     bg: 'bg-surface-overlay border-border',
     label: scene.section,
   };
+
+  function handleEditToggle() {
+    if (isEditing) {
+      setEditText(scene.script_text || '');
+      setIsEditing(false);
+    } else {
+      setEditText(scene.script_text || '');
+      setShowRegenerate(false);
+      setIsEditing(true);
+    }
+  }
+
+  function handleRegenToggle() {
+    if (showRegenerate) {
+      setShowRegenerate(false);
+    } else {
+      setIsEditing(false);
+      setRegenFeedback('');
+      setShowRegenerate(true);
+    }
+  }
+
+  async function handleSave() {
+    if (!projectId || !scriptId) return;
+    setSaving(true);
+    try {
+      const res = await fetch(
+        `/api/projects/${projectId}/scripts/${scriptId}/segments/${scene.segment_index}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ script_text: editText }),
+        }
+      );
+      if (res.ok) {
+        setIsEditing(false);
+        onSegmentUpdate?.();
+      }
+    } catch (err) {
+      console.error('Failed to save segment:', err);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleRegenerate() {
+    if (!projectId || !scriptId) return;
+    setRegenerating(true);
+    try {
+      const res = await fetch(
+        `/api/projects/${projectId}/scripts/${scriptId}/segments/${scene.segment_index}/regenerate`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tone: segmentTone,
+            feedback: regenFeedback || undefined,
+          }),
+        }
+      );
+      if (res.ok) {
+        setShowRegenerate(false);
+        setRegenFeedback('');
+        onSegmentUpdate?.();
+      }
+    } catch (err) {
+      console.error('Failed to regenerate segment:', err);
+    } finally {
+      setRegenerating(false);
+    }
+  }
 
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-surface transition-all hover:border-border-bright">
@@ -116,17 +241,143 @@ export function SegmentCard({ scene }: { scene: Scene }) {
             Seg {scene.segment_index + 1}
           </span>
         </div>
-        <SyllableIndicator count={scene.syllable_count} />
+        <div className="flex items-center gap-2">
+          <SyllableIndicator count={scene.syllable_count} />
+          {editable && (
+            <>
+              <button
+                type="button"
+                onClick={handleEditToggle}
+                className={`rounded p-1 transition-colors ${
+                  isEditing
+                    ? 'text-electric'
+                    : 'text-text-muted hover:text-electric'
+                }`}
+                title="Edit segment"
+              >
+                <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M11.5 1.5l3 3L5 14H2v-3L11.5 1.5z" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={handleRegenToggle}
+                className={`rounded p-1 transition-colors ${
+                  showRegenerate
+                    ? 'text-magenta'
+                    : 'text-text-muted hover:text-magenta'
+                }`}
+                title="Regenerate segment"
+              >
+                <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M1 8a7 7 0 0 1 13.4-2.8M15 8a7 7 0 0 1-13.4 2.8" />
+                  <path d="M14.4 1v4.2h-4.2M1.6 15v-4.2h4.2" />
+                </svg>
+              </button>
+            </>
+          )}
+        </div>
       </div>
+
+      {/* Regenerate Panel */}
+      {showRegenerate && (
+        <div className="border-b border-border bg-surface-raised p-4">
+          <div className="space-y-3">
+            <div>
+              <label className="mb-1.5 block font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                Tone
+              </label>
+              <ToneSelector value={segmentTone} onChange={setSegmentTone} compact />
+            </div>
+            <div>
+              <label className="mb-1.5 block font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                Feedback
+              </label>
+              <textarea
+                value={regenFeedback}
+                onChange={(e) => setRegenFeedback(e.target.value)}
+                placeholder="Optional notes for regeneration..."
+                rows={2}
+                className="block w-full resize-none rounded-lg border border-border bg-surface-raised px-4 py-3 text-sm text-text-primary placeholder:text-text-muted transition-all focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleRegenerate}
+                disabled={regenerating}
+                className="rounded-lg border border-magenta/30 bg-magenta/10 px-3 py-1.5 text-xs font-semibold text-magenta transition-all hover:bg-magenta/20 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {regenerating ? (
+                  <span className="flex items-center gap-1.5">
+                    <Spinner />
+                    Regenerating...
+                  </span>
+                ) : (
+                  'Regenerate Segment'
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowRegenerate(false)}
+                className="text-xs text-text-muted hover:text-text-secondary"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="space-y-4 p-4">
         {/* Script text */}
-        {scene.script_text && (
-          <div>
-            <p className="text-sm leading-relaxed text-text-primary">
-              &ldquo;{scene.script_text}&rdquo;
-            </p>
+        {isEditing ? (
+          <div className="space-y-2">
+            <textarea
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              rows={4}
+              className="block w-full resize-none rounded-lg border border-border bg-surface-raised px-4 py-3 text-sm text-text-primary focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric"
+            />
+            <div className="flex items-center justify-between">
+              <LiveSyllableCount text={editText} />
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditText(scene.script_text || '');
+                    setIsEditing(false);
+                  }}
+                  className="text-xs text-text-muted hover:text-text-secondary"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="rounded-lg border border-electric/30 bg-electric/10 px-3 py-1.5 text-xs font-semibold text-electric transition-all hover:bg-electric/20 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {saving ? (
+                    <span className="flex items-center gap-1.5">
+                      <Spinner />
+                      Saving...
+                    </span>
+                  ) : (
+                    'Save'
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
+        ) : (
+          scene.script_text && (
+            <div>
+              <p className="text-sm leading-relaxed text-text-primary">
+                &ldquo;{scene.script_text}&rdquo;
+              </p>
+            </div>
+          )
         )}
 
         {/* Energy Arc */}

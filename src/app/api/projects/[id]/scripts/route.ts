@@ -37,14 +37,27 @@ export async function GET(
       return NextResponse.json({ error: 'Failed to fetch scripts' }, { status: 500 });
     }
 
-    // Sort scenes by segment_index within each script
-    const sorted = (scripts || []).map((script) => ({
-      ...script,
-      scenes: (script.scenes || []).sort(
-        (a: { segment_index: number }, b: { segment_index: number }) =>
-          a.segment_index - b.segment_index
-      ),
-    }));
+    // For each script, deduplicate scenes to only the latest version per segment_index
+    const sorted = (scripts || []).map((script) => {
+      const allScenes = (script.scenes || []) as { segment_index: number; version: number }[];
+      // Sort by segment_index asc, then version desc
+      allScenes.sort((a, b) =>
+        a.segment_index !== b.segment_index
+          ? a.segment_index - b.segment_index
+          : (b.version ?? 1) - (a.version ?? 1)
+      );
+      // Keep only the latest version per segment_index
+      const latest = new Map<number, typeof allScenes[0]>();
+      for (const scene of allScenes) {
+        if (!latest.has(scene.segment_index)) {
+          latest.set(scene.segment_index, scene);
+        }
+      }
+      return {
+        ...script,
+        scenes: Array.from(latest.values()),
+      };
+    });
 
     return NextResponse.json(sorted);
   } catch (error) {
