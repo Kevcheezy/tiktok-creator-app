@@ -102,6 +102,8 @@ Full roadmap at `docs/PRODUCT_ROADMAP.md`. Current priority order:
 - ~~B0.1-B0.11~~ ALL FIXED
 
 **Tier 1 (NOW): Complete the Pipeline**
+- R1.5 Product Versioning (semver, version in logs/UI/deployments, git tags)
+- R1.4 Pipeline Observability & Logging (Pino structured logging, generation_log table, API call audit trail, correlation IDs)
 - R1.1 Complete Asset Generation (influencer selection gate, product interaction prompts, product image requirement, worker recovery)
 - R1.2 Video Composition + Run Archive (Phase 4 - EditorAgent, handle `editing` status)
 - R1.3 Reference Video Intelligence (make `video_url` input functional)
@@ -126,8 +128,10 @@ Full roadmap at `docs/PRODUCT_ROADMAP.md`. Current priority order:
 **Before building any new feature, check `docs/PRODUCT_ROADMAP.md`.** Enforce these rules:
 1. **Tier ordering**: Do not start work from a lower tier while higher-tier items remain incomplete. Tier 0 bugs ALWAYS come first.
 2. **Dependency chain**: Check the `Depends on:` field on each roadmap item. Never build a feature before its dependencies are complete. Key dependencies:
+   - R1.4 (Observability) should land before or alongside R1.1 (provides debugging foundation for pipeline hardening)
+   - R1.5 (Versioning) should land before R1.4 (version context in every log entry)
    - R1.1 (Asset Generation) requires ~~B0.8~~ ~~B0.9~~ (both fixed)
-   - R1.5.1 (Influencer Management) requires B0.11 (image replacement) to be fixed first
+   - R1.5.1 (Influencer Management) requires ~~B0.11~~ (fixed)
    - R2.0 (Performance Tracking) requires R1.2 (Run Archive) to be built first
    - R2.1 (Hook A/B Testing) requires R2.0 (performance data to measure winners)
    - R2.2 (Trend-Aware Scripts) requires R2.0 (performance data to identify trends)
