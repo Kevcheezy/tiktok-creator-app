@@ -11,6 +11,7 @@ Full-stack app for producing 60-second TikTok Shop UGC videos using AI agents.
 | `frontend` | `.tsx` files, pages, components, styling, `globals.css` | `frontend-designer` | API routes, agents, workers, lib, db, middleware |
 | `backend` | API routes, agents, workers, lib, db, middleware, Supabase migrations | `backend-developer` | `.tsx` files, components, pages, styling |
 | `product-manager` | Roadmap, CLAUDE.md priorities, design docs, specs | `product-manager` | Any source code files |
+| `debugger` | Read-only investigation: SQL queries (SELECT only), source code reading, log analysis | `debugger` | Any code/data modifications — diagnosis and proposals only |
 | `other` | Config, CI/CD, docs, tooling, `package.json`, git ops | General superpowers | Files scoped to frontend or backend roles |
 
 **Rules:**
