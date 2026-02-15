@@ -59,7 +59,7 @@ async function handleProductAnalysis(projectId: string) {
     await supabase
       .from('project')
       .update({
-        status: 'completed',
+        status: 'analysis_review',
         product_data: analysis,
         product_name: analysis.product_name,
         product_category: analysis.category,

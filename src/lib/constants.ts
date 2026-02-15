@@ -114,7 +114,9 @@ export const ENERGY_ARC = [
 export const PROJECT_STATUSES = [
   'created',
   'analyzing',
+  'analysis_review',
   'scripting',
+  'script_review',
   'casting',
   'directing',
   'editing',
