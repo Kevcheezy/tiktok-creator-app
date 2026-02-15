@@ -7,6 +7,7 @@ import { PipelineProgress } from './pipeline-progress';
 import { ScriptReview } from './script-review';
 import { AssetReview } from './asset-review';
 import { ConfirmDialog } from './confirm-dialog';
+import { StageProgress } from './stage-progress';
 
 interface ProjectData {
   id: string;
@@ -284,72 +285,18 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
         </>
       )}
 
-      {/* Casting processing indicator */}
+      {/* Asset generation progress indicators */}
       {project.status === 'casting' && (
-        <div className="rounded-xl border border-magenta/20 bg-magenta/5 p-6">
-          <div className="flex items-center gap-4">
-            <div className="relative h-8 w-8 flex-shrink-0">
-              <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-magenta" />
-              <div className="absolute inset-1 animate-spin rounded-full border-2 border-transparent border-b-magenta/50" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }} />
-            </div>
-            <div>
-              <h3 className="font-[family-name:var(--font-display)] text-sm font-semibold text-magenta">
-                Generating Keyframes
-              </h3>
-              <p className="mt-0.5 text-sm text-text-secondary">
-                Creating character keyframe images with Nano Banana Pro...
-              </p>
-            </div>
-          </div>
-        </div>
+        <StageProgress projectId={projectId} stage="casting" color="magenta" />
       )}
-
-      {/* Directing processing indicator */}
       {project.status === 'directing' && (
-        <div className="rounded-xl border border-magenta/20 bg-magenta/5 p-6">
-          <div className="flex items-center gap-4">
-            <div className="relative h-8 w-8 flex-shrink-0">
-              <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-magenta" />
-              <div className="absolute inset-1 animate-spin rounded-full border-2 border-transparent border-b-magenta/50" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }} />
-            </div>
-            <div>
-              <h3 className="font-[family-name:var(--font-display)] text-sm font-semibold text-magenta">
-                Generating Videos
-              </h3>
-              <p className="mt-0.5 text-sm text-text-secondary">
-                Creating 15-second video segments with Kling 3.0 Pro. This may take up to 5 minutes...
-              </p>
-            </div>
-          </div>
-        </div>
+        <StageProgress projectId={projectId} stage="directing" color="magenta" />
       )}
-
-      {/* Voiceover processing indicator */}
       {project.status === 'voiceover' && (
-        <div className="rounded-xl border border-magenta/20 bg-magenta/5 p-6">
-          <div className="flex items-center gap-4">
-            <div className="relative h-8 w-8 flex-shrink-0">
-              <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-magenta" />
-              <div className="absolute inset-1 animate-spin rounded-full border-2 border-transparent border-b-magenta/50" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }} />
-            </div>
-            <div>
-              <h3 className="font-[family-name:var(--font-display)] text-sm font-semibold text-magenta">
-                Generating Voiceovers
-              </h3>
-              <p className="mt-0.5 text-sm text-text-secondary">
-                Creating voiceover audio with ElevenLabs...
-              </p>
-            </div>
-          </div>
-        </div>
+        <StageProgress projectId={projectId} stage="voiceover" color="magenta" />
       )}
-
-      {/* Editing processing indicator */}
       {project.status === 'editing' && (
-        <div className="flex items-center gap-3 rounded-xl border border-electric/20 bg-electric/5 px-6 py-4">
-          <div className="h-5 w-5 animate-spin rounded-full border-2 border-electric border-t-transparent" />
-          <span className="text-sm text-text-secondary">Composing final video...</span>
-        </div>
+        <StageProgress projectId={projectId} stage="editing" color="electric" />
       )}
 
       {/* Script Review */}
