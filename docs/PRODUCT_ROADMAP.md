@@ -125,8 +125,8 @@ These are blocking items. Nothing else matters until a user can go from product 
 - [ ] Harden CastingAgent: error recovery, retry logic, image quality validation
 - [ ] Harden DirectorAgent: video generation polling, timeout handling, quality checks
 - [ ] Harden VoiceoverAgent: voice caching on character records, audio duration validation
-- [ ] Asset review UI: per-segment image/video/audio preview with approve/reject/regenerate per-asset
-- [ ] Cost confirmation dialog before expensive operations (casting: ~$0.56, directing: ~$4.80) — currently only asset_review has one
+- [x] Asset review UI: per-segment image/video/audio preview with approve/reject/regenerate per-asset. Keyframes shown side-by-side, stats bar, auto-polling during generation, per-asset reject/regenerate buttons with BullMQ worker handler.
+- [x] Cost confirmation dialog before expensive operations (casting: ~$0.56, directing: ~$4.80) — casting_review shows cost dialog before generating videos
 - [ ] Cost tracking: display running cost per project in UI during all pipeline stages (not just completed)
 - [ ] Worker crash recovery: detect stuck pipelines (no status change for >10 min), expose "Retry" / "Reset" button in UI
 - [ ] Pipeline timeout detection: if project stays in a processing status beyond expected duration, surface a warning to the user
