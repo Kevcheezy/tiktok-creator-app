@@ -1,0 +1,456 @@
+import { SupabaseClient } from '@supabase/supabase-js';
+import { BaseAgent } from './base-agent';
+import { API_COSTS, PIPELINE_CONFIG, ENERGY_ARC, PRODUCT_PLACEMENT_ARC } from '@/lib/constants';
+
+// ─── Types ─────────────────────────────────────────────────────────────────────
+
+interface ShotScript {
+  index: number;
+  text: string;
+  energy: string;
+}
+
+interface AudioSyncPeak {
+  word: string;
+  time: string;
+  action: string;
+}
+
+interface AudioSync {
+  shot_1_peak: AudioSyncPeak;
+  shot_2_peak: AudioSyncPeak;
+  shot_3_peak: AudioSyncPeak;
+}
+
+interface EnergyPattern {
+  start: string;
+  middle: string;
+  end: string;
+}
+
+interface Segment {
+  id: number;
+  section: string;
+  script_text: string;
+  syllable_count: number;
+  energy: EnergyPattern;
+  shot_scripts: ShotScript[];
+  audio_sync: AudioSync;
+  text_overlay: string;
+  key_moment: string;
+}
+
+interface HookScore {
+  curiosity_loop: number;
+  challenges_belief: number;
+  clear_context: number;
+  plants_question: number;
+  pattern_interrupt: number;
+  emotional_trigger: number;
+  specific_claim: number;
+  total: number;
+}
+
+interface ScriptResponse {
+  segments: Segment[];
+  hook_score: HookScore;
+  total_syllables: number;
+}
+
+interface ScriptResult {
+  scriptId: string;
+  version: number;
+  hookScore: number;
+  totalSyllables: number;
+  segments: Segment[];
+}
+
+// ─── Syllable Counter (ported from predecessor) ────────────────────────────────
+
+function countSyllables(text: string): number {
+  const word = text.toLowerCase().replace(/[^a-z]/g, '');
+  if (word.length <= 3) return 1;
+  let count = 0;
+  const vowels = 'aeiouy';
+  let prevIsVowel = false;
+  for (let i = 0; i < word.length; i++) {
+    const isVowel = vowels.includes(word[i]);
+    if (isVowel && !prevIsVowel) count++;
+    prevIsVowel = isVowel;
+  }
+  if (word.endsWith('e') && count > 1) count--;
+  if (word.endsWith('le') && word.length > 2 && !vowels.includes(word[word.length - 3])) count++;
+  return Math.max(1, count);
+}
+
+function countTextSyllables(text: string): number {
+  const words = text.replace(/[^a-zA-Z\s]/g, '').split(/\s+/).filter(Boolean);
+  return words.reduce((sum, w) => sum + countSyllables(w), 0);
+}
+
+// ─── System Prompt ─────────────────────────────────────────────────────────────
+
+const SYSTEM_PROMPT = `You are a Script Architect for TikTok Shop UGC videos.
+
+CREATE A 4-SEGMENT SCRIPT for a 60-second video.
+
+RULES:
+1. Each segment = 15 seconds, 82-90 syllables
+2. Each segment will be split into 3 shots of 5 seconds each for Kling 3.0 multi-shot
+3. SEGMENT STRUCTURE (4 segments):
+   - Segment 1 (HOOK): HIGH energy throughout (exception - sustained), NO product, open curiosity loop
+   - Segment 2 (PROBLEM): LOW→PEAK→LOW energy, subtle product mention
+   - Segment 3 (SOLUTION + PRODUCT): LOW→PEAK→LOW energy, product as solution, hero moment, features
+   - Segment 4 (CTA): LOW→PEAK→LOW energy, urgency, call to action
+
+4. SHOT_SCRIPTS: For each segment, split the script into 3 roughly equal portions (one per 5s shot).
+   Each shot_script maps to a Kling 3.0 multi-shot prompt.
+
+5. AUDIO SYNC POINTS (REQUIRED for each segment):
+   Identify 3 key words/phrases for gesture timing, one per shot:
+   - shot_1_peak (~3s): Word where speaker makes confident opening gesture
+   - shot_2_peak (~8s): Word where speaker makes emphasis gesture
+   - shot_3_peak (~13s): Word where speaker transitions to calm/curious expression
+
+6. HOOK SCORING (must score >=10/14):
+   - Opens curiosity loop? (0-2)
+   - Challenges common belief? (0-2)
+   - Context immediately clear? (0-2)
+   - Plants question in mind? (0-2)
+   - Uses pattern interrupt? (0-2)
+   - Emotional trigger word? (0-2)
+   - Specific number/claim? (0-2)
+
+OUTPUT FORMAT (valid JSON only, no markdown, no code fences):
+{
+  "segments": [
+    {
+      "id": 1,
+      "section": "Hook",
+      "script_text": "full 15s spoken words...",
+      "syllable_count": 85,
+      "energy": { "start": "HIGH", "middle": "HIGH", "end": "HIGH" },
+      "shot_scripts": [
+        { "index": 0, "text": "first 5s portion...", "energy": "HIGH" },
+        { "index": 1, "text": "middle 5s portion...", "energy": "HIGH" },
+        { "index": 2, "text": "final 5s portion...", "energy": "HIGH" }
+      ],
+      "audio_sync": {
+        "shot_1_peak": { "word": "keyword at ~3s", "time": "~3s", "action": "confident gesture" },
+        "shot_2_peak": { "word": "keyword at ~8s", "time": "~8s", "action": "hand on chest" },
+        "shot_3_peak": { "word": "keyword at ~13s", "time": "~13s", "action": "lean + curious" }
+      },
+      "text_overlay": "short caption for screen",
+      "key_moment": "description of peak moment"
+    }
+  ],
+  "hook_score": {
+    "curiosity_loop": 2,
+    "challenges_belief": 1,
+    "clear_context": 2,
+    "plants_question": 2,
+    "pattern_interrupt": 1,
+    "emotional_trigger": 2,
+    "specific_claim": 2,
+    "total": 12
+  },
+  "total_syllables": 345
+}`;
+
+// ─── ScriptingAgent ────────────────────────────────────────────────────────────
+
+export class ScriptingAgent extends BaseAgent {
+  constructor(supabaseClient?: SupabaseClient) {
+    super('ScriptingAgent', supabaseClient);
+  }
+
+  async run(projectId: string): Promise<ScriptResult> {
+    this.log(`Starting scripting for project ${projectId}`);
+
+    // 1. Fetch project + product_data
+    const { data: proj, error: projError } = await this.supabase
+      .from('project')
+      .select('*, character:ai_character(*)')
+      .eq('id', projectId)
+      .single();
+
+    if (projError || !proj) {
+      throw new Error(`Project not found: ${projectId}`);
+    }
+
+    if (!proj.product_data) {
+      throw new Error(`Project ${projectId} has no product_data — run analysis first`);
+    }
+
+    const productData = proj.product_data as {
+      product_name: string;
+      category: string;
+      selling_points: string[];
+      hook_angle: string;
+    };
+
+    // 2. Optionally select a matching script_template (least used first)
+    const template = await this.selectTemplate(productData.category);
+
+    // 3. Build user prompt
+    const userPrompt = this.buildUserPrompt(productData, template, proj.video_url);
+
+    // 4. Call WaveSpeed LLM
+    this.log('Calling WaveSpeed LLM for script generation...');
+    let rawResponse: string;
+    try {
+      rawResponse = await this.wavespeed.chatCompletion(SYSTEM_PROMPT, userPrompt, {
+        temperature: 0.7,
+        maxTokens: 8192,
+      });
+    } catch (err) {
+      throw new Error(`LLM call failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
+    // 5. Parse JSON response
+    this.log('Parsing LLM response...');
+    let script: ScriptResponse;
+    try {
+      const cleaned = rawResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      script = JSON.parse(cleaned);
+    } catch (err) {
+      throw new Error(
+        `Failed to parse LLM response as JSON: ${err instanceof Error ? err.message : String(err)}\nRaw response: ${rawResponse.substring(0, 500)}`
+      );
+    }
+
+    // 6. Validate and override syllable counts
+    this.validateAndFix(script);
+
+    // 7. Determine version (A5: script versioning)
+    const version = await this.getNextVersion(projectId);
+
+    // 8. Save script row
+    const fullText = script.segments.map((s) => s.script_text).join('\n\n');
+
+    const { data: savedScript, error: scriptError } = await this.supabase
+      .from('script')
+      .insert({
+        project_id: projectId,
+        version,
+        hook_score: script.hook_score.total,
+        full_text: fullText,
+      })
+      .select()
+      .single();
+
+    if (scriptError || !savedScript) {
+      throw new Error(`Failed to save script: ${scriptError?.message}`);
+    }
+
+    // 9. Save 4 scene rows
+    const sceneRows = script.segments.map((seg, idx) => ({
+      script_id: savedScript.id,
+      segment_index: idx,
+      section: seg.section,
+      script_text: seg.script_text,
+      syllable_count: seg.syllable_count,
+      energy_arc: seg.energy,
+      shot_scripts: seg.shot_scripts,
+      audio_sync: seg.audio_sync,
+      text_overlay: seg.text_overlay,
+      product_visibility: PRODUCT_PLACEMENT_ARC[idx]?.visibility ?? 'none',
+    }));
+
+    const { error: sceneError } = await this.supabase
+      .from('scene')
+      .insert(sceneRows);
+
+    if (sceneError) {
+      throw new Error(`Failed to save scenes: ${sceneError.message}`);
+    }
+
+    // 10. Track cost
+    await this.trackCost(projectId, API_COSTS.wavespeedChat);
+
+    this.log(`Script v${version} saved (id=${savedScript.id}, hook_score=${script.hook_score.total}, syllables=${script.total_syllables})`);
+
+    return {
+      scriptId: savedScript.id,
+      version,
+      hookScore: script.hook_score.total,
+      totalSyllables: script.total_syllables,
+      segments: script.segments,
+    };
+  }
+
+  // ─── Template Selection ────────────────────────────────────────────────────
+
+  private async selectTemplate(category: string): Promise<{
+    hook_type: string;
+    text_hook_template: string;
+    spoken_hook_template: string;
+    energy_arc: unknown;
+  } | null> {
+    // Find templates matching the product category, ordered by least-used (use_count ascending)
+    const { data: templates } = await this.supabase
+      .from('script_template')
+      .select('*')
+      .contains('categories', [category])
+      .order('use_count', { ascending: true, nullsFirst: true })
+      .limit(1);
+
+    if (!templates || templates.length === 0) {
+      this.log(`No script template found for category "${category}", generating from scratch`);
+      return null;
+    }
+
+    const tmpl = templates[0];
+    this.log(`Selected template: "${tmpl.name}" (hook_type=${tmpl.hook_type})`);
+
+    // Increment use_count
+    await this.supabase
+      .from('script_template')
+      .update({ use_count: (tmpl.use_count || 0) + 1 })
+      .eq('id', tmpl.id);
+
+    return {
+      hook_type: tmpl.hook_type,
+      text_hook_template: tmpl.text_hook_template,
+      spoken_hook_template: tmpl.spoken_hook_template,
+      energy_arc: tmpl.energy_arc,
+    };
+  }
+
+  // ─── User Prompt Builder ───────────────────────────────────────────────────
+
+  private buildUserPrompt(
+    productData: {
+      product_name: string;
+      category: string;
+      selling_points: string[];
+      hook_angle: string;
+    },
+    template: {
+      hook_type: string;
+      text_hook_template: string;
+      spoken_hook_template: string;
+      energy_arc: unknown;
+    } | null,
+    videoUrl?: string | null
+  ): string {
+    const sellingPointsList = productData.selling_points
+      .map((p: string, i: number) => `${i + 1}. ${p}`)
+      .join('\n');
+
+    let prompt = `PRODUCT: ${productData.product_name}
+CATEGORY: ${productData.category}
+SELLING POINTS:
+${sellingPointsList}
+HOOK ANGLE: ${productData.hook_angle}`;
+
+    if (template) {
+      prompt += `
+
+USE THIS HOOK PATTERN:
+Type: ${template.hook_type}
+Text Template: ${template.text_hook_template}
+Spoken Template: ${template.spoken_hook_template}
+Energy Arc: ${JSON.stringify(template.energy_arc)}`;
+    }
+
+    if (videoUrl) {
+      prompt += `
+
+REFERENCE VIDEO (analyze structure): ${videoUrl}`;
+    } else {
+      prompt += `
+
+MODE: Generate from scratch using proven hook formula`;
+    }
+
+    return prompt;
+  }
+
+  // ─── Validation ────────────────────────────────────────────────────────────
+
+  private validateAndFix(script: ScriptResponse): void {
+    const { min, max, warnMin, warnMax } = PIPELINE_CONFIG.syllablesPerSegment;
+
+    let totalSyllables = 0;
+
+    for (const seg of script.segments) {
+      // Override LLM's syllable count with programmatic count
+      const programmaticCount = countTextSyllables(seg.script_text);
+      if (programmaticCount !== seg.syllable_count) {
+        this.log(
+          `[Validation] Segment ${seg.id} "${seg.section}": LLM reported ${seg.syllable_count} syllables, programmatic count is ${programmaticCount}. Overriding.`
+        );
+        seg.syllable_count = programmaticCount;
+      }
+
+      totalSyllables += programmaticCount;
+
+      // Warn on syllable range (don't throw)
+      if (programmaticCount < warnMin || programmaticCount > warnMax) {
+        this.log(
+          `[Validation] WARNING: Segment ${seg.id} "${seg.section}" has ${programmaticCount} syllables (target: ${min}-${max})`
+        );
+      }
+
+      // Validate shot_scripts count (must be 3 per segment)
+      if (!seg.shot_scripts || seg.shot_scripts.length !== PIPELINE_CONFIG.shotsPerSegment) {
+        this.log(
+          `[Validation] WARNING: Segment ${seg.id} has ${seg.shot_scripts?.length ?? 0} shot_scripts, expected ${PIPELINE_CONFIG.shotsPerSegment}`
+        );
+      }
+    }
+
+    // Override total syllables
+    script.total_syllables = totalSyllables;
+
+    // Validate segment count
+    if (script.segments.length !== PIPELINE_CONFIG.segmentCount) {
+      this.log(
+        `[Validation] WARNING: Expected ${PIPELINE_CONFIG.segmentCount} segments, got ${script.segments.length}`
+      );
+    }
+
+    // Validate hook score (>= 10)
+    if (script.hook_score.total < PIPELINE_CONFIG.hookScoreMinimum) {
+      this.log(
+        `[Validation] WARNING: Hook score ${script.hook_score.total} is below minimum ${PIPELINE_CONFIG.hookScoreMinimum}`
+      );
+    }
+
+    // Recalculate hook total from components
+    const recalculated =
+      script.hook_score.curiosity_loop +
+      script.hook_score.challenges_belief +
+      script.hook_score.clear_context +
+      script.hook_score.plants_question +
+      script.hook_score.pattern_interrupt +
+      script.hook_score.emotional_trigger +
+      script.hook_score.specific_claim;
+
+    if (recalculated !== script.hook_score.total) {
+      this.log(
+        `[Validation] Hook score total mismatch: reported ${script.hook_score.total}, calculated ${recalculated}. Overriding.`
+      );
+      script.hook_score.total = recalculated;
+    }
+
+    this.log(`[Validation] Total syllables: ${totalSyllables}, Hook score: ${script.hook_score.total}`);
+  }
+
+  // ─── Versioning (A5) ──────────────────────────────────────────────────────
+
+  private async getNextVersion(projectId: string): Promise<number> {
+    const { data: latest } = await this.supabase
+      .from('script')
+      .select('version')
+      .eq('project_id', projectId)
+      .order('version', { ascending: false })
+      .limit(1)
+      .single();
+
+    const nextVersion = (latest?.version ?? 0) + 1;
+    this.log(`Script version: ${nextVersion}`);
+    return nextVersion;
+  }
+}
