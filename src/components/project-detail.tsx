@@ -198,9 +198,14 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
           <h1 className="font-[family-name:var(--font-display)] text-2xl font-bold text-text-primary">
             {project.product_name || project.name || 'Untitled Project'}
           </h1>
-          <p className="mt-1 truncate font-[family-name:var(--font-mono)] text-xs text-text-muted">
+          <a
+            href={project.product_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-1 block truncate font-[family-name:var(--font-mono)] text-xs text-text-muted transition-colors hover:text-electric"
+          >
             {project.product_url}
-          </p>
+          </a>
           {project.influencer && (
             <Link
               href={`/influencers/${project.influencer.id}`}
