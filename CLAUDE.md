@@ -9,9 +9,8 @@ Full-stack app for producing 60-second TikTok Shop UGC videos using AI agents.
 | Role | Scope | Required Skill | Cannot Touch |
 |------|-------|---------------|--------------|
 | `frontend` | `.tsx` files, pages, components, styling, `globals.css` | `frontend-designer` | API routes, agents, workers, lib, db, middleware |
-| `backend` | API routes, agents, workers, lib, db, middleware, Supabase migrations | `backend-developer` | `.tsx` files, components, pages, styling |
+| `backend` | API routes, agents, workers, lib, db, middleware, Supabase migrations | `backend-developer`, `backend-debugger` | `.tsx` files, components, pages, styling |
 | `product-manager` | Roadmap, CLAUDE.md priorities, design docs, specs | `product-manager` | Any source code files |
-| `debugger` | Read-only investigation: SQL queries (SELECT only), source code reading, log analysis | `debugger` | Any code/data modifications — diagnosis and proposals only |
 | `other` | Config, CI/CD, docs, tooling, `package.json`, git ops | General superpowers | Files scoped to frontend or backend roles |
 
 **Rules:**
@@ -117,7 +116,7 @@ Upstash requires TLS. Both `src/lib/queue.ts` and `src/workers/pipeline.worker.t
 **ALL backend changes MUST use the `backend-developer` skill.** Any work touching API routes (`.ts` in `app/api/`), agents (`src/agents/`), workers (`src/workers/`), lib (`src/lib/`), db (`src/db/`), middleware (`src/middleware.ts`), or Supabase migrations must invoke the `backend-developer` skill first. This applies to both direct work and subagent-dispatched work. The skill enforces the superpowers workflow: brainstorm → plan → execute → verify. The skill is at `.claude/skills/backend-developer/SKILL.md`.
 
 ## Debugger Rule
-**When the user asks to investigate, debug, or diagnose a pipeline failure, invoke the `debugger` skill.** Trigger words: "investigate", "debug", "diagnose", "what went wrong", "why did it fail", "check the logs", "look into this failure". The debugger skill is read-only — it queries `generation_log`, `project`, `asset`, `script`, and `scene` tables (SELECT only) and reads source code to produce a diagnosis report. It never modifies code or data. The skill is at `.claude/skills/debugger/SKILL.md`.
+**When the user asks to investigate, debug, or diagnose a failure, the backend agent invokes the `backend-debugger` skill.** Trigger words: "investigate", "debug", "diagnose", "what went wrong", "why did it fail", "check the logs", "look into this failure". The skill wraps `superpowers:systematic-debugging` with app-specific triage queries, an observability toolkit, and known failure patterns. The backend agent can both diagnose AND fix. The skill is at `.claude/skills/debugger/SKILL.md`.
 
 ## Predecessor
 This app replaces the n8n-based orchestration at `../tt_shop_content_creator/`.
