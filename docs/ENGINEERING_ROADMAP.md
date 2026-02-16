@@ -632,9 +632,10 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] Project detail header (`project-detail.tsx`) — display `PROJECT-N` prominently in header
 - [x] Project list search — allow searching by project number (e.g., "14" or "PROJECT-14")
 
-#### R1.5.16 - Video Model Selection & Pipeline Abstraction ~~DONE~~
+#### R1.5.16 - Video Model Selection & Pipeline Abstraction
 **Priority:** P0 - Critical
 **Effort:** Large
+**Status:** Backend abstraction complete (2026-02-15). Schema, API, and 4 critical agents (Scripting, Casting, Directing, Voiceover) read from video model. **Remaining:** B-RollAgent + EditorAgent still hardcode segments, WaveSpeed resolution param deferred, frontend selector + badge not built.
 **Spec:** `docs/plans/2026-02-15-video-model-selection-design.md`
 **Why:** The pipeline hardcodes Kling 3.0 Pro assumptions (4 segments, 15s, 3 shots, Kling endpoint) across 7+ files. Making "video model" a first-class database entity decouples the pipeline from a single model. Each video model profile defines technical params (segments, duration, resolution, API endpoint) AND creative structure (energy arc, product placement arc, section names). All agents read config from the project's video model. Initial scope: Kling 3.0 Pro only (60s, 4x15s, 1080p), but the abstraction enables future models/formats.
 
@@ -944,7 +945,7 @@ POLISH     Tier 1.5: UX Hardening
            R1.5.12 Projects Quest Board (FF7 World Map Kanban — depends on R1.5.6 ✅)
            R1.5.13 Influencer 4K Upscale ✅ DONE (inline at upload time)
            R1.5.15 Project sequential numbering (PROJECT-N)
-           R1.5.16 Video Model Selection & Pipeline Abstraction ✅ DONE (Kling 3.0 Pro, 1080p, future-proof)
+           R1.5.16 Video Model Selection & Pipeline Abstraction (backend done, frontend selector + 2 agents remaining)
            R1.5.19 Structured Prompt Schema (depends on R1.5.16 — uses model-specific negative prompts)
 
 NEXT       Tier 2: Quality & Conversion
