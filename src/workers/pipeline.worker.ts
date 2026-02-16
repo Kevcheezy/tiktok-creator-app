@@ -67,6 +67,8 @@ const worker = new Worker(
       await handleEditing(projectId, correlationId, jobLog);
     } else if (step === 'regenerate_asset') {
       await handleAssetRegeneration(projectId, job.data.assetId, correlationId, jobLog);
+    } else if (step === 'keyframe_edit') {
+      await handleKeyframeEdit(projectId!, job.data.assetId!, job.data.editPrompt!, job.data.propagate || false, correlationId, jobLog);
     } else {
       jobLog.warn({ step }, 'Unknown step, skipping');
     }
@@ -971,6 +973,199 @@ async function regenerateAudio(
     .from('project')
     .update({ cost_usd: (currentCost + API_COSTS.elevenLabsTts).toFixed(4), updated_at: new Date().toISOString() })
     .eq('id', projectId);
+}
+
+async function handleKeyframeEdit(
+  projectId: string,
+  assetId: string,
+  editPrompt: string,
+  propagate: boolean,
+  correlationId: string,
+  jobLog: ReturnType<typeof createLogger>,
+) {
+  const editStart = Date.now();
+  const wavespeed = new WaveSpeedClient();
+
+  try {
+    await logToGenerationLog(supabase, {
+      project_id: projectId,
+      correlation_id: correlationId,
+      event_type: 'keyframe_edit_start',
+      agent_name: 'PipelineWorker',
+      stage: 'keyframe_edit',
+      detail: { assetId, propagate, editPrompt },
+    });
+
+    if (!propagate) {
+      await editSingleKeyframe(projectId, assetId, editPrompt, wavespeed, jobLog);
+    } else {
+      const sourceAsset = await fetchAssetWithScene(assetId);
+      if (!sourceAsset) throw new Error(`Source asset ${assetId} not found`);
+
+      const sourceSegment = sourceAsset.scene?.segment_index ?? -1;
+      const sourceIsStart = sourceAsset.type === 'keyframe_start';
+
+      const { data: editingAssets } = await supabase
+        .from('asset')
+        .select('id, type, url, status, scene_id, scene:scene(segment_index)')
+        .eq('project_id', projectId)
+        .in('type', ['keyframe_start', 'keyframe_end'])
+        .eq('status', 'editing');
+
+      const subsequent = (editingAssets || []).filter((kf: any) => {
+        const sceneData = Array.isArray(kf.scene) ? kf.scene[0] : kf.scene;
+        const seg = sceneData?.segment_index ?? -1;
+        if (seg > sourceSegment) return true;
+        if (seg === sourceSegment && sourceIsStart && kf.type === 'keyframe_end') return true;
+        return false;
+      });
+
+      jobLog.info({ count: subsequent.length }, 'Propagating edit to subsequent keyframes');
+
+      for (const kf of subsequent) {
+        try {
+          if (!kf.url) {
+            jobLog.warn({ assetId: kf.id }, 'Subsequent keyframe has no URL, skipping');
+            await supabase
+              .from('asset')
+              .update({ status: 'failed', updated_at: new Date().toISOString() })
+              .eq('id', kf.id);
+            continue;
+          }
+          await editSingleKeyframe(projectId, kf.id, editPrompt, wavespeed, jobLog);
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          jobLog.error({ assetId: kf.id, err }, 'Failed to edit subsequent keyframe');
+          await supabase
+            .from('asset')
+            .update({ status: 'failed', updated_at: new Date().toISOString() })
+            .eq('id', kf.id);
+          await logToGenerationLog(supabase, {
+            project_id: projectId,
+            correlation_id: correlationId,
+            event_type: 'keyframe_edit_error',
+            agent_name: 'PipelineWorker',
+            stage: 'keyframe_edit',
+            detail: { assetId: kf.id, error: errMsg },
+          });
+        }
+      }
+    }
+
+    const durationMs = Date.now() - editStart;
+    await logToGenerationLog(supabase, {
+      project_id: projectId,
+      correlation_id: correlationId,
+      event_type: 'keyframe_edit_complete',
+      agent_name: 'PipelineWorker',
+      stage: 'keyframe_edit',
+      detail: { assetId, propagate, durationMs },
+    });
+    jobLog.info({ durationMs, propagate }, 'Keyframe edit complete');
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    jobLog.error({ assetId, err: error }, 'Keyframe edit failed');
+
+    await supabase
+      .from('asset')
+      .update({ status: 'failed', updated_at: new Date().toISOString() })
+      .eq('id', assetId);
+
+    await logToGenerationLog(supabase, {
+      project_id: projectId,
+      correlation_id: correlationId,
+      event_type: 'keyframe_edit_error',
+      agent_name: 'PipelineWorker',
+      stage: 'keyframe_edit',
+      detail: { assetId, error: errorMessage },
+    });
+
+    throw error;
+  }
+}
+
+async function editSingleKeyframe(
+  projectId: string,
+  assetId: string,
+  editPrompt: string,
+  wavespeed: WaveSpeedClient,
+  jobLog: ReturnType<typeof createLogger>,
+) {
+  const { data: asset, error } = await supabase
+    .from('asset')
+    .select('id, url, metadata')
+    .eq('id', assetId)
+    .single();
+
+  if (error || !asset?.url) throw new Error(`Asset ${assetId} has no URL to edit`);
+
+  jobLog.info({ assetId }, 'Editing keyframe via Nano Banana Pro Edit');
+
+  const result = await wavespeed.editImage(
+    [asset.url],
+    editPrompt,
+    { aspectRatio: '9:16', resolution: '1k' },
+  );
+
+  jobLog.info({ assetId, taskId: result.taskId }, 'Polling keyframe edit result');
+  const pollResult = await wavespeed.pollResult(result.taskId, {
+    maxWait: 120000,
+    initialInterval: 5000,
+  });
+
+  const existingMeta = (asset.metadata || {}) as Record<string, unknown>;
+  const editHistory = (existingMeta.editHistory || []) as Array<Record<string, unknown>>;
+  editHistory.push({
+    prompt: editPrompt,
+    previousUrl: asset.url,
+    timestamp: new Date().toISOString(),
+  });
+
+  await supabase
+    .from('asset')
+    .update({
+      url: pollResult.url || '',
+      status: 'completed',
+      provider_task_id: result.taskId,
+      cost_usd: API_COSTS.nanoBananaProEdit,
+      metadata: { ...existingMeta, editHistory, lastEditPrompt: editPrompt },
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', assetId);
+
+  const { data: proj } = await supabase
+    .from('project')
+    .select('cost_usd')
+    .eq('id', projectId)
+    .single();
+  const currentCost = parseFloat(proj?.cost_usd || '0');
+  await supabase
+    .from('project')
+    .update({
+      cost_usd: (currentCost + API_COSTS.nanoBananaProEdit).toFixed(4),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', projectId);
+
+  jobLog.info({ assetId }, 'Keyframe edit applied successfully');
+}
+
+async function fetchAssetWithScene(assetId: string) {
+  const { data } = await supabase
+    .from('asset')
+    .select('id, type, url, scene_id, scene:scene(segment_index)')
+    .eq('id', assetId)
+    .single();
+  if (!data) return null;
+  const raw = data as any;
+  const scene = Array.isArray(raw.scene) ? raw.scene[0] : raw.scene;
+  return { id: raw.id, type: raw.type, url: raw.url, scene_id: raw.scene_id, scene } as {
+    id: string;
+    type: string;
+    url: string | null;
+    scene_id: string | null;
+    scene: { segment_index: number } | null;
+  };
 }
 
 worker.on('completed', (job) => {
