@@ -41,6 +41,7 @@ interface ProjectData {
   created_at: string | null;
   updated_at: string | null;
   character: { name: string; avatar_persona: string | null } | null;
+  video_analysis: Record<string, unknown> | null;
   influencer_id: string | null;
   influencer: { id: string; name: string; persona: string | null; image_url: string | null } | null;
 }
@@ -286,6 +287,9 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       {/* Analysis Review */}
       {project.status === 'analysis_review' && data && (
         <>
+          {project.video_analysis && (
+            <ReferenceVideoAnalysis projectId={project.id} videoAnalysis={project.video_analysis} />
+          )}
           <AnalysisResults data={data} costUsd={project.cost_usd} character={project.character} />
           <ProductImageSection
             projectId={projectId}
@@ -464,6 +468,259 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
         onCancel={() => setShowDeleteConfirm(false)}
         loading={deleting}
       />
+    </div>
+  );
+}
+
+/* ==============================
+   Reference Video Analysis (SEAL)
+   ============================== */
+
+const SEAL_COLORS = {
+  S: { bg: 'bg-electric/15', text: 'text-electric', border: 'border-electric/30' },
+  E: { bg: 'bg-magenta/15', text: 'text-magenta', border: 'border-magenta/30' },
+  A: { bg: 'bg-amber-hot/15', text: 'text-amber-hot', border: 'border-amber-hot/30' },
+  L: { bg: 'bg-lime/15', text: 'text-lime', border: 'border-lime/30' },
+} as const;
+
+interface ReferenceVideoAnalysisProps {
+  projectId: string;
+  videoAnalysis: Record<string, unknown>;
+}
+
+function ReferenceVideoAnalysis({ projectId, videoAnalysis }: ReferenceVideoAnalysisProps) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const va = videoAnalysis as any;
+  const hook = va.hook;
+  const segments = va.segments || [];
+  const overall = va.overall;
+
+  const referenceVideoUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/assets/projects/${projectId}/reference.mp4`;
+
+  return (
+    <div className="stagger-children space-y-5">
+      {/* Section Header */}
+      <div className="flex items-center gap-3">
+        <h2 className="font-[family-name:var(--font-display)] text-xl font-bold text-text-primary">
+          Reference Video Analysis
+        </h2>
+        <span className="inline-flex items-center rounded-md bg-electric/10 px-2.5 py-1 font-[family-name:var(--font-mono)] text-[10px] font-semibold uppercase tracking-wider text-electric ring-1 ring-inset ring-electric/20">
+          SEAL Method
+        </span>
+      </div>
+
+      {/* Reference Video Player */}
+      <div className="rounded-xl border border-border bg-surface p-5">
+        <h3 className="mb-3 font-[family-name:var(--font-display)] text-xs font-semibold uppercase tracking-wider text-text-muted">
+          Reference Video
+        </h3>
+        <video
+          controls
+          className="w-full max-w-md mx-auto rounded-lg border border-border"
+          src={referenceVideoUrl}
+        >
+          <track kind="captions" />
+        </video>
+      </div>
+
+      {/* Hook Card */}
+      {hook && (
+        <div className="rounded-xl border border-border bg-surface p-5">
+          <div className="mb-3 flex items-center gap-3">
+            <h3 className="font-[family-name:var(--font-display)] text-xs font-semibold uppercase tracking-wider text-text-muted">
+              Hook Analysis
+            </h3>
+            {hook.type && (
+              <span className="inline-flex rounded-md bg-magenta/10 px-2 py-0.5 font-[family-name:var(--font-mono)] text-[10px] font-semibold text-magenta ring-1 ring-inset ring-magenta/20">
+                {hook.type}
+              </span>
+            )}
+            {hook.durationSeconds != null && (
+              <span className="font-[family-name:var(--font-mono)] text-[10px] text-text-muted">
+                {hook.durationSeconds}s
+              </span>
+            )}
+          </div>
+          {hook.technique && (
+            <p className="text-sm text-text-secondary">{hook.technique}</p>
+          )}
+          {hook.text && (
+            <p className="mt-2 rounded-lg border border-border bg-surface-raised px-4 py-3 text-sm italic text-text-primary">
+              &ldquo;{hook.text}&rdquo;
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* SEAL Segment Cards */}
+      {segments.length > 0 && (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+          {segments.map((seg: any) => (
+            <div key={seg.index} className="rounded-xl border border-border bg-surface p-5">
+              <div className="mb-3 flex items-center justify-between">
+                <h4 className="font-[family-name:var(--font-display)] text-sm font-semibold text-text-primary">
+                  Segment {seg.index + 1}
+                </h4>
+                <span className="font-[family-name:var(--font-mono)] text-[10px] text-text-muted">
+                  {seg.startTime}s &ndash; {seg.endTime}s
+                </span>
+              </div>
+
+              {seg.description && (
+                <p className="mb-3 text-xs text-text-secondary leading-relaxed">{seg.description}</p>
+              )}
+
+              <div className="space-y-3">
+                {/* S - Scene */}
+                {seg.scene && (
+                  <div className="flex items-start gap-2.5">
+                    <span className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md font-[family-name:var(--font-display)] text-[11px] font-bold ${SEAL_COLORS.S.bg} ${SEAL_COLORS.S.text}`}>
+                      S
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                        Scene
+                      </p>
+                      <p className="mt-0.5 text-xs text-text-secondary">
+                        {[seg.scene.setting, seg.scene.composition].filter(Boolean).join(' \u00B7 ')}
+                      </p>
+                      {seg.scene.productPresence && (
+                        <span className={`mt-1 inline-flex rounded-md px-1.5 py-0.5 text-[10px] font-medium ${SEAL_COLORS.S.bg} ${SEAL_COLORS.S.text}`}>
+                          Product: {seg.scene.productPresence}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* E - Emotion */}
+                {seg.emotion && (
+                  <div className="flex items-start gap-2.5">
+                    <span className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md font-[family-name:var(--font-display)] text-[11px] font-bold ${SEAL_COLORS.E.bg} ${SEAL_COLORS.E.text}`}>
+                      E
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                        Emotion
+                      </p>
+                      <p className="mt-0.5 text-xs text-text-secondary">
+                        {[seg.emotion.mood, seg.emotion.pacing].filter(Boolean).join(' \u00B7 ')}
+                      </p>
+                      {seg.emotion.energy && (
+                        <span className={`mt-1 inline-flex rounded-md px-1.5 py-0.5 text-[10px] font-medium ${SEAL_COLORS.E.bg} ${SEAL_COLORS.E.text}`}>
+                          Energy: {seg.emotion.energy}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* A - Angle */}
+                {seg.angle && (
+                  <div className="flex items-start gap-2.5">
+                    <span className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md font-[family-name:var(--font-display)] text-[11px] font-bold ${SEAL_COLORS.A.bg} ${SEAL_COLORS.A.text}`}>
+                      A
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                        Angle
+                      </p>
+                      <p className="mt-0.5 text-xs text-text-secondary">
+                        {[seg.angle.shotType, seg.angle.cameraMovement].filter(Boolean).join(' \u00B7 ')}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* L - Lighting */}
+                {seg.lighting && (
+                  <div className="flex items-start gap-2.5">
+                    <span className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md font-[family-name:var(--font-display)] text-[11px] font-bold ${SEAL_COLORS.L.bg} ${SEAL_COLORS.L.text}`}>
+                      L
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                        Lighting
+                      </p>
+                      <p className="mt-0.5 text-xs text-text-secondary">
+                        {[seg.lighting.style, seg.lighting.colorTemp, seg.lighting.contrast].filter(Boolean).join(' \u00B7 ')}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Overall Analysis Card */}
+      {overall && (
+        <div className="rounded-xl border border-border bg-surface p-5">
+          <h3 className="mb-3 font-[family-name:var(--font-display)] text-xs font-semibold uppercase tracking-wider text-text-muted">
+            Overall Analysis
+          </h3>
+          <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+            {overall.energyArc && (
+              <div>
+                <dt className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                  Energy Arc
+                </dt>
+                <dd className="mt-1 text-sm text-text-primary">{overall.energyArc}</dd>
+              </div>
+            )}
+            {overall.dominantStyle && (
+              <div>
+                <dt className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                  Dominant Style
+                </dt>
+                <dd className="mt-1 text-sm text-text-primary">{overall.dominantStyle}</dd>
+              </div>
+            )}
+            {overall.musicPresence != null && (
+              <div>
+                <dt className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                  Music
+                </dt>
+                <dd className="mt-1 text-sm text-text-primary">
+                  {overall.musicPresence ? 'Yes' : 'No'}
+                </dd>
+              </div>
+            )}
+            {overall.textOverlayStyle && (
+              <div>
+                <dt className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                  Text Overlay
+                </dt>
+                <dd className="mt-1 text-sm text-text-primary">{overall.textOverlayStyle}</dd>
+              </div>
+            )}
+            {overall.viralPattern && (
+              <div>
+                <dt className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                  Viral Pattern
+                </dt>
+                <dd className="mt-1">
+                  <span className="inline-flex rounded-md bg-electric/10 px-2 py-0.5 font-[family-name:var(--font-mono)] text-xs text-electric">
+                    {overall.viralPattern}
+                  </span>
+                </dd>
+              </div>
+            )}
+            {overall.estimatedDuration && (
+              <div>
+                <dt className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                  Duration
+                </dt>
+                <dd className="mt-1 font-[family-name:var(--font-mono)] text-sm text-text-primary">
+                  {overall.estimatedDuration}s
+                </dd>
+              </div>
+            )}
+          </dl>
+        </div>
+      )}
     </div>
   );
 }
