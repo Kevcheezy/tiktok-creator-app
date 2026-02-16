@@ -58,6 +58,16 @@ interface ProjectData {
   product: { id: string; name: string | null; image_url: string | null } | null;
 }
 
+// Client-side rollback map (mirrors backend rollbackMap)
+const CANCEL_ROLLBACK: Record<string, string> = {
+  broll_planning: 'script_review',
+  broll_generation: 'broll_review',
+  casting: 'influencer_selection',
+  directing: 'casting_review',
+  voiceover: 'casting_review',
+  editing: 'asset_review',
+};
+
 const NAV_STAGE_LABELS: Record<string, string> = {
   analysis_review: 'Analysis Review',
   script_review: 'Script Review',
@@ -78,6 +88,8 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   const [archived, setArchived] = useState(false);
   const [copied, setCopied] = useState(false);
   const [connectionWarning, setConnectionWarning] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [cancelToast, setCancelToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const failCountRef = useRef(0);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -179,16 +191,29 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   // Cancel/stop a running stage — rolls back to previous review gate
   const handleStageCancel = useCallback(async () => {
     if (!project) return;
+    const rollbackTo = CANCEL_ROLLBACK[project.status];
+    const rollbackLabel = rollbackTo
+      ? (NAV_STAGE_LABELS[rollbackTo] || rollbackTo)
+      : 'previous stage';
+
     try {
       const res = await fetch(`/api/projects/${projectId}/cancel`, { method: 'POST' });
-      if (!res.ok) {
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        const newStatus = data.status || rollbackTo;
+        setCancelToast({ type: 'success', message: `Stopped. Returned to ${rollbackLabel}.` });
+        await fetchProject();
+        if (newStatus) setViewingStage(null); // show current (rolled-back) stage
+      } else {
         const body = await res.json().catch(() => ({}));
-        console.error('Cancel failed:', body.error || res.statusText);
+        setCancelToast({ type: 'error', message: body.error || 'Failed to cancel — backend endpoint may not be deployed yet.' });
       }
-      fetchProject();
-    } catch (err) {
-      console.error('Failed to cancel stage:', err);
+    } catch {
+      setCancelToast({ type: 'error', message: 'Network error — could not reach the server.' });
     }
+
+    // Auto-dismiss toast after 5s
+    setTimeout(() => setCancelToast(null), 5000);
   }, [project, projectId, fetchProject]);
 
   // Derived navigation state
@@ -580,24 +605,24 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
 
       {/* B-Roll progress indicators */}
       {!isViewingPast && project.status === 'broll_planning' && (
-        <StageProgress projectId={projectId} stage="broll_planning" color="electric" onRetry={() => handleStageRetry('broll_planning')} onCancel={handleStageCancel} />
+        <StageProgress projectId={projectId} stage="broll_planning" color="electric" onRetry={() => handleStageRetry('broll_planning')} onCancel={() => setShowCancelConfirm(true)} />
       )}
       {!isViewingPast && project.status === 'broll_generation' && (
-        <StageProgress projectId={projectId} stage="broll_generation" color="magenta" onRetry={() => handleStageRetry('broll_generation')} onCancel={handleStageCancel} />
+        <StageProgress projectId={projectId} stage="broll_generation" color="magenta" onRetry={() => handleStageRetry('broll_generation')} onCancel={() => setShowCancelConfirm(true)} />
       )}
 
       {/* Asset generation progress indicators */}
       {!isViewingPast && project.status === 'casting' && (
-        <StageProgress projectId={projectId} stage="casting" color="magenta" onRetry={() => handleStageRetry('casting')} onCancel={handleStageCancel} />
+        <StageProgress projectId={projectId} stage="casting" color="magenta" onRetry={() => handleStageRetry('casting')} onCancel={() => setShowCancelConfirm(true)} />
       )}
       {!isViewingPast && project.status === 'directing' && (
-        <StageProgress projectId={projectId} stage="directing" color="magenta" onRetry={() => handleStageRetry('directing')} onCancel={handleStageCancel} />
+        <StageProgress projectId={projectId} stage="directing" color="magenta" onRetry={() => handleStageRetry('directing')} onCancel={() => setShowCancelConfirm(true)} />
       )}
       {!isViewingPast && project.status === 'voiceover' && (
-        <StageProgress projectId={projectId} stage="voiceover" color="magenta" onRetry={() => handleStageRetry('voiceover')} onCancel={handleStageCancel} />
+        <StageProgress projectId={projectId} stage="voiceover" color="magenta" onRetry={() => handleStageRetry('voiceover')} onCancel={() => setShowCancelConfirm(true)} />
       )}
       {!isViewingPast && project.status === 'editing' && (
-        <StageProgress projectId={projectId} stage="editing" color="electric" onRetry={() => handleStageRetry('editing')} onCancel={handleStageCancel} />
+        <StageProgress projectId={projectId} stage="editing" color="electric" onRetry={() => handleStageRetry('editing')} onCancel={() => setShowCancelConfirm(true)} />
       )}
 
       {/* Script Review */}
@@ -868,6 +893,51 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
         onCancel={() => setShowDeleteConfirm(false)}
         loading={deleting}
       />
+
+      <ConfirmDialog
+        open={showCancelConfirm}
+        title="Stop Generation"
+        description={`Stop the current ${STAGE_LABELS[project.status] || project.status} stage? You'll be returned to ${CANCEL_ROLLBACK[project.status] ? (NAV_STAGE_LABELS[CANCEL_ROLLBACK[project.status]] || CANCEL_ROLLBACK[project.status]) : 'the previous review step'}.`}
+        onConfirm={async () => {
+          setShowCancelConfirm(false);
+          await handleStageCancel();
+        }}
+        onCancel={() => setShowCancelConfirm(false)}
+      />
+
+      {/* Cancel toast notification */}
+      {cancelToast && (
+        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 animate-fade-in-up">
+          <div className={`flex items-center gap-3 rounded-lg border px-4 py-2.5 shadow-lg ${
+            cancelToast.type === 'success'
+              ? 'border-electric/30 bg-surface-raised text-electric'
+              : 'border-magenta/30 bg-surface-raised text-magenta'
+          }`}>
+            {cancelToast.type === 'success' ? (
+              <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4 flex-shrink-0" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round">
+                <circle cx="8" cy="8" r="6.5" />
+                <path d="M5.5 8.5l2 2 3.5-4" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4 flex-shrink-0" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round">
+                <circle cx="8" cy="8" r="6.5" />
+                <path d="M8 5v4" />
+                <circle cx="8" cy="11.5" r="0.5" fill="currentColor" />
+              </svg>
+            )}
+            <span className="text-sm">{cancelToast.message}</span>
+            <button
+              type="button"
+              onClick={() => setCancelToast(null)}
+              className="ml-1 text-text-muted transition-colors hover:text-text-secondary"
+            >
+              <svg viewBox="0 0 12 12" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round">
+                <path d="M2 2l8 8M10 2l-8 8" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
     </BattleHUD>
   );
