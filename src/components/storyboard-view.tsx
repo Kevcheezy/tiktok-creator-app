@@ -481,13 +481,18 @@ export function StoryboardView({ projectId, projectNumber, onStatusChange, readO
             </div>
           </div>
 
-          {/* Approve button */}
-          {!readOnly && (
-            <button
-              type="button"
-              onClick={handleApprove}
-              disabled={approving || activeShots.length === 0}
-              className="inline-flex items-center gap-2 rounded-lg bg-lime px-5 py-2.5 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:shadow-[0_0_32px_rgba(184,255,0,0.25)] disabled:cursor-not-allowed disabled:opacity-50"
+          <div className="flex items-center gap-2">
+            {brollDownloadItems.length > 0 && (
+              <DownloadAllButton items={brollDownloadItems} label={`Download All (${brollDownloadItems.length})`} />
+            )}
+
+            {/* Approve button */}
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={handleApprove}
+                disabled={approving || activeShots.length === 0}
+                className="inline-flex items-center gap-2 rounded-lg bg-lime px-5 py-2.5 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:shadow-[0_0_32px_rgba(184,255,0,0.25)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {approving ? (
                 <>
@@ -505,7 +510,8 @@ export function StoryboardView({ projectId, projectNumber, onStatusChange, readO
                 </>
               )}
             </button>
-          )}
+            )}
+          </div>
         </div>
 
         {approveError && (
@@ -594,6 +600,7 @@ export function StoryboardView({ projectId, projectNumber, onStatusChange, readO
                             shot={shot}
                             isEditing={!readOnly && editingId === shot.id}
                             editDraft={!readOnly && editingId === shot.id ? editDraft : undefined}
+                            projectNumber={projectNumber}
                             onStartEdit={readOnly ? undefined : () => startEdit(shot)}
                             onCancelEdit={cancelEdit}
                             onSaveEdit={saveEdit}
@@ -638,6 +645,7 @@ interface BrollCardProps {
   shot: BrollShot;
   isEditing: boolean;
   editDraft?: Partial<BrollShot>;
+  projectNumber?: number | null;
   onStartEdit?: () => void;
   onCancelEdit: () => void;
   onSaveEdit: () => void;
@@ -650,6 +658,7 @@ function BrollCard({
   shot,
   isEditing,
   editDraft,
+  projectNumber,
   onStartEdit,
   onCancelEdit,
   onSaveEdit,
@@ -672,13 +681,22 @@ function BrollCard({
         {/* Thumbnail */}
         <div className="flex-shrink-0">
           {shot.image_url ? (
-            <div className="h-[72px] w-[72px] overflow-hidden rounded-lg border border-border">
+            <div className="relative h-[72px] w-[72px] overflow-hidden rounded-lg border border-border group/thumb">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={shot.image_url}
                 alt={`B-roll: ${shot.category}`}
                 className="h-full w-full object-cover"
               />
+              {projectNumber && !isRemoved && (
+                <div className="absolute inset-0 flex items-center justify-center bg-void/40 opacity-0 transition-opacity group-hover/thumb:opacity-100">
+                  <DownloadButton
+                    url={shot.image_url}
+                    filename={brollFilename(projectNumber, shot.segment_index + 1, shot.shot_index + 1)}
+                    size="sm"
+                  />
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex h-[72px] w-[72px] items-center justify-center rounded-lg border border-dashed border-border bg-surface-raised">

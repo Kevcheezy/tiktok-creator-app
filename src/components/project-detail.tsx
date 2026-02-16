@@ -18,6 +18,7 @@ import { CommandMenu } from './command-menu';
 import { GilDisplay } from './gil-display';
 import { PresetSelector, type Preset } from './preset-selector';
 import { NegativePromptPanel } from './negative-prompt-panel';
+import { downloadAsset, finalVideoFilename } from '@/lib/download-utils';
 
 interface ProjectData {
   id: string;
@@ -638,7 +639,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
 
       {/* B-Roll Storyboard Review */}
       {displayStage === 'broll_review' && (
-        <StoryboardView projectId={projectId} onStatusChange={fetchProject} readOnly={readOnlyMode} />
+        <StoryboardView projectId={projectId} projectNumber={project.project_number} onStatusChange={fetchProject} readOnly={readOnlyMode} />
       )}
 
       {/* Influencer Selection Gate */}
@@ -663,6 +664,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
           />
           <AssetReview
             projectId={projectId}
+            projectNumber={project.project_number}
             onStatusChange={fetchProject}
             confirmBeforeApprove={{
               title: 'Generate Videos?',
@@ -677,7 +679,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
 
       {/* Asset Review */}
       {displayStage === 'asset_review' && (
-        <AssetReview projectId={projectId} onStatusChange={fetchProject} readOnly={readOnlyMode} />
+        <AssetReview projectId={projectId} projectNumber={project.project_number} onStatusChange={fetchProject} readOnly={readOnlyMode} />
       )}
 
       {/* Completed - Final Review */}
@@ -701,16 +703,21 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
 
           <div className="flex gap-3">
             {finalVideoUrl && (
-              <a
-                href={finalVideoUrl}
-                download
+              <button
+                type="button"
+                onClick={() => {
+                  const fn = project.project_number
+                    ? finalVideoFilename(project.project_number)
+                    : 'final-video.mp4';
+                  downloadAsset(finalVideoUrl, fn);
+                }}
                 className="inline-flex items-center gap-2 rounded-lg bg-electric px-4 py-2.5 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:bg-electric/90 hover:shadow-[0_0_24px_rgba(0,240,255,0.3)]"
               >
                 <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
                   <path d="M8 2v9M4 7l4 4 4-4M2 13h12" />
                 </svg>
                 Download Video
-              </a>
+              </button>
             )}
             {finalVideoUrl && (
               <button

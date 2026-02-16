@@ -299,17 +299,17 @@ Influencer `<select>` options displayed the entire `persona` field (full appeara
 - [x] Log each retry attempt to `generation_log` (event_type: `render_retry`, detail: `{ attempt, error, delayMs }`)
 - [x] On final failure, include retry count in error message so debugger knows retries were exhausted
 
-#### B0.27 - DirectorAgent Double-Charges Cost on Retry ($2.40/segment waste)
+#### B0.27 - DirectorAgent Double-Charges Cost on Retry ($2.40/segment waste) ~~FIXED~~
 **Severity:** Critical (direct money waste — each retried segment charges 2-3x)
 **Scope:** Backend
 **Discovered:** 2026-02-16 (bug bash)
 **Why:** `director-agent.ts` calls `trackCost(projectId, vm.cost_per_segment)` inside the retry loop. When a segment fails and retries, cost is tracked again on success — so a segment that took 2 attempts charges $2.40 instead of $1.20. With 4 segments and retries, a single video can overcharge by $4.80+. The cost should only be tracked once per successful asset, not per attempt.
 
 **Fix checklist:**
-- [ ] Move `trackCost()` call outside the retry loop — only track on the final successful generation
-- [ ] Add guard: check if cost was already tracked for this segment before calling `trackCost()`
-- [ ] Audit BRollAgent for the same pattern (confirmed: LLM cost tracked even on parse failure, then re-tracked on retry success)
-- [ ] BRollAgent: move LLM cost tracking to after successful JSON parse, not before
+- [x] Move `trackCost()` call outside the retry loop — only track on the final successful generation
+- [x] Add guard: check if cost was already tracked for this segment before calling `trackCost()`
+- [x] Audit BRollAgent for the same pattern (confirmed: LLM cost tracked even on parse failure, then re-tracked on retry success)
+- [x] BRollAgent: move LLM cost tracking to after successful JSON parse, not before
 
 #### B0.28 - B-Roll Stages Missing from Rollback Map (Recovery Blocked) ~~FIXED~~
 **Severity:** High (users stuck on failed B-roll with no rollback path)
@@ -1220,7 +1220,7 @@ DONE       R1.7 B-Roll Agent
 MVP ──→    Validate: Run real product URLs through full pipeline with B-roll. Ship when videos are watchable.
 
 BUGS ──→   Tier 0 Bug Bash Findings (fix BEFORE any new Tier 1.5 work)
-           B0.27 Director cost double-charge on retry ⚠️ CRITICAL ($2.40/segment waste)
+           ~~B0.27 Director cost double-charge on retry~~ ~~FIXED~~
            ~~B0.28 B-roll stages missing from rollback map (recovery blocked)~~ ✅ FIXED
            ~~B0.26 EditorAgent retry logic (elevated to High — $5-7 at stake)~~ ✅ FIXED
            ~~B0.29 Select-influencer race condition (duplicate casting jobs)~~ ✅ FIXED
