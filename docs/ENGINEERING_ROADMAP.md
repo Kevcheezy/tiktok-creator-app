@@ -126,10 +126,11 @@ Influencer `<select>` options displayed the entire `persona` field (full appeara
 
 #### ~~B0.15 - Generate Keyframes Requires Double-Click~~ FIXED
 **Severity:** Medium (UX — first click appears to do nothing)
-**Why:** `POST /api/projects/[id]/select-influencer` enqueues the casting job but did NOT update the project status from `influencer_selection` to `casting` on first selection (status only updated when re-casting from a downstream stage). The immediate `fetchProject()` call returned the stale status, and the UI stayed on the InfluencerSelection view.
+**Why:** `POST /api/projects/[id]/select-influencer` enqueues the casting job but did NOT update the project status from `influencer_selection` to `casting` on first selection (status only updated when re-casting from a downstream stage). The immediate `fetchProject()` call returned the stale status, and the UI stayed on the InfluencerSelection view. Consequence: users clicked multiple times, enqueuing concurrent casting jobs that each created full sets of keyframe assets (20 assets instead of 8, 15+ min generation time, $1.40 wasted).
 
 - [x] `select-influencer/route.ts`: Always set `updateData.status = 'casting'` when confirming (not just on re-cast)
 - [x] Move the `error_message`/`failed_at_status` reset into the re-cast conditional only
+- [x] CastingAgent: delete existing keyframe assets before generating new ones (prevents accumulation on re-cast or duplicate jobs)
 
 #### ~~B0.14 - Influencers Without Images Shown in Selection UI~~ FIXED
 **Severity:** Low (UX confusion, not data integrity)

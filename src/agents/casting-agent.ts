@@ -80,7 +80,21 @@ export class CastingAgent extends BaseAgent {
       | { segment: number; visibility: string; description: string; notes?: string }[]
       | null;
 
-    // 6. Sequential chained keyframe generation
+    // 6. Clean up any existing keyframe assets from previous casting runs
+    //    Prevents accumulation when re-casting or when duplicate jobs run concurrently.
+    const { data: oldKeyframes } = await this.supabase
+      .from('asset')
+      .select('id')
+      .eq('project_id', projectId)
+      .in('type', ['keyframe_start', 'keyframe_end']);
+
+    if (oldKeyframes && oldKeyframes.length > 0) {
+      const oldIds = oldKeyframes.map((a) => a.id);
+      await this.supabase.from('asset').delete().in('id', oldIds);
+      this.log(`Cleaned up ${oldIds.length} old keyframe assets before re-casting`);
+    }
+
+    // 7. Sequential chained keyframe generation
     //    Each segment's end frame feeds into the next segment as the primary reference image.
     //    This ensures visual consistency (same person, room, lighting) across all 4 segments.
     let segmentsCompleted = 0;
