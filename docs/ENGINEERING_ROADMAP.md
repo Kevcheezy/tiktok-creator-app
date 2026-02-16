@@ -121,6 +121,9 @@ Made `BaseAgent.trackCost()` atomic via Postgres `increment_project_cost` RPC fu
 #### ~~B0.7 - Schema Documentation Drift~~ FIXED
 Updated `src/db/schema.ts` with `influencer` table, `completed_run` table, and missing columns (`tone`, `influencer_id`, `source`, `version`).
 
+#### ~~B0.13 - Influencer Dropdown Shows Full Persona Text~~ FIXED
+Influencer `<select>` options displayed the entire `persona` field (full appearance description). Truncated to name + first 4 words of persona in both `create-project-form.tsx` and `project-detail.tsx` settings panel.
+
 ---
 
 ### Tier 1: Complete the Core Pipeline (Ship a working end-to-end product)

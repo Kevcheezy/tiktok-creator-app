@@ -1765,7 +1765,7 @@ function ProjectSettings({ project, onUpdated }: { project: ProjectData; onUpdat
               <option value="">No influencer selected</option>
               {influencers.map((inf) => (
                 <option key={inf.id} value={inf.id}>
-                  {inf.name}{inf.persona ? ` (${inf.persona})` : ''}
+                  {inf.name}{inf.persona ? ` — ${inf.persona.split(/\s+/).slice(0, 4).join(' ')}` : ''}
                 </option>
               ))}
             </select>
