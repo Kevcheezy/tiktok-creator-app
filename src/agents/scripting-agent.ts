@@ -184,7 +184,7 @@ export class ScriptingAgent extends BaseAgent {
     const template = await this.selectTemplate(productData.category);
 
     // 3. Build user prompt
-    const userPrompt = this.buildUserPrompt(productData, template, proj.video_url);
+    const userPrompt = this.buildUserPrompt(productData, template, proj.video_url, proj.video_analysis);
 
     // 4. Call WaveSpeed LLM
     this.log('Calling WaveSpeed LLM for script generation...');
@@ -803,7 +803,8 @@ ${segmentIndex === 0 ? 'Also include a "hook_score" object with curiosity_loop, 
       spoken_hook_template: string;
       energy_arc: unknown;
     } | null,
-    videoUrl?: string | null
+    videoUrl?: string | null,
+    videoAnalysis?: any | null,
   ): string {
     const sellingPointsList = productData.selling_points
       .map((p: string, i: number) => `${i + 1}. ${p}`)
@@ -825,17 +826,55 @@ Spoken Template: ${template.spoken_hook_template}
 Energy Arc: ${JSON.stringify(template.energy_arc)}`;
     }
 
-    if (videoUrl) {
-      prompt += `
-
-REFERENCE VIDEO (analyze structure): ${videoUrl}`;
+    if (videoAnalysis) {
+      const sealBlock = this.buildSEALBlock(videoAnalysis);
+      prompt += `\n\n${sealBlock}`;
+    } else if (videoUrl) {
+      prompt += `\n\nREFERENCE VIDEO (analyze structure): ${videoUrl}`;
     } else {
-      prompt += `
-
-MODE: Generate from scratch using proven hook formula`;
+      prompt += `\n\nMODE: Generate from scratch using proven hook formula`;
     }
 
     return prompt;
+  }
+
+  // ─── SEAL Block Builder ──────────────────────────────────────────────────
+
+  private buildSEALBlock(analysis: any): string {
+    const hook = analysis.hook;
+    const segments = analysis.segments || [];
+    const overall = analysis.overall;
+
+    let block = `REFERENCE VIDEO ANALYSIS (STRONG INFLUENCE — match this video's style):
+
+HOOK: ${hook?.type || 'unknown'} — ${hook?.technique || 'N/A'}
+Hook text: "${hook?.text || 'N/A'}" (${hook?.durationSeconds || 3}s)
+Overall energy arc: ${overall?.energyArc || 'build-to-peak'}
+Dominant style: ${overall?.dominantStyle || 'N/A'}
+Viral pattern: ${overall?.viralPattern || 'N/A'}
+Text overlays: ${overall?.textOverlayStyle || 'none'}`;
+
+    for (const seg of segments) {
+      block += `\n\nSEGMENT ${seg.index + 1} (${seg.startTime}s-${seg.endTime}s):
+  Scene: ${seg.scene?.setting || 'N/A'} — ${seg.scene?.composition || 'N/A'}
+  Props: ${(seg.scene?.props || []).join(', ') || 'none'}
+  Product: ${seg.scene?.productPresence || 'none'}
+  Emotion: ${seg.emotion?.mood || 'neutral'} mood, ${seg.emotion?.energy || 'medium'} energy, ${seg.emotion?.pacing || 'moderate'} pacing
+  Viewer intent: ${seg.emotion?.viewerIntent || 'curiosity'}
+  Camera: ${seg.angle?.shotType || 'medium'} shot, ${seg.angle?.cameraMovement || 'static'}
+  Transitions: ${seg.angle?.transitions || 'hard-cut'}
+  Lighting: ${seg.lighting?.style || 'natural'}, ${seg.lighting?.colorTemp || 'neutral'} temp, ${seg.lighting?.contrast || 'medium'} contrast
+  What happens: ${seg.description || 'N/A'}`;
+    }
+
+    block += `\n\nINSTRUCTION: Your script MUST strongly match this reference video's:
+- Hook style and opening technique (use "${hook?.type || 'similar'}" hook approach)
+- Energy arc and pacing progression (${overall?.energyArc || 'build-to-peak'})
+- Segment structure and timing
+- Product reveal pattern (${segments.map((s: any) => s.scene?.productPresence || 'none').join(' → ')})
+Adapt the CONTENT for the current product while preserving the reference's proven viral STRUCTURE and ENERGY.`;
+
+    return block;
   }
 
   // ─── Validation ────────────────────────────────────────────────────────────

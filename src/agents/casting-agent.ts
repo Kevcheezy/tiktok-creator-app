@@ -101,12 +101,14 @@ export class CastingAgent extends BaseAgent {
           }
 
           // Use LLM to generate detailed prompts for start and end frames
+          const sealSegment = project.video_analysis?.segments?.[segIdx] || null;
           const promptPair = await this.generateVisualPrompts(
             appearance, wardrobe, setting,
             scene, placement, energyArc,
             project.product_name || 'the product',
             projectId,
             useInfluencer,
+            sealSegment,
           );
 
           // Save visual prompts to scene
@@ -202,6 +204,7 @@ export class CastingAgent extends BaseAgent {
     productName: string,
     projectId: string,
     isEdit: boolean = false,
+    sealData?: any | null,
   ): Promise<{ start: string; end: string }> {
     const systemPrompt = isEdit
       ? `You are a visual prompt engineer for Nano Banana Pro image EDITING.
@@ -242,7 +245,20 @@ Generate START frame prompt (energy: ${energyArc.pattern.start}) and END frame p
 Aspect ratio: 9:16 portrait. Photorealistic. No text/watermarks in the image.
 Negative: ${NEGATIVE_PROMPT}`;
 
-    const response = await this.wavespeed.chatCompletion(systemPrompt, userPrompt);
+    // Enrich with SEAL reference data if available
+    let enrichedUserPrompt = userPrompt;
+    if (sealData) {
+      enrichedUserPrompt += `\n\nREFERENCE VIDEO SEAL DATA (match this visual style):
+  Scene: ${sealData.scene?.setting || 'N/A'}, ${sealData.scene?.composition || 'N/A'}
+  Props: ${(sealData.scene?.props || []).join(', ') || 'none'}
+  Shot type: ${sealData.angle?.shotType || 'medium'}, Camera: ${sealData.angle?.cameraMovement || 'static'}
+  Lighting: ${sealData.lighting?.style || 'natural'}, ${sealData.lighting?.colorTemp || 'neutral'} temp, ${sealData.lighting?.contrast || 'medium'} contrast
+  Mood: ${sealData.emotion?.mood || 'neutral'}
+
+Match this reference video's visual style: use similar lighting, camera angle, and composition.`;
+    }
+
+    const response = await this.wavespeed.chatCompletion(systemPrompt, enrichedUserPrompt);
     await this.trackCost(projectId, API_COSTS.wavespeedChat);
 
     try {
