@@ -104,6 +104,14 @@ function detectStatus(header: string, body: string): 'backlog' | 'in_progress' |
     if (statusText.includes('complete')) return 'in_progress';
   }
 
+  // Checkbox-based inference fallback — catches items where agents
+  // completed work but forgot to add explicit status markers
+  const boxes = extractCheckboxes(body);
+  if (boxes.total > 0) {
+    if (boxes.completed === boxes.total) return 'done';
+    if (boxes.completed > 0) return 'in_progress';
+  }
+
   return 'backlog';
 }
 
