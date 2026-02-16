@@ -3,6 +3,48 @@
 import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 
+const MAX_DIMENSION = 1920;
+const JPEG_QUALITY = 0.85;
+const MAX_FILE_SIZE = 3.5 * 1024 * 1024; // 3.5 MB (under Vercel's 4.5 MB limit)
+
+function compressImage(file: File): Promise<File> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      // Skip compression if already small enough
+      if (file.size <= MAX_FILE_SIZE && img.width <= MAX_DIMENSION && img.height <= MAX_DIMENSION) {
+        resolve(file);
+        return;
+      }
+
+      let { width, height } = img;
+      if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+        const scale = MAX_DIMENSION / Math.max(width, height);
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { resolve(file); return; }
+
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) { resolve(file); return; }
+          resolve(new File([blob], file.name.replace(/\.\w+$/, '.jpg'), { type: 'image/jpeg' }));
+        },
+        'image/jpeg',
+        JPEG_QUALITY,
+      );
+    };
+    img.onerror = () => reject(new Error('Failed to load image'));
+    img.src = URL.createObjectURL(file);
+  });
+}
+
 export function InfluencerForm() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -44,7 +86,10 @@ export function InfluencerForm() {
       const formData = new FormData();
       formData.append('name', name);
       if (persona) formData.append('persona', persona);
-      if (imageFile) formData.append('image', imageFile);
+      if (imageFile) {
+        const compressed = await compressImage(imageFile);
+        formData.append('image', compressed);
+      }
 
       const res = await fetch('/api/influencers', {
         method: 'POST',
