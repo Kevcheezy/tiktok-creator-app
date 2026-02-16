@@ -48,6 +48,7 @@ export function AssetReview({ projectId, onStatusChange, confirmBeforeApprove, o
   const [editTarget, setEditTarget] = useState<{ assetId: string; type: string; segmentIndex: number } | null>(null);
   const [editPrompt, setEditPrompt] = useState('');
   const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
   const [propagateTarget, setPropagateTarget] = useState<{ assetId: string; prompt: string; subsequentCount: number } | null>(null);
   const [propagateSubmitting, setPropagateSubmitting] = useState(false);
   const lastEditRef = useRef<{ assetId: string; prompt: string } | null>(null);
@@ -181,18 +182,24 @@ export function AssetReview({ projectId, onStatusChange, confirmBeforeApprove, o
   async function handleEditSubmit() {
     if (!editTarget || !editPrompt.trim()) return;
     setEditSubmitting(true);
+    setEditError(null);
     try {
-      await fetch(`/api/projects/${projectId}/keyframes/edit`, {
+      const res = await fetch(`/api/projects/${projectId}/keyframes/edit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ assetId: editTarget.assetId, prompt: editPrompt.trim() }),
       });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setEditError(body.error || `Edit failed (${res.status})`);
+        return;
+      }
       lastEditRef.current = { assetId: editTarget.assetId, prompt: editPrompt.trim() };
       setEditTarget(null);
       setEditPrompt('');
       fetchAssets();
-    } catch (err) {
-      console.error('Failed to submit keyframe edit:', err);
+    } catch {
+      setEditError('Network error — could not submit edit.');
     } finally {
       setEditSubmitting(false);
     }
@@ -595,10 +602,15 @@ export function AssetReview({ projectId, onStatusChange, confirmBeforeApprove, o
                 ~0.07 Gil
               </p>
             </div>
+            {editError && (
+              <div className="mt-3 rounded-lg border border-magenta/30 bg-magenta/5 px-3 py-2">
+                <p className="text-xs text-magenta">{editError}</p>
+              </div>
+            )}
             <div className="mt-4 flex gap-3">
               <button
                 type="button"
-                onClick={() => { setEditTarget(null); setEditPrompt(''); }}
+                onClick={() => { setEditTarget(null); setEditPrompt(''); setEditError(null); }}
                 className="flex-1 rounded-lg border border-border bg-surface px-4 py-2.5 font-[family-name:var(--font-display)] text-sm font-semibold text-text-secondary transition-all hover:bg-surface-raised"
               >
                 Cancel

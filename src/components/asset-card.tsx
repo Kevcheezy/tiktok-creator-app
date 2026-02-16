@@ -106,29 +106,51 @@ export function AssetCard({ asset, showGrade, compact, onGrade, onReject, onRege
   }
 
   if (asset.status === 'failed') {
+    const lastEditError = asset.metadata?.lastEditError as string | undefined;
+    const wasEditFailure = !!lastEditError;
+
     return (
       <div className="relative overflow-hidden rounded-xl border border-magenta/30 bg-magenta/5">
         <div className={`flex items-center justify-center ${isKeyframe || asset.type === 'video' ? 'aspect-[9/16]' : 'h-24'}`}>
-          <div className="flex flex-col items-center gap-2">
+          <div className="flex flex-col items-center gap-2 px-4 text-center">
             <svg viewBox="0 0 20 20" className="h-6 w-6 text-magenta" fill="currentColor">
               <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
             </svg>
             <span className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-magenta">
-              Failed
+              {wasEditFailure ? 'Edit Failed' : 'Failed'}
             </span>
-            {onRegenerate && (
-              <button
-                type="button"
-                onClick={() => onRegenerate(asset.id)}
-                className="mt-1 inline-flex items-center gap-1.5 rounded-lg bg-magenta/10 px-3 py-1.5 font-[family-name:var(--font-display)] text-[10px] font-semibold text-magenta transition-all hover:bg-magenta/20"
-              >
-                <svg viewBox="0 0 16 16" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M1 2v5h5" />
-                  <path d="M3.5 10a5 5 0 109-2.3" />
-                </svg>
-                Regenerate
-              </button>
+            {lastEditError && (
+              <p className="mt-0.5 max-w-[180px] font-[family-name:var(--font-mono)] text-[9px] leading-tight text-magenta/70">
+                {lastEditError.length > 120 ? lastEditError.slice(0, 120) + '...' : lastEditError}
+              </p>
             )}
+            <div className="mt-1 flex items-center gap-2">
+              {wasEditFailure && onEdit && isKeyframe && (
+                <button
+                  type="button"
+                  onClick={() => onEdit(asset.id)}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-amber-hot/10 px-3 py-1.5 font-[family-name:var(--font-display)] text-[10px] font-semibold text-amber-hot transition-all hover:bg-amber-hot/20"
+                >
+                  <svg viewBox="0 0 16 16" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11.5 1.5l3 3L5 14H2v-3L11.5 1.5z" />
+                  </svg>
+                  Retry Edit
+                </button>
+              )}
+              {onRegenerate && (
+                <button
+                  type="button"
+                  onClick={() => onRegenerate(asset.id)}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-magenta/10 px-3 py-1.5 font-[family-name:var(--font-display)] text-[10px] font-semibold text-magenta transition-all hover:bg-magenta/20"
+                >
+                  <svg viewBox="0 0 16 16" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1 2v5h5" />
+                    <path d="M3.5 10a5 5 0 109-2.3" />
+                  </svg>
+                  Regenerate
+                </button>
+              )}
+            </div>
           </div>
         </div>
         <div className="absolute left-2 top-2">

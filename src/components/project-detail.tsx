@@ -58,10 +58,12 @@ interface ProjectData {
   product: { id: string; name: string | null; image_url: string | null } | null;
 }
 
-// Client-side rollback map (mirrors backend rollbackMap)
+// Client-side rollback map (mirrors backend cancel endpoint)
 const CANCEL_ROLLBACK: Record<string, string> = {
+  analyzing: 'created',
+  scripting: 'analysis_review',
   broll_planning: 'script_review',
-  broll_generation: 'broll_review',
+  broll_generation: 'casting_review',
   casting: 'influencer_selection',
   directing: 'casting_review',
   voiceover: 'casting_review',
