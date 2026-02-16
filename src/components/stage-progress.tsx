@@ -29,6 +29,7 @@ interface StageProgressProps {
   color?: 'electric' | 'magenta';
   onRetry?: () => void;
   onGoBack?: () => void;
+  onCancel?: () => void;
 }
 
 function formatElapsed(seconds: number): string {
@@ -38,7 +39,8 @@ function formatElapsed(seconds: number): string {
   return `${mins}m ${secs.toString().padStart(2, '0')}s`;
 }
 
-export function StageProgress({ projectId, stage, color = 'magenta', onRetry, onGoBack }: StageProgressProps) {
+export function StageProgress({ projectId, stage, color = 'magenta', onRetry, onGoBack, onCancel }: StageProgressProps) {
+  const [cancelling, setCancelling] = useState(false);
   const [progress, setProgress] = useState<ProgressData | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [connectionWarning, setConnectionWarning] = useState(false);
@@ -151,6 +153,27 @@ export function StageProgress({ projectId, stage, color = 'magenta', onRetry, on
               <span className="font-[family-name:var(--font-mono)] text-xs text-text-muted">
                 {formatElapsed(elapsed)}
               </span>
+              {onCancel && (
+                <button
+                  type="button"
+                  disabled={cancelling}
+                  onClick={async () => {
+                    setCancelling(true);
+                    try { await onCancel(); } finally { setCancelling(false); }
+                  }}
+                  className="rounded border border-magenta/30 px-2 py-0.5 font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-magenta/70 transition-colors hover:border-magenta/60 hover:bg-magenta/10 hover:text-magenta disabled:opacity-50"
+                  title="Stop generation and go back"
+                >
+                  {cancelling ? (
+                    <svg className="h-3 w-3 animate-spin" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="2" strokeDasharray="25 10" /></svg>
+                  ) : (
+                    <span className="flex items-center gap-1">
+                      <svg viewBox="0 0 10 10" fill="currentColor" className="h-2 w-2"><rect x="1" y="1" width="8" height="8" rx="1" /></svg>
+                      Stop
+                    </span>
+                  )}
+                </button>
+              )}
             </div>
           </div>
 

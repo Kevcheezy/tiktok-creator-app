@@ -176,6 +176,21 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
     }
   }, [project, projectId, fetchProject]);
 
+  // Cancel/stop a running stage — rolls back to previous review gate
+  const handleStageCancel = useCallback(async () => {
+    if (!project) return;
+    try {
+      const res = await fetch(`/api/projects/${projectId}/cancel`, { method: 'POST' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        console.error('Cancel failed:', body.error || res.statusText);
+      }
+      fetchProject();
+    } catch (err) {
+      console.error('Failed to cancel stage:', err);
+    }
+  }, [project, projectId, fetchProject]);
+
   // Derived navigation state
   const displayStage = viewingStage || project?.status || '';
   const isViewingPast = viewingStage !== null;
@@ -565,24 +580,24 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
 
       {/* B-Roll progress indicators */}
       {!isViewingPast && project.status === 'broll_planning' && (
-        <StageProgress projectId={projectId} stage="broll_planning" color="electric" onRetry={() => handleStageRetry('broll_planning')} />
+        <StageProgress projectId={projectId} stage="broll_planning" color="electric" onRetry={() => handleStageRetry('broll_planning')} onCancel={handleStageCancel} />
       )}
       {!isViewingPast && project.status === 'broll_generation' && (
-        <StageProgress projectId={projectId} stage="broll_generation" color="magenta" onRetry={() => handleStageRetry('broll_generation')} />
+        <StageProgress projectId={projectId} stage="broll_generation" color="magenta" onRetry={() => handleStageRetry('broll_generation')} onCancel={handleStageCancel} />
       )}
 
       {/* Asset generation progress indicators */}
       {!isViewingPast && project.status === 'casting' && (
-        <StageProgress projectId={projectId} stage="casting" color="magenta" onRetry={() => handleStageRetry('casting')} />
+        <StageProgress projectId={projectId} stage="casting" color="magenta" onRetry={() => handleStageRetry('casting')} onCancel={handleStageCancel} />
       )}
       {!isViewingPast && project.status === 'directing' && (
-        <StageProgress projectId={projectId} stage="directing" color="magenta" onRetry={() => handleStageRetry('directing')} />
+        <StageProgress projectId={projectId} stage="directing" color="magenta" onRetry={() => handleStageRetry('directing')} onCancel={handleStageCancel} />
       )}
       {!isViewingPast && project.status === 'voiceover' && (
-        <StageProgress projectId={projectId} stage="voiceover" color="magenta" onRetry={() => handleStageRetry('voiceover')} />
+        <StageProgress projectId={projectId} stage="voiceover" color="magenta" onRetry={() => handleStageRetry('voiceover')} onCancel={handleStageCancel} />
       )}
       {!isViewingPast && project.status === 'editing' && (
-        <StageProgress projectId={projectId} stage="editing" color="electric" onRetry={() => handleStageRetry('editing')} />
+        <StageProgress projectId={projectId} stage="editing" color="electric" onRetry={() => handleStageRetry('editing')} onCancel={handleStageCancel} />
       )}
 
       {/* Script Review */}
