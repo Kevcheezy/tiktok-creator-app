@@ -56,6 +56,8 @@ interface ProjectData {
   influencer: { id: string; name: string; persona: string | null; image_url: string | null } | null;
   product_id: string | null;
   product: { id: string; name: string | null; image_url: string | null } | null;
+  video_model_id: string | null;
+  video_model: { id: string; name: string; slug: string; resolution: string; total_duration: number; segment_count: number; provider: string } | null;
 }
 
 // Client-side rollback map (mirrors backend cancel endpoint)
@@ -2229,6 +2231,17 @@ interface SettingsInfluencer {
   image_url: string | null;
 }
 
+interface SettingsVideoModel {
+  id: string;
+  name: string;
+  slug: string;
+  provider: string;
+  total_duration: number;
+  segment_count: number;
+  resolution: string;
+  is_default: boolean;
+}
+
 function ProjectSettings({ project, onUpdated }: { project: ProjectData; onUpdated: () => void }) {
   const [editing, setEditing] = useState(false);
   const [tone, setTone] = useState(project.tone || 'reluctant-insider');
@@ -2237,6 +2250,8 @@ function ProjectSettings({ project, onUpdated }: { project: ProjectData; onUpdat
   const [projectName, setProjectName] = useState(project.name || '');
   const [characters, setCharacters] = useState<SettingsCharacter[]>([]);
   const [influencers, setInfluencers] = useState<SettingsInfluencer[]>([]);
+  const [videoModels, setVideoModels] = useState<SettingsVideoModel[]>([]);
+  const [videoModelId, setVideoModelId] = useState(project.video_model_id || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -2249,7 +2264,8 @@ function ProjectSettings({ project, onUpdated }: { project: ProjectData; onUpdat
     setCharacterId(project.character_id || '');
     setInfluencerId(project.influencer_id || '');
     setProjectName(project.name || '');
-  }, [project.tone, project.character_id, project.influencer_id, project.name]);
+    setVideoModelId(project.video_model_id || '');
+  }, [project.tone, project.character_id, project.influencer_id, project.name, project.video_model_id]);
 
   // Fetch options when entering edit mode
   useEffect(() => {
@@ -2262,6 +2278,10 @@ function ProjectSettings({ project, onUpdated }: { project: ProjectData; onUpdat
       .then((r) => (r.ok ? r.json() : []))
       .then(setInfluencers)
       .catch(() => setInfluencers([]));
+    fetch('/api/video-models')
+      .then((r) => (r.ok ? r.json() : { videoModels: [] }))
+      .then((data: { videoModels: SettingsVideoModel[] }) => setVideoModels(data.videoModels))
+      .catch(() => setVideoModels([]));
   }, [editing]);
 
   function handleCancel() {
@@ -2269,6 +2289,7 @@ function ProjectSettings({ project, onUpdated }: { project: ProjectData; onUpdat
     setCharacterId(project.character_id || '');
     setInfluencerId(project.influencer_id || '');
     setProjectName(project.name || '');
+    setVideoModelId(project.video_model_id || '');
     setError('');
     setEditing(false);
   }
@@ -2282,6 +2303,7 @@ function ProjectSettings({ project, onUpdated }: { project: ProjectData; onUpdat
     if (characterId !== (project.character_id || '')) updates.character_id = characterId || null;
     if (influencerId !== (project.influencer_id || '')) updates.influencer_id = influencerId || null;
     if (projectName !== (project.name || '')) updates.name = projectName || null;
+    if (videoModelId !== (project.video_model_id || '')) updates.video_model_id = videoModelId || null;
 
     if (Object.keys(updates).length === 0) {
       setEditing(false);
@@ -2420,6 +2442,31 @@ function ProjectSettings({ project, onUpdated }: { project: ProjectData; onUpdat
           </div>
         </div>
 
+        {/* Video Model */}
+        {videoModels.length > 0 && (
+          <div>
+            <label className="mb-1.5 block font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+              Video Model
+            </label>
+            <div className="relative">
+              <select
+                value={videoModelId}
+                onChange={(e) => setVideoModelId(e.target.value)}
+                className="block w-full appearance-none rounded-lg border border-border bg-surface-raised px-3 py-2 pr-9 text-sm text-text-primary transition-all focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric"
+              >
+                {videoModels.map((vm) => (
+                  <option key={vm.id} value={vm.id}>
+                    {vm.name} — {vm.total_duration}s, {vm.segment_count} segments
+                  </option>
+                ))}
+              </select>
+              <svg viewBox="0 0 16 16" fill="none" className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-muted" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="4 6 8 10 12 6" />
+              </svg>
+            </div>
+          </div>
+        )}
+
         {error && (
           <div className="rounded-lg border border-magenta/30 bg-magenta/10 px-3 py-2">
             <p className="text-xs text-magenta">{error}</p>
@@ -2461,6 +2508,17 @@ function ProjectSettings({ project, onUpdated }: { project: ProjectData; onUpdat
               />
             )}
             {project.influencer.name}
+          </span>
+        )}
+
+        {/* Video model badge */}
+        {project.video_model && (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-hot/20 bg-amber-hot/5 px-2.5 py-0.5 font-[family-name:var(--font-display)] text-[11px] font-medium text-amber-hot">
+            <svg viewBox="0 0 16 16" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="3" width="12" height="10" rx="1.5" />
+              <path d="M6.5 6.5l3 2-3 2v-4z" fill="currentColor" stroke="none" />
+            </svg>
+            {project.video_model.name}
           </span>
         )}
 

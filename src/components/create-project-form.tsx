@@ -25,6 +25,17 @@ interface Character {
   avatarPersona: string | null;
 }
 
+interface VideoModel {
+  id: string;
+  name: string;
+  slug: string;
+  provider: string;
+  total_duration: number;
+  segment_count: number;
+  resolution: string;
+  is_default: boolean;
+}
+
 export function CreateProjectForm() {
   const router = useRouter();
   const [productUrl, setProductUrl] = useState('');
@@ -37,6 +48,8 @@ export function CreateProjectForm() {
   const [products, setProducts] = useState<Product[]>([]);
   const [influencers, setInfluencers] = useState<Influencer[]>([]);
   const [characters, setCharacters] = useState<Character[]>([]);
+  const [videoModels, setVideoModels] = useState<VideoModel[]>([]);
+  const [videoModelId, setVideoModelId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -53,6 +66,14 @@ export function CreateProjectForm() {
       .then((res) => (res.ok ? res.json() : []))
       .then(setCharacters)
       .catch(() => setCharacters([]));
+    fetch('/api/video-models')
+      .then((res) => (res.ok ? res.json() : { videoModels: [] }))
+      .then((data: { videoModels: VideoModel[] }) => {
+        setVideoModels(data.videoModels);
+        const defaultModel = data.videoModels.find((m) => m.is_default);
+        if (defaultModel) setVideoModelId(defaultModel.id);
+      })
+      .catch(() => setVideoModels([]));
   }, []);
 
   useEffect(() => {
@@ -80,6 +101,7 @@ export function CreateProjectForm() {
           videoUrl: videoUrl || undefined,
           influencerId: influencerId || undefined,
           characterId: characterId || undefined,
+          videoModelId: videoModelId || undefined,
           tone,
         }),
       });
@@ -320,6 +342,52 @@ export function CreateProjectForm() {
           </svg>
         </div>
       </div>
+
+      {/* Video Model */}
+      {videoModels.length > 0 && (
+        <div>
+          <label
+            htmlFor="videoModel"
+            className="mb-2 block font-[family-name:var(--font-display)] text-sm font-medium text-text-primary"
+          >
+            Video Model
+          </label>
+          <div className="relative">
+            <select
+              id="videoModel"
+              value={videoModelId}
+              onChange={(e) => setVideoModelId(e.target.value)}
+              className="block w-full appearance-none rounded-lg border border-border bg-surface-raised px-4 py-3 pr-10 text-sm text-text-primary transition-all focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric"
+            >
+              {videoModels.map((vm) => (
+                <option key={vm.id} value={vm.id}>
+                  {vm.name} — {vm.total_duration}s, {vm.segment_count} segments, {vm.resolution}
+                </option>
+              ))}
+            </select>
+            <svg
+              viewBox="0 0 16 16"
+              fill="none"
+              className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="4 6 8 10 12 6" />
+            </svg>
+          </div>
+          {(() => {
+            const selected = videoModels.find((m) => m.id === videoModelId);
+            if (!selected) return null;
+            return (
+              <p className="mt-1.5 font-[family-name:var(--font-mono)] text-[11px] text-text-muted">
+                {selected.provider} · {selected.segment_count}×{selected.total_duration / selected.segment_count}s segments · {selected.resolution}
+              </p>
+            );
+          })()}
+        </div>
+      )}
 
       {/* Script Tone */}
       <div>

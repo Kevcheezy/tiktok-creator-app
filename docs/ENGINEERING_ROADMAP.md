@@ -679,7 +679,7 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 #### R1.5.16 - Video Model Selection & Pipeline Abstraction
 **Priority:** P0 - Critical
 **Effort:** Large
-**Status:** Backend abstraction complete (2026-02-15). Schema, API, and 4 critical agents (Scripting, Casting, Directing, Voiceover) read from video model. **Remaining:** B-RollAgent + EditorAgent still hardcode segments, WaveSpeed resolution param deferred, frontend selector + badge not built.
+**Status:** Backend abstraction complete (2026-02-15). Frontend selector + badge complete (2026-02-16). **Remaining:** B-RollAgent + EditorAgent still hardcode segments, WaveSpeed resolution param deferred.
 **Spec:** `docs/plans/2026-02-15-video-model-selection-design.md`
 **Why:** The pipeline hardcodes Kling 3.0 Pro assumptions (4 segments, 15s, 3 shots, Kling endpoint) across 7+ files. Making "video model" a first-class database entity decouples the pipeline from a single model. Each video model profile defines technical params (segments, duration, resolution, API endpoint) AND creative structure (energy arc, product placement arc, section names). All agents read config from the project's video model. Initial scope: Kling 3.0 Pro only (60s, 4x15s, 1080p), but the abstraction enables future models/formats.
 
@@ -700,9 +700,9 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [ ] WaveSpeed client: add resolution param to generateVideo() (deferred — Kling uses 1080p default)
 - [ ] `PIPELINE_CONFIG` kept as fallback for backward compatibility
 
-**Frontend:** 🔧 IN PROGRESS
-- [ ] Create project form: video model selector (pre-selected Kling 3.0 Pro card)
-- [ ] Project detail: video model badge in header
+**Frontend:** ~~DONE~~ (2026-02-16)
+- [x] Create project form: video model selector (pre-selected Kling 3.0 Pro, shows duration/segments/resolution)
+- [x] Project detail: video model badge in settings bar (amber-hot themed) + editable dropdown at review gates
 
 ---
 
