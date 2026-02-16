@@ -87,39 +87,17 @@ export class ElevenLabsClient {
   }
 
   /**
-   * Generate a new voice from a text description.
-   * Returns a temporary generated_voice_id and audio preview (base64).
+   * Fetch full voice metadata from ElevenLabs by voice ID.
+   * Used to validate a user-provided voice ID and extract name, description, preview_url, labels.
    */
-  async designVoice(description: string, sampleText: string, gender?: string, context?: ElevenLabsCallContext): Promise<{ generatedVoiceId: string; audioBase64: string }> {
-    const data = await this.request('/v1/text-to-speech/voice-design/preview', {
-      method: 'POST',
-      body: JSON.stringify({
-        voice_description: description,
-        text: sampleText,
-        ...(gender && { gender }),
-      }),
-    }, context);
-    return {
-      generatedVoiceId: data.generated_voice_id,
-      audioBase64: data.audio_base_64,
-    };
-  }
-
-  /**
-   * Save a designed voice to the library, making it permanent.
-   * Returns the permanent voice_id.
-   */
-  async saveVoice(generatedVoiceId: string, name: string, description?: string, context?: ElevenLabsCallContext): Promise<string> {
-    const data = await this.request('/v1/voice-generation/create-voice-from-preview', {
-      method: 'POST',
-      body: JSON.stringify({
-        voice_name: name,
-        voice_description: description || '',
-        generated_voice_id: generatedVoiceId,
-        labels: { source: 'tiktok-creator-app' },
-      }),
-    }, context);
-    return data.voice_id;
+  async getVoice(voiceId: string, context?: ElevenLabsCallContext): Promise<{
+    voice_id: string;
+    name: string;
+    description: string;
+    preview_url: string;
+    labels: Record<string, string>;
+  }> {
+    return this.request(`/v1/voices/${voiceId}`, {}, context);
   }
 
   /**

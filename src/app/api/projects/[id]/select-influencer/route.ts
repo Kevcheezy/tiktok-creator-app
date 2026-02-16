@@ -148,10 +148,26 @@ export async function POST(
       updateData.failed_at_status = null;
     }
 
-    await supabase
+    // Optimistic locking: only update if the project is still in a recastable
+    // status that is NOT already 'casting'. This prevents duplicate casting jobs
+    // when rapid clicks cause concurrent requests — the first request sets
+    // status = 'casting', so the second request's WHERE clause won't match.
+    const allowedStatuses = RECASTABLE_STATUSES.filter(s => s !== 'casting');
+
+    const { data: updated, error: updateError } = await supabase
       .from('project')
       .update(updateData)
-      .eq('id', id);
+      .eq('id', id)
+      .in('status', allowedStatuses)
+      .select('id')
+      .single();
+
+    if (updateError || !updated) {
+      return NextResponse.json(
+        { error: 'Project is already being processed. Please wait.' },
+        { status: 409 }
+      );
+    }
 
     // Enqueue casting
     await getPipelineQueue().add('casting', {

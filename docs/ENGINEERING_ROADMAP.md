@@ -311,27 +311,27 @@ Influencer `<select>` options displayed the entire `persona` field (full appeara
 - [ ] Audit BRollAgent for the same pattern (confirmed: LLM cost tracked even on parse failure, then re-tracked on retry success)
 - [ ] BRollAgent: move LLM cost tracking to after successful JSON parse, not before
 
-#### B0.28 - B-Roll Stages Missing from Rollback Map (Recovery Blocked)
+#### B0.28 - B-Roll Stages Missing from Rollback Map (Recovery Blocked) ~~FIXED~~
 **Severity:** High (users stuck on failed B-roll with no rollback path)
 **Scope:** Backend
 **Discovered:** 2026-02-16 (bug bash)
 **Why:** `src/app/api/projects/[id]/rollback/route.ts` has a `rollbackMap` that maps each stage to its previous review gate. `broll_planning` and `broll_generation` are both missing from this map. If either B-roll stage fails, the "Roll Back" button in the UI calls the rollback endpoint, which returns an error because it can't find the stage in the map. The user is stuck with no recovery path except manual DB intervention.
 
 **Fix checklist:**
-- [ ] Add `broll_planning: 'script_review'` to `rollbackMap` (rolls back to script review)
-- [ ] Add `broll_generation: 'broll_review'` to `rollbackMap` (rolls back to B-roll storyboard review)
-- [ ] Verify retry endpoint already has both stages in `stepToJob` (confirmed: it does)
+- [x] Add `broll_planning: 'script_review'` to `rollbackMap` (rolls back to script review)
+- [x] Add `broll_generation: 'broll_review'` to `rollbackMap` (rolls back to B-roll storyboard review)
+- [x] Verify retry endpoint already has both stages in `stepToJob` (confirmed: it does)
 
-#### B0.29 - Select-Influencer Race Condition Enqueues Duplicate Casting Jobs
+#### B0.29 - Select-Influencer Race Condition Enqueues Duplicate Casting Jobs ~~FIXED~~
 **Severity:** Medium (wastes $0.56+ per duplicate — CastingAgent cleans up assets but API budget is spent)
 **Scope:** Backend
 **Discovered:** 2026-02-16 (bug bash)
 **Why:** `POST /api/projects/[id]/select-influencer` has no idempotency guard. B0.15 fixed the status update so it always sets `status: 'casting'` on first click, but there's still a window: if two requests arrive before the first DB update completes, both pass the status check, both update the project, and both enqueue casting jobs. CastingAgent does delete old keyframe assets before generating (B0.15 fix), so the second job's cleanup + regeneration isn't catastrophic — but it wastes $0.56 in WaveSpeed API calls and confuses the progress UI.
 
 **Fix checklist:**
-- [ ] Add optimistic locking: `select-influencer` route should include `status` in the UPDATE's WHERE clause (e.g., `WHERE id = ? AND status = 'influencer_selection'`) — second request fails because status already changed to `casting`
-- [ ] Return 409 Conflict if the conditional update matches 0 rows
-- [ ] Frontend: disable the button after first click (defense in depth — backend guard is primary)
+- [x] Add optimistic locking: `select-influencer` route should include `status` in the UPDATE's WHERE clause (e.g., `WHERE id = ? AND status = 'influencer_selection'`) — second request fails because status already changed to `casting`
+- [x] Return 409 Conflict if the conditional update matches 0 rows
+- [x] Frontend: disable the button after first click (defense in depth — backend guard is primary)
 
 ---
 
@@ -1221,9 +1221,9 @@ MVP ──→    Validate: Run real product URLs through full pipeline with B-ro
 
 BUGS ──→   Tier 0 Bug Bash Findings (fix BEFORE any new Tier 1.5 work)
            B0.27 Director cost double-charge on retry ⚠️ CRITICAL ($2.40/segment waste)
-           B0.28 B-roll stages missing from rollback map (recovery blocked)
+           ~~B0.28 B-roll stages missing from rollback map (recovery blocked)~~ ✅ FIXED
            ~~B0.26 EditorAgent retry logic (elevated to High — $5-7 at stake)~~ ✅ FIXED
-           B0.29 Select-influencer race condition (duplicate casting jobs)
+           ~~B0.29 Select-influencer race condition (duplicate casting jobs)~~ ✅ FIXED
 
 POLISH     Tier 1.5: UX Hardening
            R1.5.1 Influencer edit ──→ R1.5.2 Project settings ──→ R1.5.3 Navigation ──→ R1.5.4 Error handling (ALL DONE)

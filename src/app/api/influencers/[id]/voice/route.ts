@@ -6,8 +6,8 @@ import { deleteStorageFile, extractStoragePath } from '@/lib/storage';
 /**
  * DELETE /api/influencers/[id]/voice
  *
- * Remove the designed voice from an influencer.
- * Clears voice_id, voice_preset_id, voice_description, voice_preview_url.
+ * Remove the linked voice from an influencer.
+ * Clears voice_id, voice_description, voice_preview_url.
  * Deletes preview audio from Supabase Storage.
  * Does NOT delete the voice from ElevenLabs (may be in use by active projects).
  */
@@ -42,7 +42,6 @@ export async function DELETE(
       .from('influencer')
       .update({
         voice_id: null,
-        voice_preset_id: null,
         voice_description: null,
         voice_preview_url: null,
         updated_at: new Date().toISOString(),

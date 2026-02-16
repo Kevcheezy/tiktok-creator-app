@@ -1821,7 +1821,7 @@ function InfluencerSelection({ projectId, currentInfluencerId, productCategory, 
   }, [currentInfluencerId, productCategory]);
 
   async function handleConfirm() {
-    if (!selectedId) return;
+    if (!selectedId || confirming) return;
     setConfirming(true);
     setError('');
     try {
@@ -1839,12 +1839,16 @@ function InfluencerSelection({ projectId, currentInfluencerId, productCategory, 
       });
       if (!res.ok) {
         const data = await res.json();
+        if (res.status === 409) {
+          throw new Error(data.error || 'This project is already being processed. Please wait for casting to complete.');
+        }
         throw new Error(data.error || 'Failed to select influencer');
       }
+      // Success — keep button disabled (confirming=true) until the view transitions
+      // to the casting progress screen via onSelected(). Do NOT re-enable.
       onSelected();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to select influencer');
-    } finally {
       setConfirming(false);
     }
   }

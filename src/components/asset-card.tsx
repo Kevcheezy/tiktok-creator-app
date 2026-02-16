@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { GilDisplay } from './gil-display';
+import { DownloadButton } from './download-button';
 
 interface AssetCardProps {
   asset: {
@@ -21,6 +22,8 @@ interface AssetCardProps {
   onReject?: (assetId: string) => void;
   onRegenerate?: (assetId: string) => void;
   onEdit?: (assetId: string) => void;
+  /** Filename for the download button. When provided, a download icon appears on completed assets. */
+  downloadFilename?: string;
 }
 
 const TYPE_BADGES: Record<string, { label: string; color: string }> = {
@@ -37,7 +40,7 @@ const GRADES = [
   { value: 'F', color: 'bg-magenta/10 text-magenta border-magenta/30 hover:bg-magenta/20' },
 ];
 
-export function AssetCard({ asset, showGrade, compact, onGrade, onReject, onRegenerate, onEdit }: AssetCardProps) {
+export function AssetCard({ asset, showGrade, compact, onGrade, onReject, onRegenerate, onEdit, downloadFilename }: AssetCardProps) {
   const [grading, setGrading] = useState(false);
   const [showPrompt, setShowPrompt] = useState(false);
   const badge = TYPE_BADGES[asset.type] || { label: asset.type, color: 'bg-surface-overlay text-text-muted border-border' };
@@ -280,9 +283,12 @@ export function AssetCard({ asset, showGrade, compact, onGrade, onReject, onRege
         </div>
       )}
 
-      {/* Action buttons: edit + reject + regenerate (shown on hover for completed assets) */}
-      {asset.status === 'completed' && (onEdit || onReject || onRegenerate) && (
+      {/* Action buttons: download + edit + reject + regenerate (shown on hover for completed assets) */}
+      {asset.status === 'completed' && (onEdit || onReject || onRegenerate || (asset.url && downloadFilename)) && (
         <div className="absolute right-2 bottom-14 flex flex-col gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+          {asset.url && downloadFilename && (
+            <DownloadButton url={asset.url} filename={downloadFilename} size="sm" />
+          )}
           {onEdit && isKeyframe && (
             <button
               type="button"

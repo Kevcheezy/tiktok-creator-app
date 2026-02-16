@@ -127,12 +127,14 @@ export class BRollAgent extends BaseAgent {
 
     // 5. Call LLM
     this.log('Calling LLM for B-roll shot list...');
+    let llmCallsMade = 0;
     let rawResponse: string;
     try {
       rawResponse = await this.wavespeed.chatCompletion(systemPrompt, userPrompt, {
         temperature: 0.7,
         maxTokens: 8192,
       });
+      llmCallsMade++;
     } catch (err) {
       throw new Error(`B-roll planning LLM call failed: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -168,19 +170,22 @@ export class BRollAgent extends BaseAgent {
           temperature: 0.3,
           maxTokens: 8192,
         });
+        llmCallsMade++;
       } catch (err) {
+        // Track cost for all LLM calls actually made before failing
+        if (llmCallsMade > 0) {
+          await this.trackCost(projectId, API_COSTS.brollPlanning * llmCallsMade);
+        }
         throw new Error(`B-roll planning LLM retry call failed: ${err instanceof Error ? err.message : String(err)}`);
       }
-
-      // Track cost for the retry call
-      await this.trackCost(projectId, API_COSTS.brollPlanning);
 
       const retryResult = this.tryParseShots(retryResponse);
       if (retryResult.ok) {
         shots = retryResult.shots;
         this.log('LLM retry succeeded — parsed B-roll shots from retry response');
       } else {
-        // Both attempts exhausted — log retry response and fail
+        // Both attempts exhausted — track cost for all LLM calls made, then fail
+        await this.trackCost(projectId, API_COSTS.brollPlanning * llmCallsMade);
         await this.logEvent(projectId, 'json_parse_failure', 'broll_planning', {
           error: retryResult.error,
           rawResponse: retryResponse,
@@ -220,8 +225,8 @@ export class BRollAgent extends BaseAgent {
 
     if (insertError) throw new Error(`Failed to save B-roll shots: ${insertError.message}`);
 
-    // 8. Track cost
-    await this.trackCost(projectId, API_COSTS.brollPlanning);
+    // 8. Track cost — once for all actual LLM calls made (1 or 2 depending on retry)
+    await this.trackCost(projectId, API_COSTS.brollPlanning * llmCallsMade);
 
     const durationMs = Date.now() - stageStart;
     await this.logEvent(projectId, 'stage_complete', 'broll_planning', {

@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { DownloadButton, DownloadAllButton } from './download-button';
+import { brollFilename } from '@/lib/download-utils';
 
 // =============================================
 // Types
@@ -31,6 +33,7 @@ interface SegmentInfo {
 
 interface StoryboardViewProps {
   projectId: string;
+  projectNumber?: number | null;
   onStatusChange?: () => void;
   readOnly?: boolean;
 }
@@ -92,7 +95,7 @@ function getCategoryColorClasses(category: string): { bg: string; text: string; 
 // Main Component
 // =============================================
 
-export function StoryboardView({ projectId, onStatusChange, readOnly }: StoryboardViewProps) {
+export function StoryboardView({ projectId, projectNumber, onStatusChange, readOnly }: StoryboardViewProps) {
   const [segments, setSegments] = useState<SegmentInfo[]>([]);
   const [shots, setShots] = useState<BrollShot[]>([]);
   const [loading, setLoading] = useState(true);
@@ -167,6 +170,16 @@ export function StoryboardView({ projectId, onStatusChange, readOnly }: Storyboa
     acc[s.category] = (acc[s.category] || 0) + 1;
     return acc;
   }, {});
+
+  // Build download-all items for B-roll images
+  const brollDownloadItems = projectNumber
+    ? activeShots
+        .filter((s) => s.image_url && (s.status === 'completed' || s.source === 'user_uploaded'))
+        .map((s) => ({
+          url: s.image_url!,
+          filename: brollFilename(projectNumber, s.segment_index + 1, s.shot_index + 1),
+        }))
+    : [];
 
   // ---- Handlers ----
 

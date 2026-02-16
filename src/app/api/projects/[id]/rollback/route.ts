@@ -34,6 +34,8 @@ export async function POST(
     const rollbackMap: Record<string, string> = {
       analyzing: 'created',
       scripting: 'analysis_review',
+      broll_planning: 'script_review',
+      broll_generation: 'broll_review',
       casting: 'influencer_selection',
       directing: 'casting_review',
       voiceover: 'casting_review',

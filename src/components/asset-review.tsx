@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { AssetCard } from './asset-card';
+import { DownloadAllButton } from './download-button';
+import { keyframeFilename, videoFilename, voiceFilename } from '@/lib/download-utils';
 
 interface Asset {
   id: string;
@@ -20,6 +22,7 @@ interface Asset {
 
 interface AssetReviewProps {
   projectId: string;
+  projectNumber?: number | null;
   onStatusChange?: () => void;
   confirmBeforeApprove?: { title: string; description: string; cost: string };
   onRegenerateAll?: () => Promise<void>;
@@ -33,7 +36,7 @@ const SECTION_LABELS: Record<string, string> = {
   cta: 'CTA',
 };
 
-export function AssetReview({ projectId, onStatusChange, confirmBeforeApprove, onRegenerateAll, readOnly }: AssetReviewProps) {
+export function AssetReview({ projectId, projectNumber, onStatusChange, confirmBeforeApprove, onRegenerateAll, readOnly }: AssetReviewProps) {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [bySegment, setBySegment] = useState<Record<number, Asset[]>>({});
   const [loading, setLoading] = useState(true);
@@ -312,17 +315,39 @@ export function AssetReview({ projectId, onStatusChange, confirmBeforeApprove, o
   const editingAssets = assets.filter((a) => a.status === 'editing').length;
   const hasIssues = failedAssets > 0 || rejectedAssets > 0;
 
+  // Build download filename for an asset based on its type and segment
+  function getDownloadFilename(asset: Asset): string | undefined {
+    if (!projectNumber || !asset.url || asset.status !== 'completed') return undefined;
+    const segIdx = (asset.scene?.segment_index ?? 0) + 1; // 1-based
+    switch (asset.type) {
+      case 'keyframe_start': return keyframeFilename(projectNumber, segIdx, 'start');
+      case 'keyframe_end': return keyframeFilename(projectNumber, segIdx, 'end');
+      case 'video': return videoFilename(projectNumber, segIdx);
+      case 'audio': return voiceFilename(projectNumber, segIdx);
+      default: return undefined;
+    }
+  }
+
+  // Build "Download All" items from all completed assets with URLs
+  const downloadAllItems = projectNumber
+    ? assets
+        .filter((a) => a.status === 'completed' && a.url)
+        .map((a) => ({ url: a.url!, filename: getDownloadFilename(a)! }))
+        .filter((item) => item.filename)
+    : [];
+
   return (
     <div className="space-y-6">
       {/* Stats bar */}
-      <div className="flex items-center gap-4 rounded-lg border border-border bg-surface px-4 py-3">
-        <span className="font-[family-name:var(--font-display)] text-xs font-semibold uppercase tracking-wider text-text-muted">
-          Assets
-        </span>
-        <div className="flex items-center gap-3 text-xs">
-          <span className="text-text-secondary">
-            <span className="font-[family-name:var(--font-mono)] font-bold text-lime">{completedAssets}</span>/{totalAssets} completed
+      <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-surface px-4 py-3">
+        <div className="flex items-center gap-4">
+          <span className="font-[family-name:var(--font-display)] text-xs font-semibold uppercase tracking-wider text-text-muted">
+            Assets
           </span>
+          <div className="flex items-center gap-3 text-xs">
+            <span className="text-text-secondary">
+              <span className="font-[family-name:var(--font-mono)] font-bold text-lime">{completedAssets}</span>/{totalAssets} completed
+            </span>
           {generatingAssets > 0 && (
             <span className="flex items-center gap-1.5 text-electric">
               <span className="relative flex h-2 w-2">
@@ -347,7 +372,11 @@ export function AssetReview({ projectId, onStatusChange, confirmBeforeApprove, o
           {rejectedAssets > 0 && (
             <span className="text-amber-hot">{rejectedAssets} rejected</span>
           )}
+          </div>
         </div>
+        {downloadAllItems.length > 0 && (
+          <DownloadAllButton items={downloadAllItems} />
+        )}
       </div>
 
       {/* Segment cards */}
@@ -389,6 +418,7 @@ export function AssetReview({ projectId, onStatusChange, confirmBeforeApprove, o
                         onReject={readOnly ? undefined : handleReject}
                         onRegenerate={readOnly ? undefined : handleRegenerate}
                         onEdit={!readOnly && confirmBeforeApprove ? openEditModal : undefined}
+                        downloadFilename={getDownloadFilename(keyframeStart)}
                       />
                     )}
                     {keyframeEnd && (
@@ -399,6 +429,7 @@ export function AssetReview({ projectId, onStatusChange, confirmBeforeApprove, o
                         onReject={readOnly ? undefined : handleReject}
                         onRegenerate={readOnly ? undefined : handleRegenerate}
                         onEdit={!readOnly && confirmBeforeApprove ? openEditModal : undefined}
+                        downloadFilename={getDownloadFilename(keyframeEnd)}
                       />
                     )}
                   </div>
@@ -418,6 +449,7 @@ export function AssetReview({ projectId, onStatusChange, confirmBeforeApprove, o
                       onGrade={readOnly ? undefined : handleGrade}
                       onReject={readOnly ? undefined : handleReject}
                       onRegenerate={readOnly ? undefined : handleRegenerate}
+                      downloadFilename={getDownloadFilename(video)}
                     />
                   </div>
                 </div>
@@ -435,6 +467,7 @@ export function AssetReview({ projectId, onStatusChange, confirmBeforeApprove, o
                     onGrade={readOnly ? undefined : handleGrade}
                     onReject={readOnly ? undefined : handleReject}
                     onRegenerate={readOnly ? undefined : handleRegenerate}
+                    downloadFilename={getDownloadFilename(audio)}
                   />
                 </div>
               )}

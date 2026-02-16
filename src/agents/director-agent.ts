@@ -141,6 +141,8 @@ export class DirectorAgent extends BaseAgent {
       // Generate video with retry logic
       const maxRetries = 2;
       let lastError: Error | null = null;
+      let apiCallsMade = 0;
+      let segmentSuccess = false;
 
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
@@ -161,6 +163,9 @@ export class DirectorAgent extends BaseAgent {
             cfgScale: 0.5,
           });
 
+          // API call succeeded — count it for cost tracking
+          apiCallsMade++;
+
           await this.supabase.from('asset').insert({
             project_id: projectId,
             scene_id: scene.id,
@@ -179,8 +184,8 @@ export class DirectorAgent extends BaseAgent {
             .update({ url: pollResult.url || '', status: 'completed' })
             .eq('provider_task_id', result.taskId);
 
-          await this.trackCost(projectId, vm.cost_per_segment);
           this.log(`Video complete for segment ${segIdx}: ${pollResult.url}`);
+          segmentSuccess = true;
           lastError = null;
           break;
 
@@ -190,7 +195,12 @@ export class DirectorAgent extends BaseAgent {
         }
       }
 
-      if (lastError) {
+      // Track cost ONCE outside the retry loop — covers all actual API calls made
+      if (apiCallsMade > 0) {
+        await this.trackCost(projectId, vm.cost_per_segment * apiCallsMade);
+      }
+
+      if (!segmentSuccess && lastError) {
         this.log(`All retries exhausted for segment ${segIdx}, marking as failed`);
         await this.supabase.from('asset').insert({
           project_id: projectId,

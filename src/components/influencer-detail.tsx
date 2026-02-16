@@ -16,25 +16,9 @@ interface Influencer {
   created_at: string | null;
   updated_at: string | null;
   voice_id: string | null;
-  voice_preset_id: string | null;
+  voice_name: string | null;
   voice_description: string | null;
   voice_preview_url: string | null;
-}
-
-interface VoicePreset {
-  id: string;
-  name: string;
-  description: string;
-  gender: string;
-  sample_text: string | null;
-  category_affinity: string[];
-  is_system: boolean;
-}
-
-interface VoicePreviewData {
-  previewUrl: string;
-  temporaryVoiceId: string;
-  description: string;
 }
 
 function formatDate(date: string | null): string {
@@ -48,157 +32,64 @@ function formatDate(date: string | null): string {
   });
 }
 
-// --- Voice Section sub-component ---
+// --- Voice Section sub-component (R1.5.24 — ElevenLabs Voice ID Reference) ---
 
 function VoiceSection({ influencer, influencerId, onInfluencerUpdate }: {
   influencer: Influencer;
   influencerId: string;
   onInfluencerUpdate: (updated: Influencer) => void;
 }) {
-  // Voice state machine: 'select' | 'preview' | 'approved'
-  const [voicePresets, setVoicePresets] = useState<VoicePreset[]>([]);
-  const [presetsLoading, setPresetsLoading] = useState(true);
-  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
-  const [customMode, setCustomMode] = useState(false);
-  const [customDescription, setCustomDescription] = useState('');
-  const [customGender, setCustomGender] = useState<'female' | 'male'>('female');
-  const [designing, setDesigning] = useState(false);
-  const [designError, setDesignError] = useState('');
-  const [voicePreview, setVoicePreview] = useState<VoicePreviewData | null>(null);
-  const [approving, setApproving] = useState(false);
-  const [approveError, setApproveError] = useState('');
+  const [voiceIdInput, setVoiceIdInput] = useState('');
+  const [linking, setLinking] = useState(false);
+  const [linkError, setLinkError] = useState('');
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
   const [removing, setRemoving] = useState(false);
-  const [changingVoice, setChangingVoice] = useState(false);
-  const [changeVoiceError, setChangeVoiceError] = useState('');
+  const [copied, setCopied] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
 
-  // Determine current state
   const hasVoice = !!influencer.voice_id;
-  const hasPreview = !!voicePreview;
 
-  // Fetch voice presets
-  useEffect(() => {
-    fetch('/api/voice-presets')
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data) => {
-        setVoicePresets(Array.isArray(data) ? data : (data.presets || []));
-      })
-      .catch(() => setVoicePresets([]))
-      .finally(() => setPresetsLoading(false));
-  }, []);
-
-  const handleDesignVoice = useCallback(async () => {
-    setDesigning(true);
-    setDesignError('');
+  const handleLinkVoice = useCallback(async () => {
+    const trimmed = voiceIdInput.trim();
+    if (!trimmed) return;
+    setLinking(true);
+    setLinkError('');
     try {
-      const body: Record<string, string> = {};
-      if (customMode && customDescription.trim()) {
-        body.customDescription = customDescription.trim();
-        body.gender = customGender;
-      } else if (selectedPresetId) {
-        body.presetId = selectedPresetId;
-      } else {
-        setDesignError('Select a preset or write a custom description');
-        setDesigning(false);
-        return;
-      }
-
-      const res = await fetch(`/api/influencers/${influencerId}/voice/design`, {
+      const res = await fetch(`/api/influencers/${influencerId}/voice/link`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ voiceId: trimmed }),
       });
-
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || 'Failed to design voice');
+        throw new Error(data.error || 'Failed to link voice');
       }
-
       const data = await res.json();
-      setVoicePreview({
-        previewUrl: data.previewUrl,
-        temporaryVoiceId: data.temporaryVoiceId,
-        description: data.description || customDescription || '',
-      });
-    } catch (err) {
-      setDesignError(err instanceof Error ? err.message : 'Failed to design voice');
-    } finally {
-      setDesigning(false);
-    }
-  }, [influencerId, selectedPresetId, customMode, customDescription, customGender]);
-
-  const handleApproveVoice = useCallback(async () => {
-    if (!voicePreview) return;
-    setApproving(true);
-    setApproveError('');
-    try {
-      const res = await fetch(`/api/influencers/${influencerId}/voice/approve`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          temporaryVoiceId: voicePreview.temporaryVoiceId,
-          presetId: customMode ? undefined : selectedPresetId,
-          description: voicePreview.description,
-        }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || 'Failed to approve voice');
-      }
-
-      const data = await res.json();
-      // Update the influencer record with voice data
       onInfluencerUpdate({
         ...influencer,
         voice_id: data.voiceId,
-        voice_preview_url: data.previewUrl,
-        voice_preset_id: customMode ? null : selectedPresetId,
-        voice_description: voicePreview.description,
-      } as Influencer);
-      setVoicePreview(null);
-    } catch (err) {
-      setApproveError(err instanceof Error ? err.message : 'Failed to approve voice');
-    } finally {
-      setApproving(false);
-    }
-  }, [influencerId, voicePreview, influencer, onInfluencerUpdate, customMode, selectedPresetId]);
-
-  const handleTryAgain = useCallback(() => {
-    setVoicePreview(null);
-    setApproveError('');
-  }, []);
-
-  const handleChangeVoice = useCallback(async () => {
-    setChangingVoice(true);
-    setChangeVoiceError('');
-    try {
-      const res = await fetch(`/api/influencers/${influencerId}/voice`, {
-        method: 'DELETE',
+        voice_name: data.name || null,
+        voice_description: data.description || null,
+        voice_preview_url: data.previewUrl || null,
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || 'Failed to remove voice from server');
-      }
-      // Server cleared successfully — now reset local state
-      setSelectedPresetId(null);
-      setCustomMode(false);
-      setCustomDescription('');
-      setVoicePreview(null);
-      onInfluencerUpdate({
-        ...influencer,
-        voice_id: null,
-        voice_preset_id: null,
-        voice_description: null,
-        voice_preview_url: null,
-      } as Influencer);
+      setVoiceIdInput('');
     } catch (err) {
-      setChangeVoiceError(err instanceof Error ? err.message : 'Failed to change voice');
+      setLinkError(err instanceof Error ? err.message : 'Failed to link voice');
     } finally {
-      setChangingVoice(false);
+      setLinking(false);
     }
-  }, [influencerId, influencer, onInfluencerUpdate]);
+  }, [influencerId, voiceIdInput, influencer, onInfluencerUpdate]);
+
+  const handleChangeVoice = useCallback(() => {
+    setVoiceIdInput(influencer.voice_id || '');
+    onInfluencerUpdate({
+      ...influencer,
+      voice_id: null,
+      voice_name: null,
+      voice_description: null,
+      voice_preview_url: null,
+    });
+  }, [influencer, onInfluencerUpdate]);
 
   const handleRemoveVoice = useCallback(async () => {
     setRemoving(true);
@@ -210,14 +101,12 @@ function VoiceSection({ influencer, influencerId, onInfluencerUpdate }: {
         onInfluencerUpdate({
           ...influencer,
           voice_id: null,
-          voice_preset_id: null,
+          voice_name: null,
           voice_description: null,
           voice_preview_url: null,
-        } as Influencer);
+        });
         setShowRemoveConfirm(false);
-        setSelectedPresetId(null);
-        setCustomMode(false);
-        setCustomDescription('');
+        setVoiceIdInput('');
       }
     } catch {
       // silent fail
@@ -226,31 +115,15 @@ function VoiceSection({ influencer, influencerId, onInfluencerUpdate }: {
     }
   }, [influencerId, influencer, onInfluencerUpdate]);
 
-  const handlePresetSelect = useCallback((presetId: string) => {
-    setCustomMode(false);
-    setCustomDescription('');
-    setSelectedPresetId(selectedPresetId === presetId ? null : presetId);
-    setDesignError('');
-  }, [selectedPresetId]);
+  const handleCopyVoiceId = useCallback(() => {
+    if (!influencer.voice_id) return;
+    navigator.clipboard.writeText(influencer.voice_id).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [influencer.voice_id]);
 
-  const handleCustomSelect = useCallback(() => {
-    setSelectedPresetId(null);
-    setCustomMode(true);
-    setDesignError('');
-  }, []);
-
-  // Find preset name for display
-  const voicePresetName = influencer.voice_preset_id
-    ? voicePresets.find((p) => p.id === influencer.voice_preset_id)?.name || 'Preset'
-    : 'Custom';
-
-  const selectedPresetName = selectedPresetId
-    ? voicePresets.find((p) => p.id === selectedPresetId)?.name || 'Preset'
-    : customMode ? 'Custom' : '';
-
-  const canDesign = (selectedPresetId && !customMode) || (customMode && customDescription.trim().length > 0);
-
-  // --- State C: Voice Approved ---
+  // --- Voice Linked ---
   if (hasVoice) {
     return (
       <div className="rounded-xl border border-border bg-surface p-5">
@@ -261,36 +134,29 @@ function VoiceSection({ influencer, influencerId, onInfluencerUpdate }: {
             </h2>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-lime/15 px-2.5 py-0.5 font-[family-name:var(--font-mono)] text-[10px] font-medium text-lime">
               <svg viewBox="0 0 16 16" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                <path d="M8 2v12M5 5l-2 3 2 3M11 5l2 3-2 3" />
+                <polyline points="3.5 8 6.5 11 12.5 5" />
               </svg>
-              Voice Designed
+              Linked
             </span>
           </div>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handleChangeVoice}
-              disabled={changingVoice}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 font-[family-name:var(--font-display)] text-xs font-medium text-text-secondary transition-colors hover:border-border-bright hover:text-text-primary disabled:opacity-50"
+              className="rounded-lg border border-border px-3 py-1.5 font-[family-name:var(--font-display)] text-xs font-medium text-text-secondary transition-colors hover:border-border-bright hover:text-text-primary"
             >
-              {changingVoice && (
-                <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
-                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="60" strokeDashoffset="15" strokeLinecap="round" />
-                </svg>
-              )}
-              {changingVoice ? 'Changing...' : 'Change Voice'}
+              Change Voice
             </button>
             <button
               type="button"
               onClick={() => setShowRemoveConfirm(true)}
               className="rounded-lg border border-border px-3 py-1.5 font-[family-name:var(--font-display)] text-xs font-medium text-text-muted transition-colors hover:border-magenta/40 hover:bg-magenta/5 hover:text-magenta"
             >
-              Remove Voice
+              Remove
             </button>
           </div>
         </div>
 
-        {/* Voice info */}
         <div className="rounded-lg border border-border-bright bg-surface-raised p-4">
           <div className="flex items-start gap-4">
             <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-lime/10">
@@ -299,18 +165,24 @@ function VoiceSection({ influencer, influencerId, onInfluencerUpdate }: {
               </svg>
             </div>
             <div className="min-w-0 flex-1">
-              <p className="font-[family-name:var(--font-display)] text-sm font-semibold text-text-primary">
-                {voicePresetName}
-              </p>
+              {influencer.voice_name && (
+                <p className="font-[family-name:var(--font-display)] text-sm font-semibold text-text-primary">
+                  {influencer.voice_name}
+                </p>
+              )}
               {influencer.voice_description && (
-                <p className="mt-1 text-xs leading-relaxed text-text-secondary">
+                <p className={`${influencer.voice_name ? 'mt-1' : ''} text-xs leading-relaxed text-text-secondary`}>
                   {influencer.voice_description}
+                </p>
+              )}
+              {!influencer.voice_name && !influencer.voice_description && (
+                <p className="font-[family-name:var(--font-display)] text-sm font-semibold text-text-primary">
+                  ElevenLabs Voice
                 </p>
               )}
             </div>
           </div>
 
-          {/* Audio player */}
           {influencer.voice_preview_url && (
             <div className="mt-4 rounded-lg border border-border bg-surface p-3">
               <audio
@@ -322,19 +194,35 @@ function VoiceSection({ influencer, influencerId, onInfluencerUpdate }: {
               />
             </div>
           )}
-        </div>
 
-        {/* Change voice error */}
-        {changeVoiceError && (
-          <p className="mt-3 font-[family-name:var(--font-display)] text-xs font-medium text-magenta">
-            {changeVoiceError}
-          </p>
-        )}
+          <div className="mt-3 flex items-center gap-2">
+            <span className="font-[family-name:var(--font-mono)] text-[10px] text-text-muted">
+              {influencer.voice_id}
+            </span>
+            <button
+              type="button"
+              onClick={handleCopyVoiceId}
+              className="rounded p-1 text-text-muted transition-colors hover:bg-surface-overlay hover:text-text-secondary"
+              title="Copy Voice ID"
+            >
+              {copied ? (
+                <svg viewBox="0 0 16 16" fill="none" className="h-3 w-3 text-lime" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3.5 8 6.5 11 12.5 5" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 16 16" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="5" y="5" width="8" height="8" rx="1" />
+                  <path d="M3 11V3a1 1 0 011-1h8" />
+                </svg>
+              )}
+            </button>
+          </div>
+        </div>
 
         <ConfirmDialog
           open={showRemoveConfirm}
           title="Remove Voice"
-          description={`Remove the designed voice from "${influencer.name}"? They will need a new voice before being selected for any project.`}
+          description={`Remove the linked voice from "${influencer.name}"? They will need a new voice before being selected for any project.`}
           confirmLabel="Remove Voice"
           onConfirm={handleRemoveVoice}
           onCancel={() => setShowRemoveConfirm(false)}
@@ -344,89 +232,7 @@ function VoiceSection({ influencer, influencerId, onInfluencerUpdate }: {
     );
   }
 
-  // --- State B: Voice Preview ---
-  if (hasPreview && voicePreview) {
-    return (
-      <div className="rounded-xl border border-border bg-surface p-5">
-        <h2 className="mb-4 font-[family-name:var(--font-display)] text-sm font-semibold uppercase tracking-wider text-text-muted">
-          Voice Preview
-        </h2>
-
-        <div className="rounded-lg border border-lime/20 bg-lime/5 p-4">
-          {/* Preset/description info */}
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-lime/15">
-              <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4 text-lime" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                <path d="M8 2v12M5 5l-2 3 2 3M11 5l2 3-2 3" />
-              </svg>
-            </div>
-            <div>
-              <p className="font-[family-name:var(--font-display)] text-xs font-semibold text-text-primary">
-                {selectedPresetName || 'Voice Preview'}
-              </p>
-              {voicePreview.description && (
-                <p className="mt-0.5 text-[11px] text-text-muted line-clamp-1">{voicePreview.description}</p>
-              )}
-            </div>
-          </div>
-
-          {/* Audio player */}
-          <div className="mt-3 rounded-lg border border-border bg-surface p-3">
-            <audio
-              src={voicePreview.previewUrl}
-              controls
-              autoPlay
-              className="w-full h-8 [&::-webkit-media-controls-panel]:bg-surface-raised [&::-webkit-media-controls-panel]:rounded-lg"
-              style={{ colorScheme: 'dark' }}
-            />
-          </div>
-
-          {/* Error */}
-          {approveError && (
-            <p className="mt-2 font-[family-name:var(--font-display)] text-xs font-medium text-magenta">
-              {approveError}
-            </p>
-          )}
-
-          {/* Actions */}
-          <div className="mt-4 flex items-center gap-3">
-            <button
-              type="button"
-              onClick={handleApproveVoice}
-              disabled={approving}
-              className="inline-flex items-center gap-2 rounded-lg bg-lime px-5 py-2.5 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:shadow-[0_0_24px_rgba(122,255,110,0.25)] disabled:opacity-50"
-            >
-              {approving ? (
-                <>
-                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="60" strokeDashoffset="15" strokeLinecap="round" />
-                  </svg>
-                  Approving...
-                </>
-              ) : (
-                <>
-                  <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="3.5 8 6.5 11 12.5 5" />
-                  </svg>
-                  Approve Voice
-                </>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={handleTryAgain}
-              disabled={approving}
-              className="rounded-lg border border-border px-4 py-2.5 font-[family-name:var(--font-display)] text-sm font-medium text-text-secondary transition-colors hover:border-border-bright hover:text-text-primary disabled:opacity-50"
-            >
-              Try Again
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // --- State A: No Voice (preset selection) ---
+  // --- No Voice (link input) ---
   return (
     <div className="rounded-xl border border-border bg-surface p-5">
       <div className="mb-4 flex items-center gap-2.5">
@@ -434,185 +240,67 @@ function VoiceSection({ influencer, influencerId, onInfluencerUpdate }: {
           Voice
         </h2>
         <span className="rounded-md bg-surface-overlay px-2 py-0.5 font-[family-name:var(--font-mono)] text-[10px] text-text-muted">
-          Not designed
+          Not linked
         </span>
       </div>
 
-      {presetsLoading ? (
-        <div className="flex items-center gap-3 py-6">
-          <div className="h-5 w-5 animate-spin rounded-full border-2 border-electric border-t-transparent" />
-          <span className="text-sm text-text-secondary">Loading voice presets...</span>
-        </div>
-      ) : (
-        <>
-          {/* Voice preset card grid */}
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
-            {voicePresets.map((preset) => {
-              const isSelected = selectedPresetId === preset.id && !customMode;
-              const isMale = preset.gender === 'male';
+      <p className="mb-3 text-xs text-text-secondary">
+        Design a voice in{' '}
+        <a
+          href="https://elevenlabs.io/app/voice-lab"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-electric hover:underline"
+        >
+          ElevenLabs Voice Lab
+        </a>
+        , then paste the Voice ID here.
+      </p>
 
-              return (
-                <button
-                  key={preset.id}
-                  type="button"
-                  onClick={() => handlePresetSelect(preset.id)}
-                  className={`group relative rounded-lg border-2 p-3 text-left transition-all ${
-                    isSelected
-                      ? 'border-electric bg-electric/5 ring-1 ring-electric/30'
-                      : 'border-border bg-surface-raised hover:border-border-bright hover:bg-surface-overlay'
-                  }`}
-                >
-                  {/* Category affinity badges */}
-                  {preset.category_affinity && preset.category_affinity.length > 0 && (
-                    <div className="mb-1.5 flex flex-wrap gap-1">
-                      {preset.category_affinity.slice(0, 2).map((cat) => (
-                        <span
-                          key={cat}
-                          className="rounded-full bg-surface-overlay px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-[9px] text-text-muted"
-                        >
-                          {cat}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Title + gender icon */}
-                  <div className="flex items-center gap-1.5">
-                    <svg viewBox="0 0 16 16" fill="none" className={`h-3 w-3 flex-shrink-0 ${isMale ? 'text-electric' : 'text-magenta'}`} stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                      {isMale ? (
-                        <>
-                          <circle cx="6.5" cy="9.5" r="4" />
-                          <path d="M10 6l4-4M14 2v3.5M10.5 5.5H14" />
-                        </>
-                      ) : (
-                        <>
-                          <circle cx="8" cy="6" r="4" />
-                          <path d="M8 10v4M6 12.5h4" />
-                        </>
-                      )}
-                    </svg>
-                    <p className="font-[family-name:var(--font-display)] text-xs font-semibold text-text-primary">
-                      {preset.name}
-                    </p>
-                  </div>
-
-                  {/* Description */}
-                  <p className="mt-1 text-[11px] leading-relaxed text-text-muted line-clamp-2">
-                    {preset.description}
-                  </p>
-
-                  {/* Selection checkmark */}
-                  {isSelected && (
-                    <div className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-electric">
-                      <svg viewBox="0 0 16 16" fill="none" className="h-3 w-3 text-void" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="3.5 8 6.5 11 12.5 5" />
-                      </svg>
-                    </div>
-                  )}
-                </button>
-              );
-            })}
-
-            {/* + Custom card */}
-            <button
-              type="button"
-              onClick={handleCustomSelect}
-              className={`rounded-lg border-2 border-dashed p-3 text-left transition-all ${
-                customMode
-                  ? 'border-electric bg-electric/5'
-                  : 'border-border-bright bg-surface-raised hover:border-electric/50 hover:bg-surface-overlay'
-              }`}
-            >
-              <div className="flex items-center gap-1.5">
-                <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5 text-text-muted" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
-                  <line x1="8" y1="3" x2="8" y2="13" />
-                  <line x1="3" y1="8" x2="13" y2="8" />
-                </svg>
-                <p className="font-[family-name:var(--font-display)] text-xs font-semibold text-text-secondary">
-                  Custom
-                </p>
-              </div>
-              <p className="mt-1 text-[11px] text-text-muted">
-                Describe the voice yourself
-              </p>
-            </button>
-          </div>
-
-          {/* Custom mode: description + gender selector */}
-          {customMode && (
-            <div className="mt-3 space-y-3">
-              <textarea
-                value={customDescription}
-                onChange={(e) => setCustomDescription(e.target.value)}
-                rows={3}
-                placeholder="Describe the voice: tone, pitch, energy, personality..."
-                className="block w-full rounded-lg border border-border bg-surface-raised px-3 py-2.5 text-xs text-text-primary placeholder:text-text-muted/60 transition-all focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric resize-none"
-              />
-              <div className="flex items-center gap-3">
-                <span className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-                  Gender
-                </span>
-                <div className="flex gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setCustomGender('female')}
-                    className={`rounded-md px-3 py-1 text-xs font-medium transition-all ${
-                      customGender === 'female'
-                        ? 'bg-magenta/15 text-magenta border border-magenta/30'
-                        : 'bg-surface-raised text-text-muted border border-border hover:border-border-bright'
-                    }`}
-                  >
-                    Female
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCustomGender('male')}
-                    className={`rounded-md px-3 py-1 text-xs font-medium transition-all ${
-                      customGender === 'male'
-                        ? 'bg-electric/15 text-electric border border-electric/30'
-                        : 'bg-surface-raised text-text-muted border border-border hover:border-border-bright'
-                    }`}
-                  >
-                    Male
-                  </button>
-                </div>
-              </div>
-            </div>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={voiceIdInput}
+          onChange={(e) => {
+            setVoiceIdInput(e.target.value);
+            setLinkError('');
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && voiceIdInput.trim()) handleLinkVoice();
+          }}
+          placeholder="e.g. JBFqnCBsd6RMkjVDRZzb"
+          className="flex-1 rounded-lg border border-border bg-surface-raised px-3 py-2.5 font-[family-name:var(--font-mono)] text-xs text-text-primary placeholder:text-text-muted/40 transition-all focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric/20"
+        />
+        <button
+          type="button"
+          onClick={handleLinkVoice}
+          disabled={!voiceIdInput.trim() || linking}
+          className="inline-flex items-center gap-2 rounded-lg bg-electric px-4 py-2.5 font-[family-name:var(--font-display)] text-xs font-semibold text-void transition-all hover:shadow-[0_0_24px_rgba(0,240,255,0.25)] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {linking ? (
+            <>
+              <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="60" strokeDashoffset="15" strokeLinecap="round" />
+              </svg>
+              Linking...
+            </>
+          ) : (
+            <>
+              <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6.5 9.5l3-3" />
+                <path d="M9 3.5l1.5-1.5a2.12 2.12 0 013 3L12 6.5" />
+                <path d="M7 9.5L5.5 11a2.12 2.12 0 01-3-3L4 6.5" />
+              </svg>
+              Link Voice
+            </>
           )}
+        </button>
+      </div>
 
-          {/* Design error */}
-          {designError && (
-            <p className="mt-2 font-[family-name:var(--font-display)] text-xs font-medium text-magenta">
-              {designError}
-            </p>
-          )}
-
-          {/* Design Voice button */}
-          <div className="mt-4">
-            <button
-              type="button"
-              onClick={handleDesignVoice}
-              disabled={!canDesign || designing}
-              className="inline-flex items-center gap-2 rounded-lg bg-electric px-5 py-2.5 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:shadow-[0_0_24px_rgba(0,229,160,0.25)] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {designing ? (
-                <>
-                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="60" strokeDashoffset="15" strokeLinecap="round" />
-                  </svg>
-                  Designing voice...
-                </>
-              ) : (
-                <>
-                  <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M8 2v12M5 5l-2 3 2 3M11 5l2 3-2 3" />
-                  </svg>
-                  Design Voice
-                </>
-              )}
-            </button>
-          </div>
-        </>
+      {linkError && (
+        <p className="mt-2 font-[family-name:var(--font-display)] text-xs font-medium text-magenta">
+          {linkError}
+        </p>
       )}
     </div>
   );
@@ -707,10 +395,7 @@ export function InfluencerDetail({ influencerId }: { influencerId: string }) {
     setUploading(true);
     setUploadStatus('idle');
     try {
-      // Upload directly to storage
       const { path } = await uploadToStorage(file, 'influencer', influencerId);
-
-      // Update influencer record with storage path
       const res = await fetch(`/api/influencers/${influencerId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -783,23 +468,14 @@ export function InfluencerDetail({ influencerId }: { influencerId: string }) {
       <div className="animate-fade-in-up">
         <div className="rounded-xl border border-border bg-surface p-12 text-center">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-surface-raised">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              className="h-8 w-8 text-text-muted"
-              stroke="currentColor"
-              strokeWidth={1.5}
-            >
+            <svg viewBox="0 0 24 24" fill="none" className="h-8 w-8 text-text-muted" stroke="currentColor" strokeWidth={1.5}>
               <circle cx="12" cy="12" r="10" />
               <line x1="15" y1="9" x2="9" y2="15" />
               <line x1="9" y1="9" x2="15" y2="15" />
             </svg>
           </div>
           <p className="mt-4 text-text-secondary">Influencer not found.</p>
-          <Link
-            href="/influencers"
-            className="mt-4 inline-flex text-sm text-electric hover:underline"
-          >
+          <Link href="/influencers" className="mt-4 inline-flex text-sm text-electric hover:underline">
             Back to Influencers
           </Link>
         </div>
@@ -809,60 +485,38 @@ export function InfluencerDetail({ influencerId }: { influencerId: string }) {
 
   return (
     <div className="animate-fade-in-up space-y-8">
-      {/* Back link */}
       <Link
         href="/influencers"
         className="inline-flex items-center gap-2 font-[family-name:var(--font-display)] text-sm text-text-secondary transition-colors hover:text-electric"
       >
-        <svg
-          viewBox="0 0 16 16"
-          fill="none"
-          className="h-4 w-4"
-          stroke="currentColor"
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
+        <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
           <line x1="12" y1="8" x2="4" y2="8" />
           <polyline points="8 4 4 8 8 12" />
         </svg>
         Influencers
       </Link>
 
-      {/* Delete error banner */}
       {deleteError && (
         <div className="rounded-xl border border-magenta/30 bg-magenta/5 p-4">
-          <p className="font-[family-name:var(--font-display)] text-sm font-medium text-magenta">
-            {deleteError.message}
-          </p>
+          <p className="font-[family-name:var(--font-display)] text-sm font-medium text-magenta">{deleteError.message}</p>
           {deleteError.projects.length > 0 && (
             <ul className="mt-3 space-y-1.5">
               {deleteError.projects.map((p) => (
                 <li key={p.id} className="flex items-center gap-2">
-                  <Link
-                    href={`/projects/${p.id}`}
-                    className="font-[family-name:var(--font-display)] text-sm text-electric hover:underline"
-                  >
+                  <Link href={`/projects/${p.id}`} className="font-[family-name:var(--font-display)] text-sm text-electric hover:underline">
                     {p.name || 'Untitled project'}
                   </Link>
-                  <span className="rounded-md bg-surface-overlay px-2 py-0.5 font-[family-name:var(--font-mono)] text-[10px] text-text-muted">
-                    {p.status}
-                  </span>
+                  <span className="rounded-md bg-surface-overlay px-2 py-0.5 font-[family-name:var(--font-mono)] text-[10px] text-text-muted">{p.status}</span>
                 </li>
               ))}
             </ul>
           )}
-          <button
-            type="button"
-            onClick={() => setDeleteError(null)}
-            className="mt-3 font-[family-name:var(--font-display)] text-xs text-text-muted hover:text-text-secondary"
-          >
+          <button type="button" onClick={() => setDeleteError(null)} className="mt-3 font-[family-name:var(--font-display)] text-xs text-text-muted hover:text-text-secondary">
             Dismiss
           </button>
         </div>
       )}
 
-      {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           {editMode ? (
@@ -870,68 +524,35 @@ export function InfluencerDetail({ influencerId }: { influencerId: string }) {
               type="text"
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleSave();
-                if (e.key === 'Escape') cancelEditMode();
-              }}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') cancelEditMode(); }}
               className="w-full rounded-lg border border-electric/30 bg-surface-raised px-3 py-2 font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight text-text-primary outline-none focus:border-electric/60 focus:ring-1 focus:ring-electric/30"
               autoFocus
             />
           ) : (
-            <h1 className="font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight text-text-primary">
-              {influencer.name}
-            </h1>
+            <h1 className="font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight text-text-primary">{influencer.name}</h1>
           )}
           <div className="mt-2 flex items-center gap-3">
-            <span className="rounded-md bg-surface-overlay px-2.5 py-1 font-[family-name:var(--font-mono)] text-[11px] text-text-secondary">
-              {influencer.status}
-            </span>
+            <span className="rounded-md bg-surface-overlay px-2.5 py-1 font-[family-name:var(--font-mono)] text-[11px] text-text-secondary">{influencer.status}</span>
             {influencer.created_at && (
-              <span className="font-[family-name:var(--font-mono)] text-[11px] text-text-muted">
-                Created {formatDate(influencer.created_at)}
-              </span>
+              <span className="font-[family-name:var(--font-mono)] text-[11px] text-text-muted">Created {formatDate(influencer.created_at)}</span>
             )}
           </div>
         </div>
         <div className="flex flex-shrink-0 items-center gap-2">
           {editMode ? (
             <>
-              <button
-                type="button"
-                onClick={cancelEditMode}
-                disabled={saving}
-                className="rounded-lg border border-border px-3 py-2 font-[family-name:var(--font-display)] text-xs font-medium text-text-secondary transition-colors hover:border-border-bright hover:text-text-primary disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={saving || !editName.trim()}
-                className="rounded-lg border border-electric/30 bg-electric/10 px-3 py-2 font-[family-name:var(--font-display)] text-xs font-medium text-electric transition-colors hover:bg-electric/20 disabled:opacity-50"
-              >
-                {saving ? 'Saving...' : 'Save'}
-              </button>
+              <button type="button" onClick={cancelEditMode} disabled={saving} className="rounded-lg border border-border px-3 py-2 font-[family-name:var(--font-display)] text-xs font-medium text-text-secondary transition-colors hover:border-border-bright hover:text-text-primary disabled:opacity-50">Cancel</button>
+              <button type="button" onClick={handleSave} disabled={saving || !editName.trim()} className="rounded-lg border border-electric/30 bg-electric/10 px-3 py-2 font-[family-name:var(--font-display)] text-xs font-medium text-electric transition-colors hover:bg-electric/20 disabled:opacity-50">{saving ? 'Saving...' : 'Save'}</button>
             </>
           ) : (
             <>
-              <button
-                type="button"
-                onClick={enterEditMode}
-                className="rounded-lg border border-border p-2.5 text-text-muted transition-all hover:border-electric/40 hover:bg-electric/5 hover:text-electric"
-                title="Edit influencer"
-              >
+              <button type="button" onClick={enterEditMode} className="rounded-lg border border-border p-2.5 text-text-muted transition-all hover:border-electric/40 hover:bg-electric/5 hover:text-electric" title="Edit influencer">
                 <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
                   <path d="M11.5 1.5l3 3-9 9H2.5v-3l9-9z" />
                   <path d="M9.5 3.5l3 3" />
                 </svg>
               </button>
-              <button
-                type="button"
-                onClick={() => setShowDeleteConfirm(true)}
-                className="rounded-lg border border-border p-2.5 text-text-muted transition-all hover:border-magenta/40 hover:bg-magenta/5 hover:text-magenta"
-                title="Delete influencer"
-              >
+              <button type="button" onClick={() => setShowDeleteConfirm(true)} className="rounded-lg border border-border p-2.5 text-text-muted transition-all hover:border-magenta/40 hover:bg-magenta/5 hover:text-magenta" title="Delete influencer">
                 <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
                   <path d="M2 4h12" />
                   <path d="M5 4V2.5A.5.5 0 015.5 2h5a.5.5 0 01.5.5V4" />
@@ -945,90 +566,38 @@ export function InfluencerDetail({ influencerId }: { influencerId: string }) {
         </div>
       </div>
 
-      {/* Base Image */}
       <div className="rounded-xl border border-border bg-surface p-5">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-[family-name:var(--font-display)] text-sm font-semibold uppercase tracking-wider text-text-muted">
-            Reference Image
-          </h2>
+          <h2 className="font-[family-name:var(--font-display)] text-sm font-semibold uppercase tracking-wider text-text-muted">Reference Image</h2>
           <div className="flex items-center gap-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleImageSelect}
-              className="hidden"
-            />
+            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
             {previewUrl ? (
               <>
-                <button
-                  type="button"
-                  onClick={handleCancelPreview}
-                  disabled={uploading}
-                  className="rounded-lg border border-border px-3 py-1.5 font-[family-name:var(--font-display)] text-xs font-medium text-text-secondary transition-colors hover:border-border-bright hover:text-text-primary disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleImageUpload}
-                  disabled={uploading}
-                  className="rounded-lg border border-electric/30 bg-electric/10 px-3 py-1.5 font-[family-name:var(--font-display)] text-xs font-medium text-electric transition-colors hover:bg-electric/20 disabled:opacity-50"
-                >
-                  {uploading ? 'Uploading...' : 'Confirm Upload'}
-                </button>
+                <button type="button" onClick={handleCancelPreview} disabled={uploading} className="rounded-lg border border-border px-3 py-1.5 font-[family-name:var(--font-display)] text-xs font-medium text-text-secondary transition-colors hover:border-border-bright hover:text-text-primary disabled:opacity-50">Cancel</button>
+                <button type="button" onClick={handleImageUpload} disabled={uploading} className="rounded-lg border border-electric/30 bg-electric/10 px-3 py-1.5 font-[family-name:var(--font-display)] text-xs font-medium text-electric transition-colors hover:bg-electric/20 disabled:opacity-50">{uploading ? 'Uploading...' : 'Confirm Upload'}</button>
               </>
             ) : (
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="rounded-lg border border-border px-3 py-1.5 font-[family-name:var(--font-display)] text-xs font-medium text-text-secondary transition-colors hover:border-electric/40 hover:bg-electric/5 hover:text-electric"
-              >
+              <button type="button" onClick={() => fileInputRef.current?.click()} className="rounded-lg border border-border px-3 py-1.5 font-[family-name:var(--font-display)] text-xs font-medium text-text-secondary transition-colors hover:border-electric/40 hover:bg-electric/5 hover:text-electric">
                 {influencer.image_url ? 'Replace Image' : 'Upload Image'}
               </button>
             )}
           </div>
         </div>
-
-        {/* Upload status feedback */}
-        {uploadStatus === 'success' && (
-          <p className="mb-2 font-[family-name:var(--font-display)] text-xs font-medium text-lime">
-            Image updated successfully
-          </p>
-        )}
-        {uploadStatus === 'error' && (
-          <p className="mb-2 font-[family-name:var(--font-display)] text-xs font-medium text-magenta">
-            Failed to upload image
-          </p>
-        )}
-
-        {/* Preview of new image (before confirming) */}
+        {uploadStatus === 'success' && <p className="mb-2 font-[family-name:var(--font-display)] text-xs font-medium text-lime">Image updated successfully</p>}
+        {uploadStatus === 'error' && <p className="mb-2 font-[family-name:var(--font-display)] text-xs font-medium text-magenta">Failed to upload image</p>}
         {previewUrl && (
           <div className="mb-4 rounded-lg border-2 border-dashed border-electric/40 bg-electric/5 p-3">
-            <p className="mb-2 font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-electric">
-              New Image Preview
-            </p>
-            <img
-              src={previewUrl}
-              alt="New reference preview"
-              className="max-h-64 rounded-lg object-contain"
-            />
+            <p className="mb-2 font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-electric">New Image Preview</p>
+            <img src={previewUrl} alt="New reference preview" className="max-h-64 rounded-lg object-contain" />
           </div>
         )}
-
-        {/* Current image */}
         {influencer.image_url ? (
           <div className="relative overflow-hidden rounded-lg border border-border-bright bg-surface-raised">
-            <img
-              src={influencer.image_url}
-              alt={`${influencer.name} reference`}
-              className="w-full max-w-lg object-contain"
-            />
+            <img src={influencer.image_url} alt={`${influencer.name} reference`} className="w-full max-w-lg object-contain" />
             <div className="absolute right-0 top-0 h-16 w-16">
               <div className="absolute right-0 top-0 h-px w-8 bg-gradient-to-l from-magenta/50 to-transparent" />
               <div className="absolute right-0 top-0 h-8 w-px bg-gradient-to-b from-magenta/50 to-transparent" />
             </div>
-            {/* 4K badge — cost_usd > 0 means image was auto-upscaled */}
             {influencer.cost_usd && parseFloat(influencer.cost_usd) > 0 && (
               <span className="absolute left-3 top-3 rounded border border-electric/30 bg-electric/90 px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-[10px] font-bold leading-none text-void shadow-sm shadow-electric/20">4K</span>
             )}
@@ -1036,15 +605,7 @@ export function InfluencerDetail({ influencerId }: { influencerId: string }) {
         ) : (
           <div className="flex h-64 items-center justify-center rounded-lg border border-dashed border-border-bright bg-surface-raised">
             <div className="text-center">
-              <svg
-                viewBox="0 0 32 32"
-                fill="none"
-                className="mx-auto h-10 w-10 text-text-muted"
-                stroke="currentColor"
-                strokeWidth={1.5}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
+              <svg viewBox="0 0 32 32" fill="none" className="mx-auto h-10 w-10 text-text-muted" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
                 <rect x="4" y="4" width="24" height="24" rx="3" />
                 <circle cx="11" cy="13" r="3" />
                 <path d="M28 22l-6-6-14 14" />
@@ -1055,104 +616,63 @@ export function InfluencerDetail({ influencerId }: { influencerId: string }) {
         )}
       </div>
 
-      {/* Voice Section */}
-      <VoiceSection
-        influencer={influencer}
-        influencerId={influencerId}
-        onInfluencerUpdate={setInfluencer}
-      />
+      <VoiceSection influencer={influencer} influencerId={influencerId} onInfluencerUpdate={setInfluencer} />
 
-      {/* Persona */}
       <div className="rounded-xl border border-border bg-surface p-5">
-        <h2 className="mb-3 font-[family-name:var(--font-display)] text-sm font-semibold uppercase tracking-wider text-text-muted">
-          Persona
-        </h2>
+        <h2 className="mb-3 font-[family-name:var(--font-display)] text-sm font-semibold uppercase tracking-wider text-text-muted">Persona</h2>
         {editMode ? (
           <textarea
             value={editPersona}
             onChange={(e) => setEditPersona(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') cancelEditMode();
-            }}
+            onKeyDown={(e) => { if (e.key === 'Escape') cancelEditMode(); }}
             rows={5}
             placeholder="Describe this influencer's persona, style, and personality..."
             className="w-full resize-y rounded-lg border border-electric/30 bg-surface-raised px-3 py-2 text-sm leading-relaxed text-text-primary outline-none placeholder:text-text-muted/50 focus:border-electric/60 focus:ring-1 focus:ring-electric/30"
           />
         ) : influencer.persona ? (
-          <p className="text-sm leading-relaxed text-text-secondary">
-            {influencer.persona}
-          </p>
+          <p className="text-sm leading-relaxed text-text-secondary">{influencer.persona}</p>
         ) : (
           <p className="text-sm italic text-text-muted">No persona description provided</p>
         )}
       </div>
 
-      {/* Metadata */}
       <div className="rounded-xl border border-border bg-surface p-5">
-        <h2 className="mb-4 font-[family-name:var(--font-display)] text-sm font-semibold uppercase tracking-wider text-text-muted">
-          Details
-        </h2>
+        <h2 className="mb-4 font-[family-name:var(--font-display)] text-sm font-semibold uppercase tracking-wider text-text-muted">Details</h2>
         <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
           <div>
-            <dt className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-              ID
-            </dt>
-            <dd className="mt-1 font-[family-name:var(--font-mono)] text-xs text-text-secondary">
-              {influencer.id}
-            </dd>
+            <dt className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">ID</dt>
+            <dd className="mt-1 font-[family-name:var(--font-mono)] text-xs text-text-secondary">{influencer.id}</dd>
           </div>
           <div>
-            <dt className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-              Status
-            </dt>
+            <dt className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">Status</dt>
             <dd className="mt-1 text-sm text-text-primary">{influencer.status}</dd>
           </div>
           <div>
-            <dt className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-              Has Image
-            </dt>
+            <dt className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">Has Image</dt>
             <dd className="mt-1 text-sm text-text-primary">
               {influencer.image_url ? (
-                influencer.cost_usd && parseFloat(influencer.cost_usd) > 0 ? (
-                  <span className="text-electric">Yes (4K)</span>
-                ) : (
-                  <span className="text-lime">Yes</span>
-                )
+                influencer.cost_usd && parseFloat(influencer.cost_usd) > 0 ? <span className="text-electric">Yes (4K)</span> : <span className="text-lime">Yes</span>
               ) : (
                 <span className="text-text-muted">No</span>
               )}
             </dd>
           </div>
           <div>
-            <dt className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-              Has Voice
-            </dt>
+            <dt className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">Has Voice</dt>
             <dd className="mt-1 text-sm text-text-primary">
-              {influencer.voice_id ? (
-                <span className="text-lime">Yes</span>
-              ) : (
-                <span className="text-text-muted">No</span>
-              )}
+              {influencer.voice_id ? <span className="text-lime">Yes</span> : <span className="text-text-muted">No</span>}
             </dd>
           </div>
           {influencer.created_at && (
             <div>
-              <dt className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-                Created
-              </dt>
-              <dd className="mt-1 text-sm text-text-secondary">
-                {formatDate(influencer.created_at)}
-              </dd>
+              <dt className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">Created</dt>
+              <dd className="mt-1 text-sm text-text-secondary">{formatDate(influencer.created_at)}</dd>
             </div>
           )}
           {influencer.updated_at && (
             <div>
-              <dt className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-                Updated
-              </dt>
-              <dd className="mt-1 text-sm text-text-secondary">
-                {formatDate(influencer.updated_at)}
-              </dd>
+              <dt className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">Updated</dt>
+              <dd className="mt-1 text-sm text-text-secondary">{formatDate(influencer.updated_at)}</dd>
             </div>
           )}
         </dl>

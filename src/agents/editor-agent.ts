@@ -151,38 +151,82 @@ export class EditorAgent extends BaseAgent {
     const validVideoCount = Object.keys(modifications).filter(k => k.startsWith('Video-')).length;
     if (validVideoCount === 0) throw new Error('No valid video assets to compose after URL validation');
 
-    // 3. Start Creatomate render
-    this.log('Starting Creatomate render...');
-    const render = await this.creatomate.renderVideo({
-      templateId: CREATOMATE_TEMPLATE_ID,
-      modifications,
-      maxWidth: RESOLUTION.width,
-      maxHeight: RESOLUTION.height,
-    });
+    // 3. Start Creatomate render + poll with retry logic
+    //    2 retries with exponential backoff (15s, 30s) to protect $5-7 of prior API investment
+    const maxAttempts = 3;
+    const retryDelays = [15000, 30000]; // exponential backoff: 15s, 30s
+    let lastError: Error | null = null;
+    let finalResult: { id: string; url?: string } | null = null;
 
-    // 4. Create asset row for final video
-    await this.supabase.from('asset').insert({
-      project_id: projectId,
-      type: 'final_video',
-      provider: 'creatomate',
-      provider_task_id: render.id,
-      status: 'generating',
-      cost_usd: API_COSTS.creatomateRender,
-    });
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        if (attempt > 1) {
+          const delayMs = retryDelays[attempt - 2];
+          this.log(`Retry ${attempt - 1}/${maxAttempts - 1} for Creatomate render after ${delayMs / 1000}s delay...`);
+          await this.logEvent(projectId, 'render_retry', 'editing', {
+            attempt,
+            maxAttempts,
+            error: lastError?.message ?? 'unknown',
+            delayMs,
+          });
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
 
-    // 5. Poll until complete
-    this.log(`Polling Creatomate render ${render.id}...`);
-    const result = await this.creatomate.pollRender(render.id);
+        this.log(`Starting Creatomate render (attempt ${attempt}/${maxAttempts})...`);
+        const render = await this.creatomate.renderVideo({
+          templateId: CREATOMATE_TEMPLATE_ID,
+          modifications,
+          maxWidth: RESOLUTION.width,
+          maxHeight: RESOLUTION.height,
+        });
 
-    // 6. Update asset with final URL
+        // Create asset row for final video (only on first attempt; clean up stale rows on retries)
+        if (attempt === 1) {
+          await this.supabase.from('asset').insert({
+            project_id: projectId,
+            type: 'final_video',
+            provider: 'creatomate',
+            provider_task_id: render.id,
+            status: 'generating',
+            cost_usd: API_COSTS.creatomateRender,
+          });
+        } else {
+          // Update the existing asset row with the new render task ID
+          await this.supabase
+            .from('asset')
+            .update({ provider_task_id: render.id, status: 'generating' })
+            .eq('project_id', projectId)
+            .eq('type', 'final_video')
+            .eq('provider', 'creatomate');
+        }
+
+        // Poll until complete
+        this.log(`Polling Creatomate render ${render.id}...`);
+        const result = await this.creatomate.pollRender(render.id);
+
+        finalResult = { id: render.id, url: result.url };
+        lastError = null;
+        break;
+
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        this.log(`Creatomate render failed (attempt ${attempt}/${maxAttempts}): ${lastError.message}`);
+      }
+    }
+
+    if (lastError || !finalResult) {
+      throw new Error(`Creatomate render failed after ${maxAttempts} attempts: ${lastError?.message ?? 'unknown error'}`);
+    }
+
+    // 4. Update asset with final URL
     await this.supabase
       .from('asset')
-      .update({ url: result.url || '', status: 'completed' })
-      .eq('provider_task_id', render.id);
+      .update({ url: finalResult.url || '', status: 'completed' })
+      .eq('provider_task_id', finalResult.id);
 
     await this.trackCost(projectId, API_COSTS.creatomateRender);
     const durationMs = Date.now() - stageStart;
     await this.logEvent(projectId, 'stage_complete', 'editing', { durationMs });
-    this.log(`Editing complete for project ${projectId}: ${result.url}`);
+    this.log(`Editing complete for project ${projectId}: ${finalResult.url}`);
   }
 }
