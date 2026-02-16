@@ -757,6 +757,37 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [ ] Serializer detects old string format vs new StructuredPrompt in `scene.visual_prompt`
 - [ ] Existing projects continue working without migration
 
+#### R1.5.20 - Influencer Voice Design System
+**Priority:** P0 - Critical
+**Effort:** Medium
+**Spec:** `docs/plans/2026-02-16-influencer-voice-design-system.md`
+**Depends on:** None (can start immediately)
+**Why:** Voice is currently a pipeline side effect — derived from a broken `VOICE_MAPPING[product_category]` lookup that always falls back to "pharmacist." Every influencer sounds the same regardless of persona. Voice should be a first-class influencer attribute: designed via ElevenLabs Voice Design with user-approved presets, stored permanently, and reused across projects. Kling native audio is muted in the final render — only ElevenLabs TTS is heard. Fixes Gap 3 (voice mapping mismatch) from the pipeline analysis.
+
+**Schema:**
+- [ ] `voice_preset` table (~8 system presets: Trusted Expert, Energetic Creator, Calm Reviewer, Big Sister, Hype Man, Wellness Guide, Street Smart, Trendsetter) + custom user presets
+- [ ] `influencer` table: add `voice_id`, `voice_preset_id` FK, `voice_description`, `voice_preview_url` columns
+
+**Backend:**
+- [ ] `GET /api/voice-presets` — list all presets
+- [ ] `POST /api/voice-presets` — create custom preset
+- [ ] `DELETE /api/voice-presets/[id]` — delete custom preset (system presets immutable)
+- [ ] `POST /api/influencers/[id]/voice/design` — call ElevenLabs Voice Design, return preview audio + temporary voice ID
+- [ ] `POST /api/influencers/[id]/voice/approve` — save voice permanently to ElevenLabs + influencer record
+- [ ] `DELETE /api/influencers/[id]/voice` — clear voice (influencer becomes ineligible for selection)
+- [ ] `POST /api/projects/[id]/select-influencer` — hard gate: reject if `influencer.voice_id` is null
+- [ ] `GET /api/influencers?hasVoice=true` — filter by voice presence
+- [ ] VoiceoverAgent: remove `VOICE_MAPPING`, `FALLBACK_VOICES`, `resolveVoice()`, `isVoiceValid()`. Replace with direct `influencer.voice_id` read.
+- [ ] EditorAgent: mute Kling video audio (`volume: 0` on Video-1..4 Creatomate modifications)
+
+**Frontend:**
+- [ ] Influencer page: voice preset card grid (same pattern as scene/interaction presets), "+ Custom" option
+- [ ] "Design Voice" button → preview audio player → approve/regenerate
+- [ ] Voice badge on influencer cards + play preview button
+- [ ] Influencer selection gate: filter `hasImage=true&hasVoice=true`, voice preview on selection cards
+
+**Cost:** ~$0.01 per voice design (one-time per influencer). TTS cost unchanged ($0.20/video).
+
 ---
 
 ### Tier 2: Make It Actually Convert (Quality & conversion optimization)
@@ -991,6 +1022,7 @@ POLISH     Tier 1.5: UX Hardening
            R1.5.15 Project sequential numbering (PROJECT-N)
            R1.5.16 Video Model Selection & Pipeline Abstraction (backend done, frontend selector + 2 agents remaining)
            R1.5.19 Structured Prompt Schema (depends on R1.5.16 — uses model-specific negative prompts)
+           R1.5.20 Influencer Voice Design System (no deps — voice as first-class influencer attribute, mute Kling audio)
 
 NEXT       Tier 2: Quality & Conversion
            R2.0 Performance Tracking ✅ DONE (backend) ──→ R2.4 Product Images ✅ DONE (backend) ──→ R2.3 Avatar Consistency ──→ R2.1 Hook Testing ──→ R2.2 Trends
