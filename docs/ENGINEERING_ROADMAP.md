@@ -193,6 +193,17 @@ Influencer `<select>` options displayed the entire `persona` field (full appeara
 - Injected concrete pose cues into user prompt for both edit and text-to-image paths
 - Each segment now gets distinct start/end pose directions regardless of energy arc values
 
+#### B0.19 - Per-Segment Keyframe Regeneration Broken (Missing Endpoint)
+**Severity:** High (user-facing button does nothing)
+**Scope:** Backend
+**Why:** The "Regenerate" button on failed/rejected keyframe assets calls `POST /api/projects/[id]/assets/regenerate` with `{ assetId }`, but **this API route does not exist** — there is no `src/app/api/projects/[id]/assets/regenerate/route.ts` file. The request silently 404s. The frontend already handles the UI correctly (shows button, calls endpoint, re-fetches assets), so only the backend needs to be built.
+
+**Backend (needs implementation):**
+- [ ] Create `src/app/api/projects/[id]/assets/regenerate/route.ts` — POST handler that accepts `{ assetId }`, validates asset belongs to project, enqueues a BullMQ job to regenerate that single keyframe (start or end) for the given scene
+- [ ] Worker handler for single-keyframe regeneration — reuses CastingAgent's per-segment generation logic for one asset, sets status back to `generating`, replaces URL on completion
+
+**Frontend:** No changes needed — `asset-review.tsx` already calls the endpoint correctly.
+
 ---
 
 ### Tier 1: Complete the Core Pipeline (Ship a working end-to-end product)
@@ -599,7 +610,7 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] Project detail header (`project-detail.tsx`) — display `PROJECT-N` prominently in header
 - [x] Project list search — allow searching by project number (e.g., "14" or "PROJECT-14")
 
-#### R1.5.16 - Video Model Selection & Pipeline Abstraction
+#### R1.5.16 - Video Model Selection & Pipeline Abstraction 🔧 IN PROGRESS
 **Priority:** P0 - Critical
 **Effort:** Large
 **Spec:** `docs/plans/2026-02-15-video-model-selection-design.md`
