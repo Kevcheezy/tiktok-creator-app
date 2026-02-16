@@ -13,6 +13,7 @@ interface ProjectCardProps {
     status: string;
     created_at: string | null;
     cost_usd: string | null;
+    error_message: string | null;
   };
   onDelete?: (id: string) => void;
 }
@@ -89,6 +90,13 @@ export function ProjectCard({ project, onDelete }: ProjectCardProps) {
             </span>
           )}
         </div>
+
+        {/* Error message for failed projects */}
+        {project.status === 'failed' && project.error_message && (
+          <p className="text-[11px] text-magenta/80 line-clamp-1 mt-1">
+            {project.error_message}
+          </p>
+        )}
 
         {/* Footer */}
         <div className="mt-3 flex items-center justify-between">

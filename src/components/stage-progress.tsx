@@ -39,7 +39,10 @@ function formatElapsed(seconds: number): string {
 export function StageProgress({ projectId, stage, color = 'magenta' }: StageProgressProps) {
   const [progress, setProgress] = useState<ProgressData | null>(null);
   const [elapsed, setElapsed] = useState(0);
+  const [connectionWarning, setConnectionWarning] = useState(false);
   const startTimeRef = useRef<number | null>(null);
+  const failCountRef = useRef(0);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchProgress = useCallback(async () => {
     try {
@@ -47,20 +50,39 @@ export function StageProgress({ projectId, stage, color = 'magenta' }: StageProg
       if (res.ok) {
         const data = await res.json();
         setProgress(data);
+        failCountRef.current = 0;
+        setConnectionWarning(false);
         if (data.startedAt && !startTimeRef.current) {
           startTimeRef.current = new Date(data.startedAt).getTime();
         }
+      } else {
+        failCountRef.current++;
+        if (failCountRef.current >= 5) setConnectionWarning(true);
       }
     } catch {
-      // silently fail
+      failCountRef.current++;
+      if (failCountRef.current >= 5) setConnectionWarning(true);
     }
   }, [projectId]);
 
-  // Poll progress every 3 seconds
+  // Poll progress with exponential backoff on failure
   useEffect(() => {
-    fetchProgress();
-    const interval = setInterval(fetchProgress, 3000);
-    return () => clearInterval(interval);
+    let cancelled = false;
+
+    async function poll() {
+      await fetchProgress();
+      if (cancelled) return;
+      const delay = failCountRef.current > 0
+        ? Math.min(3000 * Math.pow(2, failCountRef.current), 30000)
+        : 3000;
+      timeoutRef.current = setTimeout(poll, delay);
+    }
+
+    poll();
+    return () => {
+      cancelled = true;
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
   }, [fetchProgress]);
 
   // Update elapsed time every second (client-side)
@@ -178,6 +200,13 @@ export function StageProgress({ projectId, stage, color = 'magenta' }: StageProg
                 Use the retry/rollback controls if the project becomes stuck.
               </p>
             </div>
+          )}
+
+          {/* Connection warning after consecutive failures */}
+          {connectionWarning && (
+            <p className="mt-2 text-[11px] text-amber-hot/80">
+              Connection issues — retrying...
+            </p>
           )}
         </div>
       </div>

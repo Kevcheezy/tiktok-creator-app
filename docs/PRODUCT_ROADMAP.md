@@ -291,9 +291,8 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] Search/filter on project list (by status, category, name) — search input + status filter pills (All/Active/Review/Completed/Failed) with count badge
 - [x] Consistent empty states across all list views — all three lists (project/product/influencer) use same pattern: glow, icon, heading, description, CTA
 
-#### R1.5.4 - Error Handling & Recovery
-**Priority:** P1 - Medium
-**Effort:** Medium
+#### ~~R1.5.4 - Error Handling & Recovery~~ DONE
+**Status:** Complete (2026-02-15)
 **Why:** Backend error infrastructure is solid (structured logging, status tracking, retry endpoints). Frontend needs to surface these errors to users instead of showing blank states.
 
 **Backend (done):**
@@ -302,11 +301,11 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] Recovery endpoints: `POST /api/projects/[id]/retry` (failed retry + stage restart), `POST /api/projects/[id]/rollback`
 - [x] Structured logging: Pino logger across all API routes, agents, worker, API clients
 
-**Frontend (remaining):**
-- [ ] Error boundary component with retry button for failed data fetches
-- [ ] Error state display in ScriptReview, AssetReview (currently console.error only)
-- [ ] Network failure recovery: exponential backoff on polling, offline indicator
-- [ ] Failed pipeline recovery: surface `error_message` on project card (not just detail page)
+**Frontend (done):**
+- [x] Error boundary component with retry button for failed data fetches — `src/components/error-boundary.tsx`, reusable React error boundary
+- [x] Error state display in ScriptReview, AssetReview — magenta error panel with retry button replaces blank states on fetch failure
+- [x] Network failure recovery: exponential backoff on polling (3s → 30s cap), connection warning after 5 failures in StageProgress and ProjectDetail
+- [x] Failed pipeline recovery: surface `error_message` on project card (truncated single line in magenta)
 
 ---
 

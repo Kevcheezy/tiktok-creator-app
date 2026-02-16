@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { StatusBadge } from './status-badge';
@@ -54,6 +54,9 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   const [finalVideoUrl, setFinalVideoUrl] = useState('');
   const [archived, setArchived] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [connectionWarning, setConnectionWarning] = useState(false);
+  const failCountRef = useRef(0);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchProject = useCallback(async () => {
     try {
@@ -61,9 +64,16 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       if (res.ok) {
         const data = await res.json();
         setProject(data);
+        failCountRef.current = 0;
+        setConnectionWarning(false);
+      } else {
+        failCountRef.current++;
+        if (failCountRef.current >= 5) setConnectionWarning(true);
       }
     } catch (err) {
       console.error('Failed to fetch project:', err);
+      failCountRef.current++;
+      if (failCountRef.current >= 5) setConnectionWarning(true);
     } finally {
       setLoading(false);
     }
@@ -73,14 +83,28 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
     fetchProject();
   }, [fetchProject]);
 
-  // Poll while in processing state
+  // Poll while in processing state with exponential backoff on failure
   useEffect(() => {
     if (!project) return;
     const processingStatuses = ['created', 'analyzing', 'scripting', 'casting', 'directing', 'voiceover', 'editing'];
     if (!processingStatuses.includes(project.status)) return;
 
-    const interval = setInterval(fetchProject, 2000);
-    return () => clearInterval(interval);
+    let cancelled = false;
+
+    async function poll() {
+      await fetchProject();
+      if (cancelled) return;
+      const delay = failCountRef.current > 0
+        ? Math.min(2000 * Math.pow(2, failCountRef.current), 30000)
+        : 2000;
+      timeoutRef.current = setTimeout(poll, delay);
+    }
+
+    timeoutRef.current = setTimeout(poll, 2000);
+    return () => {
+      cancelled = true;
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
   }, [project?.status, fetchProject]);
 
   // Fetch final video URL when project is completed
@@ -213,6 +237,13 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       <div className="rounded-xl border border-border bg-surface p-5">
         <PipelineProgress status={project.status} failedAtStatus={project.failed_at_status} />
       </div>
+
+      {/* Connection warning after consecutive polling failures */}
+      {connectionWarning && (
+        <p className="mt-2 text-[11px] text-amber-hot/80">
+          Connection issues — retrying...
+        </p>
+      )}
 
       {/* Error message with recovery actions */}
       {project.status === 'failed' && (

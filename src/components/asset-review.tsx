@@ -35,6 +35,7 @@ export function AssetReview({ projectId, onStatusChange, confirmBeforeApprove }:
   const [assets, setAssets] = useState<Asset[]>([]);
   const [bySegment, setBySegment] = useState<Record<number, Asset[]>>({});
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [approving, setApproving] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -46,9 +47,12 @@ export function AssetReview({ projectId, onStatusChange, confirmBeforeApprove }:
         const data = await res.json();
         setAssets(data.assets);
         setBySegment(data.bySegment);
+        setFetchError(null);
+      } else {
+        setFetchError(`Failed to load assets (${res.status})`);
       }
-    } catch (err) {
-      console.error('Failed to fetch assets:', err);
+    } catch {
+      setFetchError('Network error — could not load assets');
     } finally {
       setLoading(false);
     }
@@ -139,6 +143,30 @@ export function AssetReview({ projectId, onStatusChange, confirmBeforeApprove }:
             </div>
           ))}
         </div>
+      </div>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <div className="rounded-xl border border-magenta/20 bg-magenta/5 p-8 text-center">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-surface-raised">
+          <svg viewBox="0 0 24 24" fill="none" className="h-6 w-6 text-magenta" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 7v6" />
+            <circle cx="12" cy="16" r="0.5" fill="currentColor" />
+          </svg>
+        </div>
+        <p className="mt-4 font-[family-name:var(--font-display)] text-sm font-medium text-text-primary">
+          {fetchError}
+        </p>
+        <button
+          type="button"
+          onClick={() => { setLoading(true); setFetchError(null); fetchAssets(); }}
+          className="mt-4 rounded-lg border border-electric/30 bg-electric/10 px-4 py-2 font-[family-name:var(--font-display)] text-sm font-medium text-electric transition-colors hover:bg-electric/20"
+        >
+          Retry
+        </button>
       </div>
     );
   }
