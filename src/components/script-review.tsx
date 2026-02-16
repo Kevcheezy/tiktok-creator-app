@@ -6,6 +6,7 @@ import { ScriptBreakdown } from './script-breakdown';
 import { HighlightedText } from './highlighted-text';
 import { ApproveControls } from './approve-controls';
 import { ScriptUpload } from './script-upload';
+import { EnergyArcGraph } from './energy-arc-graph';
 import { SCRIPT_TONES } from '@/lib/constants';
 
 interface Scene {
@@ -211,6 +212,14 @@ export function ScriptReview({
             <HighlightedText text={script.full_text} terms={productTerms} />
           </p>
         </div>
+      )}
+
+      {/* Energy arc sparkline */}
+      {script.scenes.some((s) => s.energy_arc) && (
+        <EnergyArcGraph
+          arcs={script.scenes.map((s) => s.energy_arc)}
+          sectionLabels={script.scenes.map((s) => s.section.replace('solution+product', 'Sol+Prod').replace(/^\w/, (c) => c.toUpperCase()))}
+        />
       )}
 
       {/* View toggle */}

@@ -641,15 +641,15 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] Add info icon to each keyframe card in the casting review stage (`asset-card.tsx`)
 - [x] On click, show popover with the full prompt used for that keyframe's generation
 
-#### R1.5.18 - Energy Arc Mini Graph in Script Review
+#### R1.5.18 - Energy Arc Mini Graph in Script Review ~~DONE~~
 **Priority:** P2 - Low
 **Effort:** Small
-**Status:** Backlog
+**Status:** Complete (2026-02-16)
 **Why:** The energy arc (e.g. `low → high → medium → high`) is a key creative parameter that shapes pacing, but it's currently shown as plain text. A small SVG line graph (sparkline) capturing start, mid, and end energy levels would make it instantly scannable and more intuitive during script review.
 
 **Frontend:**
-- [ ] Create `energy-arc-graph.tsx` — small inline SVG sparkline component, takes energy arc array, renders as a connected line graph with labeled points
-- [ ] Integrate into script review section of `project-detail.tsx` alongside the existing energy arc display
+- [x] Create `energy-arc-graph.tsx` — inline SVG sparkline component, takes energy arc array, renders as a connected line graph with colored dots per energy level, segment dividers, gradient fill, and section labels
+- [x] Integrate into `script-review.tsx` between full script text and view toggle
 
 ---
 
