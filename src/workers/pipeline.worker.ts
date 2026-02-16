@@ -1052,7 +1052,8 @@ async function handleCascadeRegeneration(
 
     let regeneratedCount = 0;
 
-    for (const kf of cascadeChain) {
+    for (let i = 0; i < cascadeChain.length; i++) {
+      const kf = cascadeChain[i];
       try {
         jobLog.info({ assetId: kf.id, segment: kf._seg, type: kf.type, previousUrl: !!previousUrl }, 'Cascade: regenerating keyframe');
 
@@ -1063,8 +1064,9 @@ async function handleCascadeRegeneration(
         jobLog.info({ assetId: kf.id, segment: kf._seg, type: kf.type }, 'Cascade: keyframe regenerated');
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);
-        jobLog.error({ assetId: kf.id, err }, 'Cascade: keyframe regeneration failed, marking failed');
+        jobLog.error({ assetId: kf.id, err }, 'Cascade: keyframe regeneration failed, stopping cascade');
 
+        // Mark the failed keyframe
         await supabase
           .from('asset')
           .update({
@@ -1074,9 +1076,22 @@ async function handleCascadeRegeneration(
           })
           .eq('id', kf.id);
 
-        // Continue cascade — don't break the whole chain for one failure
-        // But clear previousUrl so next frame doesn't reference a missing image
-        previousUrl = null;
+        // Mark all remaining keyframes in the chain as failed
+        const remainingIds = cascadeChain.slice(i + 1).map((r: any) => r.id);
+        if (remainingIds.length > 0) {
+          jobLog.info({ remainingCount: remainingIds.length }, 'Marking remaining cascade keyframes as failed');
+          await supabase
+            .from('asset')
+            .update({
+              status: 'failed',
+              metadata: { lastRegenError: `Cascade stopped: upstream keyframe ${kf.id} failed` },
+              updated_at: new Date().toISOString(),
+            })
+            .in('id', remainingIds);
+        }
+
+        // Stop the cascade — subsequent frames cannot be generated without a valid reference
+        break;
       }
     }
 
