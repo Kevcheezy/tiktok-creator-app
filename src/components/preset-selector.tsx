@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 
 interface Preset {
   id: string;
@@ -24,9 +24,31 @@ interface PresetSelectorProps {
   onCustomTextChange: (text: string) => void;
   productCategory: string | null;
   readOnly?: boolean;
+  /** 'scene' | 'interaction' — determines the PATCH endpoint */
+  presetType?: 'scene' | 'interaction';
+  /** Called after a successful save so the parent can update its state */
+  onPresetUpdate?: (updated: Preset) => void;
 }
 
 export type { Preset };
+
+/** Pencil icon SVG used for the edit trigger */
+function PencilIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      fill="none"
+      className={className}
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M11.5 2.5l2 2-8 8H3.5v-2z" />
+      <path d="M9.5 4.5l2 2" />
+    </svg>
+  );
+}
 
 export function PresetSelector({
   step,
@@ -39,12 +61,126 @@ export function PresetSelector({
   onCustomTextChange,
   productCategory,
   readOnly,
+  presetType,
+  onPresetUpdate,
 }: PresetSelectorProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const isCustomMode = customText.length > 0;
 
+  // Editing state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [savedId, setSavedId] = useState<string | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Auto-resize textarea
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
+    }
+  }, [editDraft]);
+
+  // Focus textarea when entering edit mode
+  useEffect(() => {
+    if (editingId && textareaRef.current) {
+      textareaRef.current.focus();
+      // Place cursor at end
+      const len = textareaRef.current.value.length;
+      textareaRef.current.setSelectionRange(len, len);
+    }
+  }, [editingId]);
+
+  // Clean up saved timer on unmount
+  useEffect(() => {
+    return () => {
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+    };
+  }, []);
+
+  const cancelEdit = useCallback(() => {
+    setEditingId(null);
+    setEditDraft('');
+    setSaveError(null);
+  }, []);
+
+  function startEdit(preset: Preset, e: React.MouseEvent) {
+    e.stopPropagation();
+    setEditingId(preset.id);
+    setEditDraft(preset.description);
+    setSaveError(null);
+    // Ensure the card is expanded while editing
+    setExpandedId(preset.id);
+  }
+
+  async function handleSave(presetId: string) {
+    if (!presetType || !onPresetUpdate) return;
+    if (saving) return;
+
+    const trimmed = editDraft.trim();
+    if (!trimmed) {
+      setSaveError('Description cannot be empty');
+      return;
+    }
+
+    // Find current preset to check if description actually changed
+    const current = presets.find((p) => p.id === presetId);
+    if (current && current.description === trimmed) {
+      // No change, just exit edit mode
+      cancelEdit();
+      return;
+    }
+
+    setSaving(true);
+    setSaveError(null);
+
+    try {
+      const res = await fetch(`/api/${presetType}-presets/${presetId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: trimmed }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Failed to update (${res.status})`);
+      }
+
+      const updated = await res.json();
+      onPresetUpdate(updated);
+      setEditingId(null);
+      setEditDraft('');
+
+      // Show "Saved" feedback briefly
+      setSavedId(presetId);
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+      savedTimerRef.current = setTimeout(() => setSavedId(null), 2000);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Save failed');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleEditKeyDown(e: React.KeyboardEvent, presetId: string) {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelEdit();
+    }
+    // Cmd/Ctrl+Enter to save
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      handleSave(presetId);
+    }
+  }
+
   function handleCardClick(presetId: string) {
     if (readOnly) return;
+    // Don't toggle selection while editing
+    if (editingId === presetId) return;
     if (selectedId === presetId) {
       setExpandedId(expandedId === presetId ? null : presetId);
     } else {
@@ -65,6 +201,8 @@ export function PresetSelector({
     return preset.category_affinity.some((a) => cat.includes(a.toLowerCase()) || a.toLowerCase().includes(cat));
   }
 
+  const canEdit = !!presetType && !!onPresetUpdate && !readOnly;
+
   return (
     <div className="rounded-xl border border-border bg-surface p-5">
       {/* Step header */}
@@ -84,14 +222,22 @@ export function PresetSelector({
           const isSelected = selectedId === preset.id && !isCustomMode;
           const isExpanded = expandedId === preset.id;
           const bestMatch = isBestMatch(preset);
+          const isEditing = editingId === preset.id;
+          const justSaved = savedId === preset.id;
 
           return (
-            <button
+            <div
               key={preset.id}
-              type="button"
+              role="button"
+              tabIndex={0}
               onClick={() => handleCardClick(preset.id)}
-              disabled={readOnly}
-              className={`group relative rounded-lg border-2 p-3 text-left transition-all ${
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleCardClick(preset.id);
+                }
+              }}
+              className={`group relative rounded-lg border-2 p-3 text-left transition-all cursor-pointer ${
                 isSelected
                   ? 'border-electric bg-electric/5 ring-1 ring-electric/30'
                   : readOnly
@@ -109,21 +255,94 @@ export function PresetSelector({
                 </span>
               )}
 
-              {/* Title */}
-              <p className="font-[family-name:var(--font-display)] text-xs font-semibold text-text-primary">
-                {preset.title}
-                {preset.is_default && (
-                  <span className="ml-1 font-normal text-text-muted">(default)</span>
+              {/* Title row with edit pencil */}
+              <div className="flex items-center gap-1.5">
+                <p className="flex-1 font-[family-name:var(--font-display)] text-xs font-semibold text-text-primary">
+                  {preset.title}
+                  {preset.is_default && (
+                    <span className="ml-1 font-normal text-text-muted">(default)</span>
+                  )}
+                </p>
+
+                {/* Edit pencil — visible on hover or when selected, hidden while editing */}
+                {canEdit && !isEditing && (
+                  <button
+                    type="button"
+                    onClick={(e) => startEdit(preset, e)}
+                    title="Edit description"
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded transition-all ${
+                      isSelected
+                        ? 'text-electric/60 hover:text-electric hover:bg-electric/10'
+                        : 'text-text-muted/0 group-hover:text-text-muted/50 hover:!text-electric hover:bg-electric/10'
+                    }`}
+                  >
+                    <PencilIcon className="h-3 w-3" />
+                  </button>
                 )}
-              </p>
 
-              {/* Description */}
-              <p className={`mt-1 text-[11px] leading-relaxed text-text-muted ${isExpanded ? '' : 'line-clamp-2'}`}>
-                {preset.description}
-              </p>
+                {/* "Saved" feedback */}
+                {justSaved && !isEditing && (
+                  <span className="shrink-0 font-[family-name:var(--font-mono)] text-[9px] font-medium text-lime">
+                    Saved
+                  </span>
+                )}
+              </div>
 
-              {/* Virality notes (expanded only) */}
-              {isExpanded && preset.virality_notes && (
+              {/* Description — show textarea in edit mode, text otherwise */}
+              {isEditing ? (
+                <div className="mt-1.5" onClick={(e) => e.stopPropagation()}>
+                  <textarea
+                    ref={textareaRef}
+                    value={editDraft}
+                    onChange={(e) => setEditDraft(e.target.value)}
+                    onKeyDown={(e) => handleEditKeyDown(e, preset.id)}
+                    rows={2}
+                    className="block w-full resize-none overflow-hidden rounded border border-border-bright bg-void px-2 py-1.5 text-[11px] leading-relaxed text-text-primary placeholder:text-text-muted/40 transition-colors focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric/40"
+                    placeholder="Enter preset description..."
+                  />
+
+                  {/* Error message */}
+                  {saveError && (
+                    <p className="mt-1 text-[10px] text-magenta">{saveError}</p>
+                  )}
+
+                  {/* Save / Cancel buttons */}
+                  <div className="mt-1.5 flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSave(preset.id);
+                      }}
+                      disabled={saving}
+                      className="rounded bg-lime/90 px-2.5 py-0.5 font-[family-name:var(--font-mono)] text-[10px] font-semibold text-void transition-all hover:bg-lime disabled:opacity-50"
+                    >
+                      {saving ? 'Saving...' : 'Save'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        cancelEdit();
+                      }}
+                      disabled={saving}
+                      className="rounded bg-surface-overlay px-2.5 py-0.5 font-[family-name:var(--font-mono)] text-[10px] text-text-muted transition-all hover:bg-border hover:text-text-secondary disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                    <span className="ml-auto text-[9px] text-text-muted/40">
+                      Esc / {'\u2318'}Enter
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <p className={`mt-1 text-[11px] leading-relaxed text-text-muted ${isExpanded || isEditing ? '' : 'line-clamp-2'}`}>
+                  {preset.description}
+                </p>
+              )}
+
+              {/* Virality notes (expanded only, not while editing) */}
+              {isExpanded && !isEditing && preset.virality_notes && (
                 <p className="mt-1.5 text-[10px] italic text-summon">
                   {preset.virality_notes}
                 </p>
@@ -139,12 +358,12 @@ export function PresetSelector({
               )}
 
               {/* Expand hint */}
-              {isSelected && !isExpanded && (
+              {isSelected && !isExpanded && !isEditing && (
                 <p className="mt-1.5 font-[family-name:var(--font-mono)] text-[9px] text-text-muted/60">
                   Click again to expand
                 </p>
               )}
-            </button>
+            </div>
           );
         })}
 

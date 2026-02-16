@@ -2002,6 +2002,12 @@ function InfluencerSelection({ projectId, currentInfluencerId, productCategory, 
           onCustomTextChange={setSceneOverride}
           productCategory={productCategory}
           readOnly={readOnly}
+          presetType="scene"
+          onPresetUpdate={(updated) =>
+            setScenePresets((prev) =>
+              prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p))
+            )
+          }
         />
       )}
 
@@ -2018,6 +2024,12 @@ function InfluencerSelection({ projectId, currentInfluencerId, productCategory, 
           onCustomTextChange={setInteractionOverride}
           productCategory={productCategory}
           readOnly={readOnly}
+          presetType="interaction"
+          onPresetUpdate={(updated) =>
+            setInteractionPresets((prev) =>
+              prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p))
+            )
+          }
         />
       )}
 
