@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { GilDisplay } from './gil-display';
 import { DownloadButton } from './download-button';
+import { downloadViaProxy } from '@/lib/download-utils';
 
 interface AssetCardProps {
   asset: {
@@ -24,6 +25,8 @@ interface AssetCardProps {
   onEdit?: (assetId: string) => void;
   /** Filename for the download button. When provided, a download icon appears on completed assets. */
   downloadFilename?: string;
+  /** When set, downloads use the backend proxy endpoint instead of fetch-and-blob. Use for large files (videos). */
+  proxyDownload?: { projectId: string };
 }
 
 const TYPE_BADGES: Record<string, { label: string; color: string }> = {
@@ -40,7 +43,7 @@ const GRADES = [
   { value: 'F', color: 'bg-magenta/10 text-magenta border-magenta/30 hover:bg-magenta/20' },
 ];
 
-export function AssetCard({ asset, showGrade, compact, onGrade, onReject, onRegenerate, onEdit, downloadFilename }: AssetCardProps) {
+export function AssetCard({ asset, showGrade, compact, onGrade, onReject, onRegenerate, onEdit, downloadFilename, proxyDownload }: AssetCardProps) {
   const [grading, setGrading] = useState(false);
   const [showPrompt, setShowPrompt] = useState(false);
   const badge = TYPE_BADGES[asset.type] || { label: asset.type, color: 'bg-surface-overlay text-text-muted border-border' };
@@ -286,9 +289,24 @@ export function AssetCard({ asset, showGrade, compact, onGrade, onReject, onRege
       {/* Action buttons: download + edit + reject + regenerate (shown on hover for completed assets) */}
       {asset.status === 'completed' && (onEdit || onReject || onRegenerate || (asset.url && downloadFilename)) && (
         <div className="absolute right-2 bottom-14 flex flex-col gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-          {asset.url && downloadFilename && (
+          {asset.url && downloadFilename && proxyDownload ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                downloadViaProxy(proxyDownload.projectId, asset.id, downloadFilename);
+              }}
+              title={`Download ${downloadFilename}`}
+              className="flex h-7 w-7 items-center justify-center rounded-md bg-void/70 text-text-muted backdrop-blur-sm transition-colors hover:bg-electric/20 hover:text-electric"
+            >
+              <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+                <path d="M8 2v9M4 7l4 4 4-4M2 13h12" />
+              </svg>
+            </button>
+          ) : asset.url && downloadFilename ? (
             <DownloadButton url={asset.url} filename={downloadFilename} size="sm" />
-          )}
+          ) : null}
           {onEdit && isKeyframe && (
             <button
               type="button"

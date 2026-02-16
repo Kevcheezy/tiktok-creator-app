@@ -436,7 +436,7 @@ export function AssetReview({ projectId, projectNumber, onStatusChange, confirmB
                 </div>
               )}
 
-              {/* Video */}
+              {/* Video — uses backend proxy for downloads to avoid loading large files into browser memory */}
               {video && (
                 <div className="mb-4">
                   <h4 className="mb-2 font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
@@ -450,6 +450,7 @@ export function AssetReview({ projectId, projectNumber, onStatusChange, confirmB
                       onReject={readOnly ? undefined : handleReject}
                       onRegenerate={readOnly ? undefined : handleRegenerate}
                       downloadFilename={getDownloadFilename(video)}
+                      proxyDownload={{ projectId }}
                     />
                   </div>
                 </div>

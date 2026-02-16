@@ -7,6 +7,11 @@
 
 export async function downloadAsset(url: string, filename: string): Promise<void> {
   const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(`Download failed — server returned ${response.status} ${response.statusText}`);
+  }
+
   const blob = await response.blob();
   const blobUrl = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -16,6 +21,26 @@ export async function downloadAsset(url: string, filename: string): Promise<void
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(blobUrl);
+}
+
+/**
+ * Downloads an asset via the backend proxy endpoint which streams
+ * the file with Content-Disposition: attachment. This avoids loading
+ * large files (e.g. 50-100 MB video segments) into browser memory.
+ *
+ * Opens the proxy URL via an anchor click so the browser handles
+ * the streaming download natively — no fetch/blob needed.
+ */
+export function downloadViaProxy(projectId: string, assetId: string, fallbackFilename: string): void {
+  const proxyUrl = `/api/projects/${projectId}/assets/${assetId}/download`;
+  const a = document.createElement('a');
+  a.href = proxyUrl;
+  a.download = fallbackFilename;
+  // rel=noopener for safety even though same-origin
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
 /**

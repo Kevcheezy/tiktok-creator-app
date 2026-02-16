@@ -938,24 +938,29 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 
 **Cost savings:** Editing 1 of 4 segments: ~$1.60 instead of ~$6.20 (74% savings).
 
-#### R1.5.25 - Asset Download for All Generated Media
+#### ~~R1.5.25 - Asset Download for All Generated Media~~ DONE
 **Priority:** P0 - Critical
 **Effort:** Small
-**Depends on:** None (all assets already stored in Supabase Storage with public URLs)
-**Why:** Users can only download the final composed video. Individual assets — keyframe images, per-segment video clips, voiceover audio, B-roll images — have no download option. Creators need these raw assets for repurposing: thumbnails from keyframes, audio clips for other platforms, B-roll for manual editing, individual video segments for testing. Every generated asset should have a visible download button.
+**Status:** Complete (2026-02-16)
+**Depends on:** None
+**Why:** Users can only download the final composed video. Individual assets — keyframe images, per-segment video clips, voiceover audio, B-roll images — have no download option. Creators need these raw assets for repurposing.
 
 **Frontend:**
-- [ ] Download icon button on each keyframe image in casting review (start + end per segment)
-- [ ] Download icon button on each video segment in directing review
-- [ ] Download icon button on each voiceover audio clip in voiceover review
-- [ ] Download icon button on each B-roll image in storyboard view
-- [ ] Download icon button on final composed video (already exists — verify working)
-- [ ] "Download All" button per stage: downloads all assets for that stage as individual files
-- [ ] Descriptive filenames: `PROJECT-{N}_keyframe-seg{X}-start.png`, `PROJECT-{N}_video-seg{X}.mp4`, `PROJECT-{N}_voice-seg{X}.mp3`, `PROJECT-{N}_broll-seg{X}-shot{Y}.png`
+- [x] Download icon button on each keyframe image in casting review (start + end per segment)
+- [x] Download icon button on each video segment in directing review
+- [x] Download icon button on each voiceover audio clip in voiceover review
+- [x] Download icon button on each B-roll image in storyboard view
+- [x] Download icon button on final composed video (rewired to fetch-and-blob with proper filename)
+- [x] "Download All" button per stage with progress counter (3/8)
+- [x] Descriptive filenames: `PROJECT-{N}_keyframe-seg{X}-start.png`, `PROJECT-{N}_video-seg{X}.mp4`, etc.
+- [x] Shared download utilities: `src/lib/download-utils.ts` (downloadAsset, downloadViaProxy, filename builders)
+- [x] Reusable components: `src/components/download-button.tsx` (DownloadButton + DownloadAllButton)
+- [x] Error feedback: inline error toast on failed downloads (auto-dismiss after 4s)
 
 **Backend:**
-- [ ] No API changes needed — assets already have public URLs via Supabase Storage
-- [ ] If any assets use signed/expiring URLs, add `GET /api/projects/[id]/assets/[assetId]/download` for fresh download URL
+- [x] `GET /api/projects/[id]/assets/[assetId]/download` — server-side proxy for large files (streams with Content-Disposition: attachment, validates asset ownership, 100MB cap, 60s timeout)
+- [x] Video assets routed through backend proxy (avoids 50-100MB blobs in browser memory)
+- [x] Keyframes/audio use client-side fetch-and-blob (small files, no memory concern)
 
 #### R1.5.26 - Scripting Validation Enforcement (Reject Invalid Scripts)
 **Priority:** P1 - High
@@ -1247,7 +1252,7 @@ POLISH     Tier 1.5: UX Hardening
            R1.5.21 Parallel Directing + Voiceover (~5 min savings per run, no deps)
            R1.5.22 B-Roll Timing in EditorAgent (depends on Creatomate template work)
            R1.5.23 Smart Cascade Editing — per-segment regeneration after script edits (depends on R1.5.8 ✅)
-           R1.5.25 Asset Download for All Generated Media (no deps, frontend-only)
+           R1.5.25 Asset Download for All Generated Media ✅ DONE
 
 NEXT       Tier 2: Quality & Conversion
            R2.0 Performance Tracking ✅ DONE (backend) ──→ R2.4 Product Images ✅ DONE (backend) ──→ R2.3 Avatar Consistency ──→ R2.1 Hook Testing ──→ R2.2 Trends
