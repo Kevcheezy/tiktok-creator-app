@@ -136,7 +136,7 @@ ORDER BY created_at;
 
 ```sql
 -- All assets for a project with generation status
-SELECT id, type, status, provider, cost_usd, error_message, created_at
+SELECT id, type, status, provider, cost_usd, metadata, created_at
 FROM asset WHERE project_id = '<uuid>'
 ORDER BY created_at;
 ```
