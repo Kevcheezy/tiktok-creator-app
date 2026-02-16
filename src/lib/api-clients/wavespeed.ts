@@ -54,20 +54,27 @@ export class WaveSpeedClient {
     let statusCode: number | undefined;
 
     try {
+      // Two-layer timeout: AbortController cancels the connection,
+      // Promise.race guarantees resolution even if AbortController fails.
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
       let response: Response;
       try {
-        response = await fetch(url, {
-          ...options,
-          signal: controller.signal,
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${this.apiKey}`,
-            ...options.headers,
-          },
-        });
+        response = await Promise.race([
+          fetch(url, {
+            ...options,
+            signal: controller.signal,
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${this.apiKey}`,
+              ...options.headers,
+            },
+          }),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error(`WaveSpeed API timeout (${timeoutMs / 1000}s): ${path}`)), timeoutMs + 5000)
+          ),
+        ]);
       } finally {
         clearTimeout(timeoutId);
       }
@@ -114,7 +121,8 @@ export class WaveSpeedClient {
     } catch (err) {
       if (statusCode === undefined) {
         const latencyMs = Date.now() - start;
-        const isTimeout = isAbortError(err);
+        const isTimeout = isAbortError(err) ||
+          (err instanceof Error && err.message.includes('API timeout'));
         const errorMsg = isTimeout
           ? `Request timed out after ${timeoutMs / 1000}s`
           : (err as Error).message;
@@ -256,6 +264,7 @@ export class WaveSpeedClient {
       initialInterval: options?.initialInterval ?? 10000,
       maxInterval: 30000,
       backoffFactor: 1.3,
+      perRequestTimeout: 30000,
       extractUrl: (data: any) => data.data?.outputs?.[0],
       extractStatus: (data: any) => data.data?.status,
       successStatuses: ['completed'],
@@ -266,48 +275,51 @@ export class WaveSpeedClient {
     let interval = config.initialInterval;
 
     while (Date.now() - startTime < config.maxWait) {
-      const pollStart = Date.now();
-      const pollController = new AbortController();
-      const pollTimeout = setTimeout(() => pollController.abort(), 30000);
-      let response: Response;
       try {
-        response = await fetch(config.url, {
-          headers: { Authorization: `Bearer ${config.authKey}` },
-          signal: pollController.signal,
-        });
-      } catch (pollErr) {
-        clearTimeout(pollTimeout);
-        const isTimeout = isAbortError(pollErr);
-        if (isTimeout) {
-          logger.warn({ taskId }, 'Poll request timed out (30s), retrying...');
-          await new Promise(resolve => setTimeout(resolve, interval));
-          interval = Math.min(interval * config.backoffFactor, config.maxInterval);
-          continue;
+        // Promise.race guarantees this resolves within perRequestTimeout,
+        // regardless of whether AbortController works in this runtime.
+        const data = await Promise.race([
+          (async () => {
+            const controller = new AbortController();
+            const tid = setTimeout(() => controller.abort(), config.perRequestTimeout);
+            try {
+              const response = await fetch(config.url, {
+                headers: { Authorization: `Bearer ${config.authKey}` },
+                signal: controller.signal,
+              });
+              if (!response.ok) {
+                throw new Error(`Poll error (${response.status}): ${await response.text()}`);
+              }
+              return response.json();
+            } finally {
+              clearTimeout(tid);
+            }
+          })(),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('POLL_REQUEST_TIMEOUT')), config.perRequestTimeout + 5000)
+          ),
+        ]);
+
+        const status = config.extractStatus(data);
+
+        if (config.successStatuses.includes(status)) {
+          const latencyMs = Date.now() - startTime;
+          logger.info({ provider: 'WaveSpeed', taskId, totalPollMs: latencyMs }, 'Poll completed successfully');
+          return { status: 'completed', url: config.extractUrl(data) };
         }
-        throw pollErr;
-      }
-      clearTimeout(pollTimeout);
 
-      if (!response.ok) {
-        const latencyMs = Date.now() - pollStart;
-        logger.error(
-          { provider: 'WaveSpeed', endpoint: `/api/v3/predictions/${taskId}/result`, method: 'GET', statusCode: response.status, latencyMs },
-          'Poll request failed'
-        );
-        throw new Error(`Poll error (${response.status}): ${await response.text()}`);
-      }
-
-      const data = await response.json();
-      const status = config.extractStatus(data);
-
-      if (config.successStatuses.includes(status)) {
-        const latencyMs = Date.now() - startTime;
-        logger.info({ provider: 'WaveSpeed', taskId, totalPollMs: latencyMs }, 'Poll completed successfully');
-        return { status: 'completed', url: config.extractUrl(data) };
-      }
-
-      if (config.failStatuses.includes(status)) {
-        throw new Error(`Task ${taskId} failed: ${JSON.stringify(data.data?.error || data.data?.message || 'Unknown error')}`);
+        if (config.failStatuses.includes(status)) {
+          throw new Error(`Task ${taskId} failed: ${JSON.stringify(data.data?.error || data.data?.message || 'Unknown error')}`);
+        }
+      } catch (err) {
+        const isTimeout = isAbortError(err) ||
+          (err instanceof Error && err.message === 'POLL_REQUEST_TIMEOUT');
+        if (isTimeout) {
+          logger.warn({ taskId, elapsed: Date.now() - startTime }, 'Poll request timed out, retrying...');
+          // fall through to sleep + continue
+        } else {
+          throw err;
+        }
       }
 
       await new Promise(resolve => setTimeout(resolve, interval));
