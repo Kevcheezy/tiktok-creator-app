@@ -74,29 +74,27 @@ export function ProductList() {
         </div>
         <div className="relative">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-surface-raised">
-            {/* Package icon */}
+            {/* Potion icon */}
             <svg viewBox="0 0 32 32" fill="none" className="h-8 w-8 text-text-muted" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-              <path d="M16 2l12 6v16l-12 6L4 24V8l12-6z" />
-              <path d="M16 16l12-6" />
-              <path d="M16 16v14" />
-              <path d="M16 16L4 10" />
+              <path d="M12 4h8v4l4 8v8a4 4 0 01-4 4h-8a4 4 0 01-4-4v-8l4-8V4z" />
+              <line x1="12" y1="4" x2="20" y2="4" />
+              <path d="M10 18h12" opacity="0.5" />
             </svg>
           </div>
           <h3 className="mt-5 font-[family-name:var(--font-display)] text-lg font-semibold text-text-primary">
-            No products analyzed yet
+            No items in inventory
           </h3>
           <p className="mt-2 text-sm text-text-secondary">
             Create a project to analyze your first product.
           </p>
           <Link
             href="/projects/new"
-            className="mt-6 inline-flex items-center gap-2 rounded-lg bg-electric px-5 py-2.5 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:shadow-[0_0_24px_rgba(0,240,255,0.3)]"
+            className="mt-6 inline-flex items-center gap-2 overflow-hidden rounded border-2 border-electric bg-transparent px-5 py-2.5 font-[family-name:var(--font-display)] text-sm font-semibold uppercase tracking-wider text-electric transition-all hover:bg-electric/10 hover:shadow-[0_0_24px_rgba(0,229,160,0.2)]"
           >
-            <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
-              <line x1="8" y1="3" x2="8" y2="13" />
-              <line x1="3" y1="8" x2="13" y2="8" />
+            <svg viewBox="0 0 8 10" fill="currentColor" className="h-2.5 w-2.5">
+              <polygon points="0,0 8,5 0,10" />
             </svg>
-            Add First Product
+            Add Item
           </Link>
         </div>
       </div>

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { ToneSelector } from './tone-selector';
+import { CommandMenu } from './command-menu';
 
 interface ApproveControlsProps {
   projectId: string;
@@ -107,9 +108,9 @@ export function ApproveControls({
               type="button"
               onClick={() => handleGrade(g.value)}
               disabled={saving}
-              className={`flex h-10 w-10 items-center justify-center rounded-lg border font-[family-name:var(--font-display)] text-sm font-bold transition-all ${
+              className={`flex h-10 w-10 items-center justify-center rounded-full border-2 font-[family-name:var(--font-display)] text-sm font-bold transition-all ${
                 grade === g.value
-                  ? `${g.color} ring-1 ring-current`
+                  ? `${g.color} ring-2 ring-current ring-offset-1 ring-offset-void shadow-[0_0_12px_currentColor]`
                   : 'border-border bg-surface text-text-muted hover:border-border-bright hover:text-text-secondary'
               }`}
             >
@@ -141,43 +142,25 @@ export function ApproveControls({
         />
       </div>
 
-      {/* Action buttons */}
-      <div className="flex gap-3">
-        <button
-          type="button"
-          onClick={handleApprove}
-          disabled={approving || regenerating}
-          className="flex-1 rounded-lg bg-lime px-4 py-2.5 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:shadow-[0_0_24px_rgba(184,255,0,0.25)] disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {approving ? (
-            <span className="flex items-center justify-center gap-2">
-              <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="60" strokeDashoffset="15" strokeLinecap="round" />
-              </svg>
-              Approving...
-            </span>
-          ) : (
-            'Approve & Continue'
-          )}
-        </button>
-        <button
-          type="button"
-          onClick={handleRegenerate}
-          disabled={approving || regenerating}
-          className="flex-1 rounded-lg border border-border bg-surface px-4 py-2.5 font-[family-name:var(--font-display)] text-sm font-semibold text-text-primary transition-all hover:border-magenta/40 hover:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {regenerating ? (
-            <span className="flex items-center justify-center gap-2">
-              <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="60" strokeDashoffset="15" strokeLinecap="round" />
-              </svg>
-              Regenerating...
-            </span>
-          ) : (
-            'Regenerate'
-          )}
-        </button>
-      </div>
+      {/* Action command menu */}
+      <CommandMenu
+        actions={[
+          {
+            label: 'Fight — Approve & Continue',
+            onClick: handleApprove,
+            disabled: approving || regenerating,
+            loading: approving,
+            variant: 'primary',
+          },
+          {
+            label: 'Regenerate',
+            onClick: handleRegenerate,
+            disabled: approving || regenerating,
+            loading: regenerating,
+            variant: 'secondary',
+          },
+        ]}
+      />
     </div>
   );
 }

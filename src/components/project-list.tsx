@@ -119,45 +119,29 @@ export function ProjectList({ projects: initialProjects }: { projects: Project[]
         </div>
 
         <div className="relative">
-          {/* Icon */}
+          {/* Buster Sword icon */}
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-surface-raised">
-            <svg
-              viewBox="0 0 32 32"
-              fill="none"
-              className="h-8 w-8 text-text-muted"
-              stroke="currentColor"
-              strokeWidth={1.5}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <rect x="4" y="6" width="24" height="20" rx="3" />
-              <circle cx="16" cy="16" r="4" />
-              <polygon points="14.5 14 18.5 16 14.5 18" fill="currentColor" stroke="none" />
+            <svg viewBox="0 0 24 24" fill="none" className="h-8 w-8 text-text-muted">
+              <rect x="10.5" y="2" width="3" height="14" rx="0.5" fill="currentColor" opacity="0.9" />
+              <rect x="6" y="16" width="12" height="2.5" rx="0.5" fill="currentColor" />
+              <rect x="10.5" y="18.5" width="3" height="4" rx="0.5" fill="currentColor" opacity="0.6" />
             </svg>
           </div>
 
           <h3 className="mt-5 font-[family-name:var(--font-display)] text-lg font-semibold text-text-primary">
-            No projects yet
+            No encounters yet
           </h3>
           <p className="mt-2 text-sm text-text-secondary">
-            Create your first AI-generated TikTok video in minutes.
+            Start a new battle.
           </p>
           <Link
             href="/projects/new"
-            className="mt-6 inline-flex items-center gap-2 rounded-lg bg-electric px-5 py-2.5 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:shadow-[0_0_24px_rgba(0,240,255,0.3)]"
+            className="mt-6 inline-flex items-center gap-2 overflow-hidden rounded border-2 border-electric bg-transparent px-5 py-2.5 font-[family-name:var(--font-display)] text-sm font-semibold uppercase tracking-wider text-electric transition-all hover:bg-electric/10 hover:shadow-[0_0_24px_rgba(0,229,160,0.2)]"
           >
-            <svg
-              viewBox="0 0 16 16"
-              fill="none"
-              className="h-4 w-4"
-              stroke="currentColor"
-              strokeWidth={2}
-              strokeLinecap="round"
-            >
-              <line x1="8" y1="3" x2="8" y2="13" />
-              <line x1="3" y1="8" x2="13" y2="8" />
+            <svg viewBox="0 0 8 10" fill="currentColor" className="h-2.5 w-2.5">
+              <polygon points="0,0 8,5 0,10" />
             </svg>
-            Create First Project
+            Start Encounter
           </Link>
         </div>
       </div>
