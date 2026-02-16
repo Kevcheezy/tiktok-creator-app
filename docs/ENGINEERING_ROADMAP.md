@@ -204,6 +204,28 @@ Influencer `<select>` options displayed the entire `persona` field (full appeara
 
 **Frontend:** No changes needed — `asset-review.tsx` already calls the endpoint correctly.
 
+#### B0.20 - Keyframe Regeneration Doesn't Cascade to Dependent Keyframes
+**Severity:** High (regenerated keyframe breaks visual continuity of all subsequent keyframes)
+**Scope:** Backend + Frontend
+**Why:** Keyframes have a hard dependency chain: each keyframe is generated using the previous keyframe as a reference input to Nano Banana Pro (chained generation). When a user regenerates a keyframe (e.g., Segment 3 START), the subsequent keyframes (Segment 3 END, Segment 4 START, Segment 4 END) still reference the OLD image and become visually inconsistent — different person appearance, lighting, pose continuity broken.
+
+**Current behavior:** Regeneration replaces a single keyframe in isolation. No downstream cascade.
+
+**Expected behavior:** When a user clicks "Regenerate" on a keyframe, prompt them: "This will also regenerate X subsequent keyframes to maintain visual continuity. Continue?" If confirmed, regenerate the target keyframe first, then cascade forward through all dependent keyframes in sequence, using each newly generated frame as the reference for the next.
+
+**Dependency chain:**
+```
+Seg 0 START → Seg 0 END → Seg 1 START → Seg 1 END → Seg 2 START → Seg 2 END → Seg 3 START → Seg 3 END
+```
+Regenerating Seg 2 END must also regenerate: Seg 3 START, Seg 3 END (and Seg 4 if it existed).
+
+**Fix checklist:**
+- [ ] Frontend: On regenerate click, count subsequent keyframes and show confirmation dialog with cascade count
+- [ ] Backend: New endpoint or extend `POST /api/projects/[id]/assets/regenerate` to accept `{ assetId, cascade: true }`
+- [ ] Worker: New `regenerateKeyframeCascade()` handler that regenerates target keyframe, then walks forward through subsequent keyframes in order, passing each completed frame as reference to the next
+- [ ] Worker: `regenerateKeyframe()` must accept optional reference images (previous end frame, influencer, product) instead of only using `influencer.image_url`
+- [ ] Backend: Store error message in `asset.metadata.lastRegenError` on regeneration failure (missing from current error handler)
+
 ---
 
 ### Tier 1: Complete the Core Pipeline (Ship a working end-to-end product)
