@@ -384,7 +384,7 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] `src/lib/storage.ts` — shared helpers: `generateUploadPath()`, `createSignedUploadUrl()`, `getPublicUrl()`, `deleteStorageFile()`, `extractStoragePath()`
 - [x] API routes accept `storagePath` (JSON body) as alternative to FormData file blob: influencers POST/PATCH, product image, project product-image
 - [x] Legacy FormData upload path preserved for backward compatibility
-- [ ] Frontend uses signed upload URL flow (frontend agent task — remove client-side compression)
+- [x] Frontend uses signed upload URL flow (frontend agent task — remove client-side compression)
 
 #### R1.5.8 - Navigable Pipeline Stages
 **Priority:** P1 - Medium
@@ -611,8 +611,8 @@ POLISH     Tier 1.5: UX Hardening
            (markdown parser + FF7 workers + live Kanban board)
            R1.5.6 FF7 Visual Theme (can run in parallel — purely frontend + static assets)
            (ATB pipeline + battle HUD + character sprites + Mako palette + command menus)
-           R1.5.7 Direct-to-Storage Uploads ✅ DONE (backend)
-           (bypass Vercel 4.5MB limit — frontend pending)
+           R1.5.7 Direct-to-Storage Uploads ✅ DONE
+           (bypass Vercel 4.5MB limit — fully complete)
            R1.5.9 Scene & Interaction Presets for Casting
            (7 scene presets + 10 interaction presets → CastingAgent consistency rule)
            ▲ Locks one scene across all 4 keyframes. Describes product interaction choreography.
