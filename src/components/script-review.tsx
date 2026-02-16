@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { SegmentCard } from './segment-card';
+import { ScriptBreakdown } from './script-breakdown';
 import { ApproveControls } from './approve-controls';
 import { ScriptUpload } from './script-upload';
 import { SCRIPT_TONES } from '@/lib/constants';
@@ -18,6 +19,7 @@ interface Scene {
   audio_sync: Record<string, { word: string; time: string; action: string }> | null;
   text_overlay: string | null;
   product_visibility: string | null;
+  broll_cues: { shot_script_index: number; offset_seconds: number; duration_seconds: number; intent: string; spoken_text_during: string }[] | null;
   tone: string | null;
   version: number;
   created_at: string;
@@ -51,6 +53,7 @@ export function ScriptReview({
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [activeScript, setActiveScript] = useState(0);
   const [showUpload, setShowUpload] = useState(false);
+  const [breakdownView, setBreakdownView] = useState<'cards' | 'timeline' | 'beats'>('cards');
 
   const fetchScripts = useCallback(async () => {
     try {
@@ -207,19 +210,46 @@ export function ScriptReview({
         </div>
       )}
 
-      {/* Segment cards grid */}
-      <div className="stagger-children grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {script.scenes.map((scene) => (
-          <SegmentCard
-            key={scene.id}
-            scene={scene}
-            editable={!readOnly}
-            projectId={projectId}
-            scriptId={script.id}
-            onSegmentUpdate={() => fetchScripts()}
-          />
-        ))}
+      {/* View toggle */}
+      <div className="flex items-center gap-3">
+        <span className="font-[family-name:var(--font-display)] text-xs font-semibold uppercase tracking-wider text-text-muted">
+          View
+        </span>
+        <div className="flex items-center gap-0.5 rounded-lg border border-border bg-surface-raised p-0.5">
+          {(['cards', 'timeline', 'beats'] as const).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => setBreakdownView(mode)}
+              className={`rounded-md px-3 py-1 font-[family-name:var(--font-display)] text-xs font-semibold transition-all ${
+                breakdownView === mode
+                  ? 'bg-electric/10 text-electric border border-electric/30'
+                  : 'border border-transparent text-text-muted hover:text-text-secondary'
+              }`}
+            >
+              {mode === 'cards' ? 'Cards' : mode === 'timeline' ? 'Timeline' : 'Beats'}
+            </button>
+          ))}
+        </div>
       </div>
+
+      {/* Segment views */}
+      {breakdownView === 'cards' && (
+        <div className="stagger-children grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {script.scenes.map((scene) => (
+            <SegmentCard
+              key={scene.id}
+              scene={scene}
+              editable={!readOnly}
+              projectId={projectId}
+              scriptId={script.id}
+              onSegmentUpdate={() => fetchScripts()}
+            />
+          ))}
+        </div>
+      )}
+      {breakdownView === 'timeline' && <ScriptBreakdown scenes={script.scenes} view="timeline" />}
+      {breakdownView === 'beats' && <ScriptBreakdown scenes={script.scenes} view="beats" />}
 
       {/* Approve / Regenerate controls */}
       {!readOnly && (

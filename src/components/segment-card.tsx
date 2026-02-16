@@ -17,6 +17,7 @@ interface Scene {
   audio_sync: Record<string, { word: string; time: string; action: string }> | null;
   text_overlay: string | null;
   product_visibility: string | null;
+  broll_cues: { shot_script_index: number; offset_seconds: number; duration_seconds: number; intent: string; spoken_text_during: string }[] | null;
   tone: string | null;
   version: number;
   created_at: string;

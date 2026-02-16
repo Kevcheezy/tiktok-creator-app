@@ -428,16 +428,18 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] Defaults pre-selected (Bedroom Ring Light + Hold & Show)
 - [x] Custom presets saved to DB for reuse across projects
 
-#### R1.5.10 - Visual Script Breakdown
+#### R1.5.10 - Visual Script Breakdown ~~DONE~~ (frontend)
 **Priority:** P2 - Medium (backlog)
 **Effort:** Medium
 **Why:** The ScriptingAgent already outputs structured data per segment (shot_scripts, audio_sync, text_overlay, broll_cues), but the user sees these as scattered metadata — never as a unified "breakdown." A visual breakdown view at script review would show the full 60-second plan at a glance: script text with highlighted product mentions, tagged elements (props, wardrobe, interaction type, scene setting), B-roll cue markers on a timeline, camera/shot specs, and energy arc visualization. Inspired by Studiovity's auto-tagging script breakdown. Lets creators see their whole video plan before committing to expensive generation steps.
 
-- [ ] Auto-tag script segments with: props needed, product visibility markers, interaction type, B-roll cue positions, text overlay suggestions
-- [ ] Visual breakdown view at script review: full 60-second timeline with tagged elements, energy arc overlay, B-roll markers
+- [ ] Auto-tag script segments with: props needed, interaction type (requires backend tagging)
+- [x] Visual breakdown view at script review: full 60-second timeline with energy arc overlay, B-roll markers, product visibility, text overlays, shot scripts, audio sync peaks
 - [ ] Highlighted product mentions in script text (clickable to see product placement details for that segment)
 - [ ] Camera/shot specs surfaced as editable fields: angle (close-up/medium/wide), movement (static/pan/zoom), lighting direction
-- [ ] Beat board view option: 4-segment visual arc (Hook → Problem → Solution → CTA) with energy levels, B-roll placements, scene previews
+- [x] Beat board view option: 4-segment visual arc (Hook → Problem → Solution → CTA) with energy levels, B-roll placements, scene previews
+- [x] Cards / Timeline / Beats toggle in script-review.tsx
+- [x] `broll_cues` typed in Scene interface across components
 
 #### R1.5.11 - Keyframe Consistency Validation
 **Priority:** P2 - Medium (backlog)
