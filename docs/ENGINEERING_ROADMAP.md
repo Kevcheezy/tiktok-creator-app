@@ -399,11 +399,11 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] Fix retry endpoint to support broll_planning/broll_generation stages
 
 **Frontend:**
-- [ ] Clickable completed stage nodes in pipeline progress bar
-- [ ] `viewingStage` + `editMode` state in project-detail.tsx
-- [ ] Navigation banner: "Viewing [Stage] — Current: [Stage]" with Back/Edit buttons
-- [ ] `readOnly` prop on ScriptReview, AssetReview, StoryboardView, InfluencerSelection
-- [ ] Destructive edit confirmation dialog with cost estimate from impact API
+- [x] Clickable completed stage nodes in pipeline progress bar
+- [x] `viewingStage` + `editMode` state in project-detail.tsx
+- [x] Navigation banner: "Viewing [Stage] — Current: [Stage]" with Back/Edit buttons
+- [x] `readOnly` prop on ScriptReview, AssetReview, StoryboardView, InfluencerSelection
+- [x] Destructive edit confirmation dialog with cost estimate from impact API
 
 ---
 
