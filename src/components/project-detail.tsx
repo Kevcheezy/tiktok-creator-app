@@ -150,6 +150,31 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
     }
   }, [project?.status]);
 
+  // Retry a stuck stage by re-triggering its entry point
+  const handleStageRetry = useCallback(async (stuckStage: string) => {
+    if (!project) return;
+    try {
+      if (stuckStage === 'casting') {
+        // Re-trigger casting via select-influencer (works from 'casting' status)
+        await fetch(`/api/projects/${projectId}/select-influencer`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ influencerId: project.influencer_id }),
+        });
+      } else {
+        // For other stages, try the retry endpoint with stage name
+        await fetch(`/api/projects/${projectId}/retry`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ stage: stuckStage }),
+        });
+      }
+      fetchProject();
+    } catch (err) {
+      console.error('Failed to retry stage:', err);
+    }
+  }, [project, projectId, fetchProject]);
+
   // Derived navigation state
   const displayStage = viewingStage || project?.status || '';
   const isViewingPast = viewingStage !== null;
@@ -524,24 +549,24 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
 
       {/* B-Roll progress indicators */}
       {!isViewingPast && project.status === 'broll_planning' && (
-        <StageProgress projectId={projectId} stage="broll_planning" color="electric" />
+        <StageProgress projectId={projectId} stage="broll_planning" color="electric" onRetry={() => handleStageRetry('broll_planning')} />
       )}
       {!isViewingPast && project.status === 'broll_generation' && (
-        <StageProgress projectId={projectId} stage="broll_generation" color="magenta" />
+        <StageProgress projectId={projectId} stage="broll_generation" color="magenta" onRetry={() => handleStageRetry('broll_generation')} />
       )}
 
       {/* Asset generation progress indicators */}
       {!isViewingPast && project.status === 'casting' && (
-        <StageProgress projectId={projectId} stage="casting" color="magenta" />
+        <StageProgress projectId={projectId} stage="casting" color="magenta" onRetry={() => handleStageRetry('casting')} />
       )}
       {!isViewingPast && project.status === 'directing' && (
-        <StageProgress projectId={projectId} stage="directing" color="magenta" />
+        <StageProgress projectId={projectId} stage="directing" color="magenta" onRetry={() => handleStageRetry('directing')} />
       )}
       {!isViewingPast && project.status === 'voiceover' && (
-        <StageProgress projectId={projectId} stage="voiceover" color="magenta" />
+        <StageProgress projectId={projectId} stage="voiceover" color="magenta" onRetry={() => handleStageRetry('voiceover')} />
       )}
       {!isViewingPast && project.status === 'editing' && (
-        <StageProgress projectId={projectId} stage="editing" color="electric" />
+        <StageProgress projectId={projectId} stage="editing" color="electric" onRetry={() => handleStageRetry('editing')} />
       )}
 
       {/* Script Review */}
