@@ -17,7 +17,7 @@ export async function POST(
 
   try {
     const body = await request.json();
-    const { influencerId, productPlacement } = body;
+    const { influencerId, productPlacement, scenePresetId, sceneOverride, interactionPresetId, interactionOverride } = body;
 
     if (!influencerId) {
       return NextResponse.json(
@@ -69,7 +69,7 @@ export async function POST(
       );
     }
 
-    // Set influencer and product placement on the project
+    // Set influencer, product placement, and scene/interaction on the project
     const updateData: Record<string, unknown> = {
       influencer_id: influencerId,
       updated_at: new Date().toISOString(),
@@ -77,6 +77,47 @@ export async function POST(
     if (productPlacement && Array.isArray(productPlacement)) {
       updateData.product_placement = productPlacement;
     }
+
+    // Scene preset: explicit selection > default
+    if (sceneOverride && typeof sceneOverride === 'string') {
+      updateData.scene_override = sceneOverride.trim();
+      updateData.scene_preset_id = scenePresetId || null;
+    } else if (scenePresetId) {
+      updateData.scene_preset_id = scenePresetId;
+      updateData.scene_override = null;
+    } else {
+      // Default to the is_default scene preset
+      const { data: defaultScene } = await supabase
+        .from('scene_preset')
+        .select('id')
+        .eq('is_default', true)
+        .limit(1)
+        .single();
+      if (defaultScene) {
+        updateData.scene_preset_id = defaultScene.id;
+      }
+    }
+
+    // Interaction preset: explicit selection > default
+    if (interactionOverride && typeof interactionOverride === 'string') {
+      updateData.interaction_override = interactionOverride.trim();
+      updateData.interaction_preset_id = interactionPresetId || null;
+    } else if (interactionPresetId) {
+      updateData.interaction_preset_id = interactionPresetId;
+      updateData.interaction_override = null;
+    } else {
+      // Default to the is_default interaction preset
+      const { data: defaultInteraction } = await supabase
+        .from('interaction_preset')
+        .select('id')
+        .eq('is_default', true)
+        .limit(1)
+        .single();
+      if (defaultInteraction) {
+        updateData.interaction_preset_id = defaultInteraction.id;
+      }
+    }
+
     await supabase
       .from('project')
       .update(updateData)

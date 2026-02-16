@@ -412,14 +412,14 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 **Why:** CastingAgent currently gets scene descriptions from disconnected sources (character seed data, AVATAR_MAPPING, SEAL video analysis) with no user control. If the setting drifts between segments, keyframes look like they were shot in different rooms. Scene presets lock ONE visual environment across all 4 segments. Interaction presets describe HOW the creator physically engages with the product (stir, apply, try on) — critical for authentic UGC that converts.
 
 **Backend:**
-- [ ] `scene_preset` table with 7 viral-optimized system presets (Bedroom Ring Light, Bathroom Vanity, Kitchen Counter, Car Confessional, Gym Mirror, Outdoor Walk, Cozy Desk)
-- [ ] `interaction_preset` table with 10 system presets (Hold & Show, Stir/Mix, Apply to Skin, Try On, Unbox, Demonstrate, Before/After, Pour/Drink, Compare, Set Down & Point)
-- [ ] `project` table: add `scene_preset_id`, `scene_override`, `interaction_preset_id`, `interaction_override` columns
-- [ ] CRUD APIs for scene + interaction presets (GET/POST/DELETE, system presets immutable)
-- [ ] `POST /api/projects/[id]/select-influencer` accepts scene + interaction selections
-- [ ] CastingAgent: replace `Setting: ${setting}` with scene + interaction descriptions + consistency rule
-- [ ] CastingAgent: "All 4 segments MUST use same room, lighting, props — only vary pose, energy, product visibility"
-- [ ] Legacy fallback: old projects without presets use `ai_character.setting`
+- [x] `scene_preset` table with 7 viral-optimized system presets (Bedroom Ring Light, Bathroom Vanity, Kitchen Counter, Car Confessional, Gym Mirror, Outdoor Walk, Cozy Desk)
+- [x] `interaction_preset` table with 10 system presets (Hold & Show, Stir/Mix, Apply to Skin, Try On, Unbox, Demonstrate, Before/After, Pour/Drink, Compare, Set Down & Point)
+- [x] `project` table: add `scene_preset_id`, `scene_override`, `interaction_preset_id`, `interaction_override` columns
+- [x] CRUD APIs for scene + interaction presets (GET/POST/DELETE, system presets immutable)
+- [x] `POST /api/projects/[id]/select-influencer` accepts scene + interaction selections
+- [x] CastingAgent: replace `Setting: ${setting}` with scene + interaction descriptions + consistency rule
+- [x] CastingAgent: "All 4 segments MUST use same room, lighting, props — only vary pose, energy, product visibility"
+- [x] Legacy fallback: old projects without presets use `ai_character.setting`
 
 **Frontend:**
 - [ ] Scene Selector component: card grid sorted by product category affinity, "★ Best match" badge, full description + virality notes on select, "+ Custom" form

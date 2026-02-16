@@ -16,10 +16,10 @@ export class CastingAgent extends BaseAgent {
     await this.logEvent(projectId, 'stage_start', 'casting');
     this.log(`Starting casting for project ${projectId}`);
 
-    // 1. Fetch project with character
+    // 1. Fetch project with character, scene preset, and interaction preset
     const { data: project, error: projError } = await this.supabase
       .from('project')
-      .select('*, character:ai_character(*), influencer:influencer(*)')
+      .select('*, character:ai_character(*), influencer:influencer(*), scene_preset:scene_preset(*), interaction_preset:interaction_preset(*)')
       .eq('id', projectId)
       .single();
 
@@ -61,7 +61,16 @@ export class CastingAgent extends BaseAgent {
     const avatarFallback = AVATAR_MAPPING[category] || AVATAR_MAPPING.supplements;
     const appearance = character?.avatar_persona || avatarFallback.appearance;
     const wardrobe = avatarFallback.wardrobe;
-    const setting = avatarFallback.setting;
+
+    // Scene priority: override > preset > legacy fallback
+    const sceneDescription = project.scene_override
+      || project.scene_preset?.description
+      || avatarFallback.setting;
+
+    // Interaction priority: override > preset > null (uses PRODUCT_PLACEMENT_ARC description)
+    const interactionDescription = project.interaction_override
+      || project.interaction_preset?.description
+      || null;
 
     // 5. Load custom product placement overrides (if user set them)
     const customPlacement = project.product_placement as
@@ -103,12 +112,13 @@ export class CastingAgent extends BaseAgent {
           // Use LLM to generate detailed prompts for start and end frames
           const sealSegment = project.video_analysis?.segments?.[segIdx] || null;
           const promptPair = await this.generateVisualPrompts(
-            appearance, wardrobe, setting,
+            appearance, wardrobe, sceneDescription,
             scene, placement, energyArc,
             project.product_name || 'the product',
             projectId,
             useInfluencer,
             sealSegment,
+            interactionDescription,
           );
 
           // Save visual prompts to scene
@@ -203,7 +213,7 @@ export class CastingAgent extends BaseAgent {
   private async generateVisualPrompts(
     appearance: string,
     wardrobe: string,
-    setting: string,
+    sceneDescription: string,
     scene: any,
     placement: { section: string; visibility: string; description: string },
     energyArc: (typeof ENERGY_ARC)[number],
@@ -211,21 +221,31 @@ export class CastingAgent extends BaseAgent {
     projectId: string,
     isEdit: boolean = false,
     sealData?: any | null,
+    interactionDescription?: string | null,
   ): Promise<{ start: string; end: string }> {
+    const consistencyRule = `CONSISTENCY RULE: All 4 segments MUST use the same room, lighting setup, and props. Only vary: character pose, energy level, product visibility, and camera micro-adjustments (slight angle shift, subtle lighting warmth change matching energy arc). The video must look like one continuous shoot in one location.`;
+
     const systemPrompt = isEdit
       ? `You are a visual prompt engineer for Nano Banana Pro image EDITING.
 Generate two edit prompts that describe how to transform a reference photo of a person into specific scene contexts.
 Keep the person's likeness but change their pose, wardrobe, setting, and energy.
+${consistencyRule}
 Output ONLY valid JSON: { "start": "...", "end": "..." }`
       : `You are a visual prompt engineer for Nano Banana Pro image generation.
 Generate two detailed image prompts for a TikTok video keyframe: one for the START of the segment and one for the END.
 Both should show the SAME person in the SAME setting but with different poses/energy matching the energy arc.
+${consistencyRule}
 Output ONLY valid JSON: { "start": "...", "end": "..." }`;
+
+    const interactionLine = interactionDescription
+      ? `Product interaction: ${interactionDescription}`
+      : `Product interaction: ${placement.description}`;
 
     const userPrompt = isEdit
       ? `Transform this person into the following scene context:
 Wardrobe: ${wardrobe}
-Setting: ${setting}
+Scene: ${sceneDescription}
+${interactionLine}
 Segment: ${placement.section} (${placement.description})
 Product: ${productName}
 Product visibility: ${placement.visibility}
@@ -234,12 +254,14 @@ Script context: ${scene.script_text || 'N/A'}
 Text overlay: ${scene.text_overlay || 'N/A'}
 
 Generate START frame edit prompt (energy: ${energyArc.pattern.start}) and END frame edit prompt (energy: ${energyArc.pattern.end}).
-Describe how to transform this person's pose, wardrobe, setting, and energy for each frame.
+Describe how to transform this person's pose, wardrobe, scene, and energy for each frame.
+Keep the scene LOCKED — same room, same lighting, same props across all segments.
 Aspect ratio: 9:16 portrait. Photorealistic. No text/watermarks in the image.
 Negative: ${NEGATIVE_PROMPT}`
       : `Character: ${appearance}
 Wardrobe: ${wardrobe}
-Setting: ${setting}
+Scene: ${sceneDescription}
+${interactionLine}
 Segment: ${placement.section} (${placement.description})
 Product: ${productName}
 Product visibility: ${placement.visibility}
@@ -248,6 +270,7 @@ Script context: ${scene.script_text || 'N/A'}
 Text overlay: ${scene.text_overlay || 'N/A'}
 
 Generate START frame prompt (energy: ${energyArc.pattern.start}) and END frame prompt (energy: ${energyArc.pattern.end}).
+Keep the scene LOCKED — same room, same lighting, same props across all segments.
 Aspect ratio: 9:16 portrait. Photorealistic. No text/watermarks in the image.
 Negative: ${NEGATIVE_PROMPT}`;
 
@@ -275,7 +298,7 @@ Match this reference video's visual style: use similar lighting, camera angle, a
     } catch {
       // Fallback: use template-based prompts
       this.log('LLM prompt generation failed, using template fallback');
-      const base = `${appearance}, ${wardrobe}, ${setting}, 9:16 portrait, photorealistic, cinematic lighting`;
+      const base = `${appearance}, ${wardrobe}, ${sceneDescription}, 9:16 portrait, photorealistic, cinematic lighting`;
       return {
         start: `${base}, ${energyArc.pattern.start.toLowerCase()} energy, opening pose, ${placement.visibility} product visibility`,
         end: `${base}, ${energyArc.pattern.end.toLowerCase()} energy, closing pose, ${placement.visibility} product visibility`,
