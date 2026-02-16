@@ -405,6 +405,29 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] `readOnly` prop on ScriptReview, AssetReview, StoryboardView, InfluencerSelection
 - [x] Destructive edit confirmation dialog with cost estimate from impact API
 
+#### R1.5.9 - Scene & Interaction Presets for Casting
+**Priority:** P1 - High
+**Effort:** Medium
+**Spec:** `docs/plans/2026-02-15-scene-interaction-presets-design.md`
+**Why:** CastingAgent currently gets scene descriptions from disconnected sources (character seed data, AVATAR_MAPPING, SEAL video analysis) with no user control. If the setting drifts between segments, keyframes look like they were shot in different rooms. Scene presets lock ONE visual environment across all 4 segments. Interaction presets describe HOW the creator physically engages with the product (stir, apply, try on) — critical for authentic UGC that converts.
+
+**Backend:**
+- [ ] `scene_preset` table with 7 viral-optimized system presets (Bedroom Ring Light, Bathroom Vanity, Kitchen Counter, Car Confessional, Gym Mirror, Outdoor Walk, Cozy Desk)
+- [ ] `interaction_preset` table with 10 system presets (Hold & Show, Stir/Mix, Apply to Skin, Try On, Unbox, Demonstrate, Before/After, Pour/Drink, Compare, Set Down & Point)
+- [ ] `project` table: add `scene_preset_id`, `scene_override`, `interaction_preset_id`, `interaction_override` columns
+- [ ] CRUD APIs for scene + interaction presets (GET/POST/DELETE, system presets immutable)
+- [ ] `POST /api/projects/[id]/select-influencer` accepts scene + interaction selections
+- [ ] CastingAgent: replace `Setting: ${setting}` with scene + interaction descriptions + consistency rule
+- [ ] CastingAgent: "All 4 segments MUST use same room, lighting, props — only vary pose, energy, product visibility"
+- [ ] Legacy fallback: old projects without presets use `ai_character.setting`
+
+**Frontend:**
+- [ ] Scene Selector component: card grid sorted by product category affinity, "★ Best match" badge, full description + virality notes on select, "+ Custom" form
+- [ ] Interaction Selector component: same card grid pattern with category sorting
+- [ ] Influencer selection page: WHO → WHERE → HOW three-section layout
+- [ ] Defaults pre-selected (Bedroom Ring Light + Hold & Show)
+- [ ] Custom presets saved to DB for reuse across projects
+
 ---
 
 ### Tier 2: Make It Actually Convert (Quality & conversion optimization)
@@ -590,6 +613,9 @@ POLISH     Tier 1.5: UX Hardening
            (ATB pipeline + battle HUD + character sprites + Mako palette + command menus)
            R1.5.7 Direct-to-Storage Uploads ✅ DONE (backend)
            (bypass Vercel 4.5MB limit — frontend pending)
+           R1.5.9 Scene & Interaction Presets for Casting
+           (7 scene presets + 10 interaction presets → CastingAgent consistency rule)
+           ▲ Locks one scene across all 4 keyframes. Describes product interaction choreography.
 
 NEXT       Tier 2: Quality & Conversion
            R2.0 Performance Tracking ──→ R2.4 Product Images ──→ R2.5 Reference Video Intel ──→ R2.3 Avatar Consistency ──→ R2.1 Hook Testing ──→ R2.2 Trends
