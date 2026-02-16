@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/db';
+import { REVIEW_GATE_STATUSES, EDITABLE_PROJECT_FIELDS, TONE_IDS } from '@/lib/constants';
 import { logger } from '@/lib/logger';
 
 export async function GET(
@@ -30,9 +31,62 @@ export async function PATCH(
   try {
     const body = await request.json();
 
+    // Fetch current project to check status
+    const { data: proj, error: fetchError } = await supabase
+      .from('project')
+      .select('id, status')
+      .eq('id', id)
+      .single();
+
+    if (fetchError || !proj) {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    }
+
+    // Build allowed updates based on current status
+    const updates: Record<string, unknown> = {};
+
+    // Settings fields (tone, character, influencer, name) — only at review gates
+    for (const field of EDITABLE_PROJECT_FIELDS) {
+      if (field in body) {
+        if (!REVIEW_GATE_STATUSES.includes(proj.status as typeof REVIEW_GATE_STATUSES[number])) {
+          return NextResponse.json(
+            { error: `Cannot edit ${field}: project is in '${proj.status}' status. Settings can only be changed at review stages.` },
+            { status: 400 }
+          );
+        }
+        // Validate tone if provided
+        if (field === 'tone' && body.tone) {
+          if (!TONE_IDS.includes(body.tone)) {
+            return NextResponse.json(
+              { error: `Invalid tone '${body.tone}'. Valid tones: ${TONE_IDS.join(', ')}` },
+              { status: 400 }
+            );
+          }
+        }
+        updates[field] = body[field];
+      }
+    }
+
+    // Always-allowed fields (internal updates from frontend — product_placement, etc.)
+    const ALWAYS_ALLOWED = ['product_placement', 'product_image_url'] as const;
+    for (const field of ALWAYS_ALLOWED) {
+      if (field in body) {
+        updates[field] = body[field];
+      }
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json(
+        { error: 'No valid fields to update' },
+        { status: 400 }
+      );
+    }
+
+    updates.updated_at = new Date().toISOString();
+
     const { data: updated, error } = await supabase
       .from('project')
-      .update({ ...body, updated_at: new Date().toISOString() })
+      .update(updates)
       .eq('id', id)
       .select()
       .single();

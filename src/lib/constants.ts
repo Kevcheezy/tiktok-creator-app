@@ -130,6 +130,46 @@ export const PROJECT_STATUSES = [
 
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 
+// Valid status transitions — any transition not in this map is invalid
+export const VALID_STATUS_TRANSITIONS: Record<string, string[]> = {
+  created: ['analyzing'],
+  analyzing: ['analysis_review', 'failed'],
+  analysis_review: ['scripting'],
+  scripting: ['script_review', 'failed'],
+  script_review: ['influencer_selection'],
+  influencer_selection: ['casting'],
+  casting: ['casting_review', 'failed'],
+  casting_review: ['directing'],
+  directing: ['voiceover', 'failed'],
+  voiceover: ['asset_review', 'failed'],
+  asset_review: ['editing'],
+  editing: ['completed', 'failed'],
+  completed: [],
+  failed: ['analyzing', 'scripting', 'casting', 'directing', 'voiceover', 'editing'], // retry from failed stage
+};
+
+// Statuses where the user can edit project settings (tone, character, influencer)
+export const REVIEW_GATE_STATUSES: ProjectStatus[] = [
+  'analysis_review',
+  'script_review',
+  'influencer_selection',
+  'casting_review',
+  'asset_review',
+];
+
+// Editable project fields and which statuses they're editable at
+export const EDITABLE_PROJECT_FIELDS = ['tone', 'character_id', 'influencer_id', 'name'] as const;
+
+// Map of stage to the review gate it should restart from
+export const RESTART_STAGE_MAP: Record<string, { targetStatus: ProjectStatus; queueStep: string }> = {
+  analysis: { targetStatus: 'created', queueStep: 'product_analysis' },
+  scripting: { targetStatus: 'analysis_review', queueStep: 'scripting' },
+  casting: { targetStatus: 'script_review', queueStep: 'casting' },
+  directing: { targetStatus: 'casting_review', queueStep: 'directing' },
+  voiceover: { targetStatus: 'casting_review', queueStep: 'voiceover' },
+  editing: { targetStatus: 'asset_review', queueStep: 'editing' },
+};
+
 // Product categories
 export const PRODUCT_CATEGORIES = [
   'supplements',

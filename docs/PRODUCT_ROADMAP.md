@@ -218,15 +218,15 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] PATCH endpoint for influencers (edit name, persona) — done in B0.4
 - [x] Image re-upload / replacement — moved to B0.11 (Tier 0, higher priority)
 - [ ] Edit mode toggle on influencer detail page (inline editing for name, persona, with save/cancel)
-- [ ] Prevent deletion of influencers assigned to active projects (or show warning with project list)
+- [x] Prevent deletion of influencers assigned to active projects (or show warning with project list) — DELETE returns 409 with project list for active (non-completed/failed) projects only
 
 #### R1.5.2 - Project Settings Editing
 **Priority:** P1 - Medium
 **Effort:** Small
 **Why:** Users can't change tone, character, or influencer after project creation. Must delete and recreate.
 
-- [ ] Editable project settings on detail page (tone, character, influencer) — only when status is at a review gate
-- [ ] "Restart pipeline" option: re-run from a specific stage with changed settings (e.g., change tone and re-run scripting)
+- [x] Editable project settings on detail page (tone, character, influencer) — PATCH whitelists `EDITABLE_PROJECT_FIELDS`, gated behind `REVIEW_GATE_STATUSES`; validates tone against `TONE_IDS`
+- [x] "Restart pipeline" option: `POST /api/projects/[id]/retry` with `{ stage }` body restarts from review gate using `RESTART_STAGE_MAP`; also supports legacy failed retry via `failed_at_status`
 
 #### R1.5.3 - Navigation & State Consistency
 **Priority:** P1 - Medium
@@ -248,7 +248,7 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [ ] Error state display in ScriptReview, AssetReview (currently console.error only)
 - [ ] Network failure recovery: exponential backoff on polling, offline indicator
 - [ ] Failed pipeline recovery: surface error_message on project card (not just detail page)
-- [ ] Status transition validation: prevent invalid status jumps via API
+- [x] Status transition validation: `VALID_STATUS_TRANSITIONS`, `REVIEW_GATE_STATUSES`, `EDITABLE_PROJECT_FIELDS`, `RESTART_STAGE_MAP` constants added to `src/lib/constants.ts`
 
 ---
 
