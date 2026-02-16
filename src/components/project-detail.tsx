@@ -20,6 +20,7 @@ import { PresetSelector, type Preset } from './preset-selector';
 
 interface ProjectData {
   id: string;
+  project_number: number | null;
   name: string | null;
   status: string;
   product_url: string;
@@ -310,6 +311,11 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
+          {project.project_number != null && (
+            <p className="mb-1 font-[family-name:var(--font-mono)] text-xs font-bold uppercase tracking-wider text-electric/70">
+              PROJECT-{project.project_number}
+            </p>
+          )}
           <h1 className="font-[family-name:var(--font-display)] text-2xl font-bold text-text-primary">
             {project.product_name || project.name || 'Untitled Project'}
           </h1>

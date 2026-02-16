@@ -545,10 +545,10 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] Saving indicator per field
 - [ ] Per-field regeneration via LLM (e.g., "regenerate just the selling points") — requires backend endpoint
 
-#### R1.5.15 - Project Sequential Numbering ~~DONE~~ (backend)
+#### R1.5.15 - Project Sequential Numbering ~~DONE~~
 **Priority:** P1 - Medium
 **Effort:** Small
-**Status:** Backend complete (2026-02-15). Schema + backfill done. Frontend display is a frontend agent task.
+**Status:** Complete (2026-02-15). Backend schema + backfill done. Frontend display live.
 **Why:** Projects only have UUIDs — no human-readable identifier. A sequential number gives each project a short, memorable reference (PROJECT-1, PROJECT-2, ...) visible across all UI surfaces. Useful for conversation ("check PROJECT-14"), search, and future batch/campaign grouping.
 
 **Schema:**
@@ -560,9 +560,9 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] `GET /api/projects` and `GET /api/projects/[id]` — return `project_number` in response (already returned via `select('*')`)
 
 **Frontend:**
-- [ ] Project card (`project-card.tsx`) — display `PROJECT-N` at top of card, above product name
-- [ ] Project detail header (`project-detail.tsx`) — display `PROJECT-N` prominently in header
-- [ ] Project list search — allow searching by project number (e.g., "14" or "PROJECT-14")
+- [x] Project card (`project-card.tsx`) — display `PROJECT-N` at top of card, above product name
+- [x] Project detail header (`project-detail.tsx`) — display `PROJECT-N` prominently in header
+- [x] Project list search — allow searching by project number (e.g., "14" or "PROJECT-14")
 
 ---
 

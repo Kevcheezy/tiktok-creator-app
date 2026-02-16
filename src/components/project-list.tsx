@@ -7,6 +7,7 @@ import { ConfirmDialog } from './confirm-dialog';
 
 interface Project {
   id: string;
+  project_number: number | null;
   name: string | null;
   product_url: string;
   product_name: string | null;
@@ -52,8 +53,12 @@ export function ProjectList({ projects: initialProjects }: { projects: Project[]
     // Search filter
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
+      // Support searching by "PROJECT-14", "14", etc.
+      const numMatch = q.replace(/^project-?/i, '');
+      const searchNum = /^\d+$/.test(numMatch) ? parseInt(numMatch, 10) : null;
       result = result.filter(
         (p) =>
+          (searchNum !== null && p.project_number === searchNum) ||
           (p.product_name && p.product_name.toLowerCase().includes(q)) ||
           (p.name && p.name.toLowerCase().includes(q)) ||
           p.product_url.toLowerCase().includes(q)
@@ -170,7 +175,7 @@ export function ProjectList({ projects: initialProjects }: { projects: Project[]
             type="text"
             value={searchQuery}
             onChange={(e) => handleSearchChange(e.target.value)}
-            placeholder="Search by name, product, or URL..."
+            placeholder="Search by name, product, URL, or PROJECT-N..."
             className="w-full rounded-lg border border-border bg-surface-raised py-2.5 pl-10 pr-4 text-sm text-text-primary placeholder:text-text-muted/50 outline-none transition-colors focus:border-electric/40 focus:ring-1 focus:ring-electric/20"
           />
         </div>

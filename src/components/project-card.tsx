@@ -9,6 +9,7 @@ import { getCharacterForStatus } from './ff7-theme';
 interface ProjectCardProps {
   project: {
     id: string;
+    project_number: number | null;
     name: string | null;
     product_url: string;
     product_name: string | null;
@@ -85,9 +86,16 @@ export function ProjectCard({ project, onDelete }: ProjectCardProps) {
             {character && (
               <FF7Sprite character={project.status} state={spriteState} size="sm" />
             )}
-            <h3 className="font-[family-name:var(--font-display)] text-sm font-semibold leading-tight text-text-primary line-clamp-2">
-              {displayName}
-            </h3>
+            <div className="min-w-0">
+              {project.project_number != null && (
+                <p className="font-[family-name:var(--font-mono)] text-[10px] font-bold uppercase tracking-wider text-electric/70">
+                  PROJECT-{project.project_number}
+                </p>
+              )}
+              <h3 className="font-[family-name:var(--font-display)] text-sm font-semibold leading-tight text-text-primary line-clamp-2">
+                {displayName}
+              </h3>
+            </div>
           </div>
           <div className="flex-shrink-0">
             <StatusBadge status={project.status} />
