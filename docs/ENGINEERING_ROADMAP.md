@@ -224,7 +224,7 @@ Influencer `<select>` options displayed the entire `persona` field (full appeara
 - [x] Worker: `regenerateKeyframe()` now uses full reference images (previous frame, influencer, product) matching CastingAgent
 - [x] Backend: Error stored in `asset.metadata.lastRegenError` on regeneration failure
 
-#### B0.21 - No Audio Duration Validation in VoiceoverAgent
+#### B0.21 - No Audio Duration Validation in VoiceoverAgent 🔧 IN PROGRESS
 **Severity:** High (audio silently clips or leaves dead silence in final video)
 **Scope:** Backend
 **Why:** VoiceoverAgent generates TTS audio from `scene.script_text` but never measures the actual audio duration. The only validation is file size (warn if <5KB or >1MB). If ElevenLabs produces audio longer than the segment duration (possible with slower voice styles or longer scripts), the Creatomate template silently clips it. If audio is too short, there's dead silence at the segment end. Users get a broken final video with no indication of why.
@@ -235,7 +235,7 @@ Influencer `<select>` options displayed the entire `persona` field (full appeara
 - [ ] Store measured duration in `asset.metadata.durationMs` for EditorAgent to reference
 - [ ] If audio exceeds segment duration by >2s, log a `segment_error` event (don't fail — but make it visible)
 
-#### B0.22 - Voice Mapping Mismatch (Every Video Gets Same Voice)
+#### B0.22 - Voice Mapping Mismatch (Every Video Gets Same Voice) 🔧 IN PROGRESS
 **Severity:** Medium (defeats voice personalization — all categories sound identical)
 **Scope:** Backend
 **Why:** `VOICE_MAPPING` in VoiceoverAgent uses persona names as keys (`pharmacist`, `dermatologist`) but the lookup is by `project.product_category` (`supplements`, `skincare`, `fitness`, etc.). The fallback `VOICE_MAPPING[Object.keys(VOICE_MAPPING)[0]]` always resolves to the first key (`pharmacist`), so every product category gets the same deep/calm/professional voice regardless of the product type.
@@ -246,7 +246,7 @@ Influencer `<select>` options displayed the entire `persona` field (full appeara
 - [ ] Log which persona was selected for the category in `logToGenerationLog()` (aids debugging)
 - [ ] Ensure unmapped categories still fall back gracefully (log warning, use first persona)
 
-#### B0.23 - Data URI Audio Fallback Causes Silent Render Failures
+#### B0.23 - Data URI Audio Fallback Causes Silent Render Failures 🔧 IN PROGRESS
 **Severity:** Medium (EditorAgent render fails with no clear error pointing to the cause)
 **Scope:** Backend
 **Why:** When Supabase Storage upload fails, VoiceoverAgent stores audio as `data:audio/mpeg;base64,...` in `asset.url`. EditorAgent passes this URL directly to Creatomate. Creatomate's support for data URIs as audio sources is undocumented and untested. If Creatomate rejects the data URI, the render fails with a generic error that doesn't indicate the audio format was the problem.
@@ -256,6 +256,22 @@ Influencer `<select>` options displayed the entire `persona` field (full appeara
 - [ ] Remove the data URI fallback path entirely — it creates a time bomb for EditorAgent
 - [ ] Log Storage upload failures as `segment_error` events with detail (bucket, path, error message)
 - [ ] EditorAgent: add pre-render validation that all asset URLs are HTTPS (reject data URIs with a clear error message)
+
+#### B0.24 - BRollAgent JSON Parse Failure — No Retry on Malformed LLM Response
+**Severity:** High (B-roll planning KOs the entire project with no recovery)
+**Scope:** Backend
+**Discovered:** 2026-02-16 (PROJECT-5: Collagen Bio-Peptides Powder, NeoCell Grassfed)
+**Error:** `Failed to parse B-roll LLM response: Expected ',' or '}' after property value in JSON at position 4438 (line 70 column 88)`
+**Why:** The Gemini LLM returned malformed JSON in the B-roll shot list response. The BRollAgent has no recovery mechanism — a single JSON parse failure immediately KOs the project. The response was large (~4438+ chars) and likely contained unescaped characters in prompt strings or a trailing comma. The agent should retry with a cleaner/simpler prompt or attempt JSON repair before hard-failing.
+
+**Root cause:** BRollAgent parses the raw LLM response with `JSON.parse()` — no fallback, no retry, no repair. LLMs frequently produce slightly malformed JSON (trailing commas, unescaped quotes in string values, truncated responses), and a single parse failure shouldn't be terminal.
+
+**Fix checklist:**
+- [ ] Add JSON repair attempt before hard-failing (strip trailing commas, fix unclosed brackets/strings)
+- [ ] If `JSON.parse()` fails after repair, retry LLM call once with a simplified prompt that emphasizes strict JSON formatting
+- [ ] Add `JSON5.parse` or equivalent lenient parser as secondary fallback (tolerates trailing commas, single quotes)
+- [ ] Log the raw LLM response on parse failure (currently only logs a truncated snippet — need full response for debugging)
+- [ ] Consider chunking: if the shot list is large (>20 shots), generate in batches to reduce truncation risk
 
 ---
 
@@ -684,7 +700,7 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [ ] WaveSpeed client: add resolution param to generateVideo() (deferred — Kling uses 1080p default)
 - [ ] `PIPELINE_CONFIG` kept as fallback for backward compatibility
 
-**Frontend:**
+**Frontend:** 🔧 IN PROGRESS
 - [ ] Create project form: video model selector (pre-selected Kling 3.0 Pro card)
 - [ ] Project detail: video model badge in header
 
