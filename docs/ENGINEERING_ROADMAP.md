@@ -345,37 +345,35 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [ ] "Roadmap" tab in navigation
 - [ ] Smooth animations: card column transitions, progress bar updates, worker avatar pulse
 
-#### R1.5.6 - FF7 Visual Theme
+#### ~~R1.5.6 - FF7 Visual Theme~~ ~~DONE~~
 **Priority:** P1 - High
 **Effort:** Medium
 **Spec:** `docs/plans/2026-02-15-ff7-visual-theme-design.md`
-**Why:** The app has a solid dark cinematic aesthetic but no distinctive identity. The pipeline becomes an Active Time Battle system where AI agents are FF7 party members battling the "Blank Video" boss. Pixel sprites generated via Nano Banana Pro. Purely visual — no workflow, routing, API, or data changes.
+**Why:** The app has a solid dark cinematic aesthetic but no distinctive identity. The pipeline becomes an Active Time Battle system where AI agents are FF7 party members battling the "Blank Video" boss. Purely visual — no workflow, routing, API, or data changes. Sprites use CSS pixel art placeholders (swap to real PNGs later).
 
 **Asset generation:**
-- [ ] Generate ~30 pixel sprite assets via Nano Banana Pro (~$2.10 one-time)
-- [ ] Character sprites: Cloud, Tifa, Aerith, Red XIII, Barret, Cait Sith (idle, attack, ko poses)
-- [ ] Icons: Gil coin, Materia orbs (5 colors), Buster Sword, command cursor
-- [ ] Scenes: battle background, empty field, item shop, party select, victory
+- [ ] Generate ~30 pixel sprite assets via Nano Banana Pro (~$2.10 one-time) — deferred, using CSS placeholders
 
 **Theme system:**
-- [ ] `ff7-theme.ts` constants: character-agent map, status-effect labels, battle text, Gil formatter
-- [ ] Mako-shifted color palette in globals.css (electric→Mako green, magenta→Ifrit red, lime→Cure green, amber→Chocobo gold)
-- [ ] Battle animations: atb-fill, attack-flash, ko-spin, victory-fanfare, command-cursor, enemy-hp-drain
+- [x] `ff7-theme.ts` constants: character-agent map, status-effect labels, battle text, Gil formatter
+- [x] Mako-shifted color palette in globals.css (electric→Mako green, magenta→Ifrit red, lime→Cure green, amber→Chocobo gold)
+- [x] Battle animations: atb-fill, attack-flash, ko-spin, victory-fanfare, command-cursor, enemy-hp-drain
 
 **New components:**
-- [ ] `atb-bar.tsx` — ATB gauge per pipeline stage (replaces dot-line progress)
-- [ ] `battle-hud.tsx` — Battle HUD overlay on project detail (party lineup, enemy HP, Gil/MP counters)
-- [ ] `ff7-sprite.tsx` — Reusable character sprite (idle/attack/ko state, sizing)
-- [ ] `command-menu.tsx` — FF7-style vertical command menu for review gate actions
-- [ ] `gil-display.tsx` — Cost display with Gil coin icon
+- [x] `atb-bar.tsx` — ATB gauge per pipeline stage (replaces dot-line progress)
+- [x] `battle-hud.tsx` — Battle HUD overlay on project detail (party lineup, enemy HP, Gil/MP counters)
+- [x] `ff7-sprite.tsx` — Reusable character sprite (idle/attack/ko state, sizing) — CSS placeholders
+- [x] `command-menu.tsx` — FF7-style vertical command menu for review gate actions
+- [x] `gil-display.tsx` — Cost display with Gil coin icon
 
 **Modified components:**
-- [ ] `nav.tsx` — Buster Sword logo, Materia nav dots, command-style New Project button, Gil counter
-- [ ] `status-badge.tsx` — FF7 status-effect names + icons (Scan, Haste, Wait, Summon, Fury, Victory, KO)
-- [ ] `pipeline-progress.tsx` — Major rewrite: ATB bar system with character sprites
-- [ ] `project-card.tsx` — Active character sprite, HP-bar gauge, Gil cost
-- [ ] `project-detail.tsx` — Battle HUD wrapper, command menu at review gates
-- [ ] Empty states: "No encounters" / "No items in inventory" / "Party not assembled" with pixel scenes
+- [x] `nav.tsx` — Buster Sword logo, Materia nav dots, command-style New Project button
+- [x] `status-badge.tsx` — FF7 status-effect names + icons (Scan, Haste, Wait, Summon, Fury, Victory, KO)
+- [x] `pipeline-progress.tsx` — Major rewrite: ATB bar system with character colors
+- [x] `project-card.tsx` — Active character sprite, Gil cost, expanded status accents
+- [x] `project-detail.tsx` — Battle HUD wrapper, command menu at review gates, VICTORY/KO states
+- [x] Empty states: "No encounters" / "No items in inventory" / "Party not assembled"
+- [x] `approve-controls.tsx` — Materia orb grade buttons, CommandMenu for approve/regenerate
 
 #### R1.5.7 - Direct-to-Storage Image Uploads
 **Priority:** P2 - Medium (backlog)
