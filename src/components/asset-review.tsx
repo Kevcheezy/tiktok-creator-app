@@ -22,6 +22,7 @@ interface AssetReviewProps {
   projectId: string;
   onStatusChange?: () => void;
   confirmBeforeApprove?: { title: string; description: string; cost: string };
+  onRegenerateAll?: () => Promise<void>;
   readOnly?: boolean;
 }
 
@@ -32,13 +33,15 @@ const SECTION_LABELS: Record<string, string> = {
   cta: 'CTA',
 };
 
-export function AssetReview({ projectId, onStatusChange, confirmBeforeApprove, readOnly }: AssetReviewProps) {
+export function AssetReview({ projectId, onStatusChange, confirmBeforeApprove, onRegenerateAll, readOnly }: AssetReviewProps) {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [bySegment, setBySegment] = useState<Record<number, Asset[]>>({});
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [approving, setApproving] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [showRegenConfirm, setShowRegenConfirm] = useState(false);
+  const [regeneratingAll, setRegeneratingAll] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Keyframe editing state
@@ -407,7 +410,7 @@ export function AssetReview({ projectId, onStatusChange, confirmBeforeApprove, r
         })}
       </div>
 
-      {/* Approve button */}
+      {/* Action buttons */}
       {!readOnly && (
         <div className="flex items-center justify-between gap-4">
           {hasIssues && (
@@ -415,7 +418,23 @@ export function AssetReview({ projectId, onStatusChange, confirmBeforeApprove, r
               {failedAssets + rejectedAssets} asset{failedAssets + rejectedAssets > 1 ? 's' : ''} need attention. Regenerate or approve to continue.
             </p>
           )}
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-3">
+            {onRegenerateAll && (
+              <button
+                type="button"
+                onClick={() => setShowRegenConfirm(true)}
+                disabled={regeneratingAll || generatingAssets > 0 || editingAssets > 0}
+                className="inline-flex items-center gap-2 rounded-lg border border-phoenix/30 bg-phoenix/10 px-5 py-3 font-[family-name:var(--font-display)] text-sm font-semibold text-phoenix transition-all hover:bg-phoenix/20 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M1.5 8a6.5 6.5 0 0111.48-4.16" />
+                  <path d="M14.5 8a6.5 6.5 0 01-11.48 4.16" />
+                  <polyline points="13 1.5 13 4.5 10 4.5" />
+                  <polyline points="3 14.5 3 11.5 6 11.5" />
+                </svg>
+                Regenerate All
+              </button>
+            )}
             <button
               type="button"
               onClick={() => confirmBeforeApprove ? setShowConfirm(true) : handleApprove()}
@@ -475,6 +494,53 @@ export function AssetReview({ projectId, onStatusChange, confirmBeforeApprove, r
                 className="flex-1 rounded-lg bg-lime px-4 py-2.5 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:shadow-[0_0_24px_rgba(184,255,0,0.25)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Confirm & Generate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Regenerate all confirmation dialog */}
+      {showRegenConfirm && onRegenerateAll && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-void/80 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-md animate-fade-in-up rounded-xl border border-phoenix/30 bg-surface p-6">
+            <h3 className="font-[family-name:var(--font-display)] text-lg font-bold text-text-primary">
+              Regenerate All Keyframes?
+            </h3>
+            <p className="mt-2 text-sm leading-relaxed text-text-secondary">
+              This will delete all existing keyframes and restart generation from scratch using the same influencer and settings.
+            </p>
+            <div className="mt-3 rounded-lg bg-surface-overlay px-3 py-2">
+              <span className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                Estimated cost
+              </span>
+              <p className="font-[family-name:var(--font-mono)] text-lg font-bold text-amber-hot">
+                ~$0.56
+              </p>
+            </div>
+            <div className="mt-5 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setShowRegenConfirm(false)}
+                className="flex-1 rounded-lg border border-border bg-surface px-4 py-2.5 font-[family-name:var(--font-display)] text-sm font-semibold text-text-secondary transition-all hover:bg-surface-raised"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  setShowRegenConfirm(false);
+                  setRegeneratingAll(true);
+                  try {
+                    await onRegenerateAll();
+                  } finally {
+                    setRegeneratingAll(false);
+                  }
+                }}
+                disabled={regeneratingAll}
+                className="flex-1 rounded-lg bg-phoenix px-4 py-2.5 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:shadow-[0_0_24px_rgba(255,107,61,0.25)] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Regenerate All
               </button>
             </div>
           </div>

@@ -273,6 +273,16 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
     if (res.ok) setArchived(true);
   }
 
+  async function handleRegenerateAllKeyframes() {
+    if (!project?.influencer_id) return;
+    await fetch(`/api/projects/${projectId}/select-influencer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ influencerId: project.influencer_id }),
+    });
+    fetchProject();
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -606,6 +616,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
             description: 'This will generate video segments using Kling 3.0 Pro and voiceover audio using ElevenLabs. Video generation takes 2-5 minutes per segment.',
             cost: '~$1.25',
           }}
+          onRegenerateAll={handleRegenerateAllKeyframes}
           readOnly={readOnlyMode}
         />
       )}
