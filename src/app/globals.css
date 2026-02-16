@@ -1,21 +1,28 @@
 @import "tailwindcss";
 
 @theme inline {
-  /* === CORE PALETTE === */
-  /* Dark cinematic base */
-  --color-void: #0a0a0f;
+  /* === MAKO PALETTE === */
+  /* FF7-themed dark cinematic base */
+  --color-void: #08080e;
   --color-surface: #12121a;
   --color-surface-raised: #1a1a26;
   --color-surface-overlay: #222233;
 
-  /* Neon accents - TikTok-inspired but unique */
-  --color-electric: #00f0ff;
-  --color-electric-dim: #00a3ad;
-  --color-magenta: #ff2d78;
-  --color-magenta-dim: #b8204f;
-  --color-lime: #b8ff00;
-  --color-lime-dim: #7aa600;
-  --color-amber-hot: #ff9500;
+  /* Mako-shifted accents */
+  --color-electric: #00e5a0;
+  --color-electric-dim: #007a55;
+  --color-magenta: #ff2d55;
+  --color-magenta-dim: #b81e3a;
+  --color-lime: #7aff6e;
+  --color-lime-dim: #50b648;
+  --color-amber-hot: #ffc933;
+
+  /* FF7-specific tokens */
+  --color-mako: #00e5a0;
+  --color-mako-dim: #007a55;
+  --color-gil: #ffc933;
+  --color-phoenix: #ff6b3d;
+  --color-summon: #b388ff;
 
   /* Text hierarchy */
   --color-text-primary: #eeeef4;
@@ -26,12 +33,12 @@
   --color-border: #2a2a3e;
   --color-border-bright: #3d3d5a;
 
-  /* Status colors */
+  /* Status colors (Mako-shifted) */
   --color-status-idle: #555570;
-  --color-status-processing: #00f0ff;
-  --color-status-review: #ff9500;
-  --color-status-success: #b8ff00;
-  --color-status-error: #ff2d78;
+  --color-status-processing: #00e5a0;
+  --color-status-review: #ffc933;
+  --color-status-success: #7aff6e;
+  --color-status-error: #ff2d55;
 
   /* Fonts */
   --font-display: var(--font-space-grotesk);
@@ -46,16 +53,16 @@ body {
   font-family: var(--font-body), system-ui, sans-serif;
 }
 
-/* Mesh gradient background */
+/* Mako reactor mesh gradient */
 body::before {
   content: "";
   position: fixed;
   inset: 0;
   z-index: -1;
   background:
-    radial-gradient(ellipse 80% 60% at 10% 20%, rgba(0, 240, 255, 0.06) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 50% at 90% 80%, rgba(255, 45, 120, 0.05) 0%, transparent 60%),
-    radial-gradient(ellipse 50% 40% at 50% 50%, rgba(184, 255, 0, 0.03) 0%, transparent 60%);
+    radial-gradient(ellipse 80% 60% at 10% 20%, rgba(0, 229, 160, 0.06) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 90% 80%, rgba(255, 45, 85, 0.05) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 40% at 50% 50%, rgba(122, 255, 110, 0.03) 0%, transparent 60%);
   pointer-events: none;
 }
 
@@ -117,6 +124,86 @@ body::after {
   50% { transform: translateY(-6px); }
 }
 
+/* --- FF7 Battle Animations --- */
+
+@keyframes atb-fill {
+  from { width: 0%; }
+  to { width: 100%; }
+}
+
+@keyframes atb-ready {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(255, 201, 51, 0.3);
+    border-color: rgba(255, 201, 51, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(255, 201, 51, 0.6);
+    border-color: rgba(255, 201, 51, 1);
+  }
+}
+
+@keyframes attack-flash {
+  0% { transform: translateX(0); opacity: 1; }
+  30% { transform: translateX(16px); opacity: 1; }
+  50% { transform: translateX(16px); opacity: 0.5; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes ko-spin {
+  0% { transform: rotate(0deg) translateY(0); opacity: 1; }
+  100% { transform: rotate(360deg) translateY(8px); opacity: 0.4; }
+}
+
+@keyframes victory-fanfare {
+  0% { transform: scale(0.8) translateY(0); opacity: 0; }
+  50% { transform: scale(1.15) translateY(-12px); opacity: 1; }
+  70% { transform: scale(1) translateY(-8px); }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+@keyframes command-cursor {
+  0%, 100% { opacity: 1; transform: translateX(0); }
+  50% { opacity: 0.4; transform: translateX(3px); }
+}
+
+@keyframes damage-number {
+  0% { transform: translateY(0); opacity: 1; }
+  100% { transform: translateY(-28px); opacity: 0; }
+}
+
+@keyframes materia-pulse {
+  0%, 100% {
+    box-shadow: 0 0 3px currentColor;
+    opacity: 0.7;
+  }
+  50% {
+    box-shadow: 0 0 8px currentColor, 0 0 14px currentColor;
+    opacity: 1;
+  }
+}
+
+@keyframes limit-charge {
+  0%, 100% {
+    box-shadow: 0 0 6px rgba(255, 201, 51, 0.3), inset 0 0 4px rgba(255, 201, 51, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(255, 201, 51, 0.6), inset 0 0 8px rgba(255, 201, 51, 0.2);
+  }
+}
+
+@keyframes enemy-hp-drain {
+  from { opacity: 1; }
+  20% { opacity: 0.6; }
+  100% { opacity: 1; }
+}
+
+@keyframes victory-bounce {
+  0%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-16px); }
+  60% { transform: translateY(-4px); }
+}
+
+/* === ANIMATION UTILITIES === */
 .animate-fade-in-up {
   animation: fade-in-up 0.5s ease-out both;
 }
@@ -138,6 +225,46 @@ body::after {
 
 .animate-float {
   animation: float 3s ease-in-out infinite;
+}
+
+.animate-atb-fill {
+  animation: atb-fill 3s linear forwards;
+}
+
+.animate-atb-ready {
+  animation: atb-ready 1.5s ease-in-out infinite;
+}
+
+.animate-attack-flash {
+  animation: attack-flash 0.4s ease-out;
+}
+
+.animate-ko-spin {
+  animation: ko-spin 0.6s ease-in forwards;
+}
+
+.animate-victory-fanfare {
+  animation: victory-fanfare 0.8s ease-out both;
+}
+
+.animate-command-cursor {
+  animation: command-cursor 0.6s ease-in-out infinite;
+}
+
+.animate-damage-number {
+  animation: damage-number 1s ease-out forwards;
+}
+
+.animate-materia-pulse {
+  animation: materia-pulse 2s ease-in-out infinite;
+}
+
+.animate-limit-charge {
+  animation: limit-charge 1.2s ease-in-out infinite;
+}
+
+.animate-victory-bounce {
+  animation: victory-bounce 0.6s ease-out;
 }
 
 /* Stagger children */
@@ -162,16 +289,33 @@ body::after {
   border: 1px solid var(--color-border);
 }
 
+/* Mako-shifted glow utilities */
 .glow-electric {
-  box-shadow: 0 0 20px rgba(0, 240, 255, 0.15), 0 0 60px rgba(0, 240, 255, 0.05);
+  box-shadow: 0 0 20px rgba(0, 229, 160, 0.15), 0 0 60px rgba(0, 229, 160, 0.05);
+}
+
+.glow-mako {
+  box-shadow: 0 0 20px rgba(0, 229, 160, 0.2), 0 0 60px rgba(0, 229, 160, 0.08);
 }
 
 .glow-magenta {
-  box-shadow: 0 0 20px rgba(255, 45, 120, 0.15), 0 0 60px rgba(255, 45, 120, 0.05);
+  box-shadow: 0 0 20px rgba(255, 45, 85, 0.15), 0 0 60px rgba(255, 45, 85, 0.05);
 }
 
 .glow-lime {
-  box-shadow: 0 0 20px rgba(184, 255, 0, 0.15), 0 0 60px rgba(184, 255, 0, 0.05);
+  box-shadow: 0 0 20px rgba(122, 255, 110, 0.15), 0 0 60px rgba(122, 255, 110, 0.05);
+}
+
+.glow-gil {
+  box-shadow: 0 0 20px rgba(255, 201, 51, 0.15), 0 0 60px rgba(255, 201, 51, 0.05);
+}
+
+.glow-phoenix {
+  box-shadow: 0 0 20px rgba(255, 107, 61, 0.15), 0 0 60px rgba(255, 107, 61, 0.05);
+}
+
+.glow-summon {
+  box-shadow: 0 0 20px rgba(179, 136, 255, 0.15), 0 0 60px rgba(179, 136, 255, 0.05);
 }
 
 .text-gradient-electric {
@@ -185,8 +329,8 @@ body::after {
   border-image: linear-gradient(135deg, var(--color-electric), var(--color-magenta)) 1;
 }
 
-/* Selection */
+/* Mako selection */
 ::selection {
-  background: rgba(0, 240, 255, 0.3);
+  background: rgba(0, 229, 160, 0.3);
   color: var(--color-text-primary);
 }
