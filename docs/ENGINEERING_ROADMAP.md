@@ -320,7 +320,7 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] Network failure recovery: exponential backoff on polling (3s → 30s cap), connection warning after 5 failures in StageProgress and ProjectDetail
 - [x] Failed pipeline recovery: surface `error_message` on project card (truncated single line in magenta)
 
-#### R1.5.5 - Engineering Roadmap Kanban Dashboard
+#### ~~R1.5.5 - Engineering Roadmap Kanban Dashboard~~ DONE
 **Priority:** P1 - Medium
 **Effort:** Medium
 **Spec:** `docs/plans/2026-02-15-r1.5.5-kanban-dashboard-design.md`
@@ -335,15 +335,15 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] Auto-assignment heuristic: domain keywords → FF7 character mapping (Cloud=Backend, Tifa=Frontend, Barret=Infra, Aerith=PM, Red XIII=QA)
 
 **Frontend:**
-- [ ] `/roadmap` page with Kanban board (3 columns: Backlog, In Progress, Done)
-- [ ] Worker bar with FF7 character avatars and active task counts (filter by clicking)
-- [ ] Task cards with worker avatar, tier badge, progress bar (from checkboxes), dependencies, cost
-- [ ] Card click expands to full detail view (all checkboxes, spec link, description)
-- [ ] Worker reassignment dropdown on cards
-- [ ] Filter by tier (dropdown), search by task ID/title
-- [ ] Auto-poll every 30 seconds for live updates
-- [ ] "Roadmap" tab in navigation
-- [ ] Smooth animations: card column transitions, progress bar updates, worker avatar pulse
+- [x] `/roadmap` page with Kanban board (3 columns: Backlog, In Progress, Done)
+- [x] Worker bar with FF7 character avatars and active task counts (filter by clicking)
+- [x] Task cards with worker avatar, tier badge, progress bar (from checkboxes), dependencies, cost
+- [x] Card click expands to full detail view (all checkboxes, spec link, description)
+- [x] Worker reassignment dropdown on cards
+- [x] Filter by tier (dropdown), search by task ID/title
+- [x] Auto-poll every 30 seconds for live updates
+- [x] "Roadmap" tab in navigation
+- [x] Smooth animations: card column transitions, progress bar updates, worker avatar pulse
 
 #### ~~R1.5.6 - FF7 Visual Theme~~ ~~DONE~~
 **Priority:** P1 - High
