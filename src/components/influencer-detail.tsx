@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ConfirmDialog } from './confirm-dialog';
+import { uploadToStorage } from './direct-upload';
 
 interface Influencer {
   id: string;
@@ -82,12 +83,10 @@ export function InfluencerDetail({ influencerId }: { influencerId: string }) {
     if (!influencer) return;
     setSaving(true);
     try {
-      const formData = new FormData();
-      formData.append('name', editName.trim());
-      formData.append('persona', editPersona.trim());
       const res = await fetch(`/api/influencers/${influencerId}`, {
         method: 'PATCH',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: editName.trim(), persona: editPersona.trim() }),
       });
       if (res.ok) {
         const updated = await res.json();
@@ -114,11 +113,14 @@ export function InfluencerDetail({ influencerId }: { influencerId: string }) {
     setUploading(true);
     setUploadStatus('idle');
     try {
-      const formData = new FormData();
-      formData.append('image', file);
+      // Upload directly to storage
+      const { path } = await uploadToStorage(file, 'influencer', influencerId);
+
+      // Update influencer record with storage path
       const res = await fetch(`/api/influencers/${influencerId}`, {
         method: 'PATCH',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storagePath: path }),
       });
       if (res.ok) {
         const updated = await res.json();

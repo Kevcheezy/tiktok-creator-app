@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { StatusBadge } from './status-badge';
 import { ConfirmDialog } from './confirm-dialog';
+import { uploadToStorage } from './direct-upload';
 
 interface ProductData {
   id: string;
@@ -237,12 +238,14 @@ export function ProductDetail({ productId }: { productId: string }) {
     setUploadError('');
 
     try {
-      const formData = new FormData();
-      formData.append('image', file);
+      // Upload directly to storage
+      const { path } = await uploadToStorage(file, 'product', productId);
 
+      // Update product record with storage path
       const res = await fetch(`/api/products/${productId}/image`, {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storagePath: path }),
       });
 
       if (!res.ok) {

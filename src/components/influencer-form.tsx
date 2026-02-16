@@ -2,48 +2,7 @@
 
 import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-
-const MAX_DIMENSION = 1920;
-const JPEG_QUALITY = 0.85;
-const MAX_FILE_SIZE = 3.5 * 1024 * 1024; // 3.5 MB (under Vercel's 4.5 MB limit)
-
-function compressImage(file: File): Promise<File> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      // Skip compression if already small enough
-      if (file.size <= MAX_FILE_SIZE && img.width <= MAX_DIMENSION && img.height <= MAX_DIMENSION) {
-        resolve(file);
-        return;
-      }
-
-      let { width, height } = img;
-      if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
-        const scale = MAX_DIMENSION / Math.max(width, height);
-        width = Math.round(width * scale);
-        height = Math.round(height * scale);
-      }
-
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) { resolve(file); return; }
-
-      ctx.drawImage(img, 0, 0, width, height);
-      canvas.toBlob(
-        (blob) => {
-          if (!blob) { resolve(file); return; }
-          resolve(new File([blob], file.name.replace(/\.\w+$/, '.jpg'), { type: 'image/jpeg' }));
-        },
-        'image/jpeg',
-        JPEG_QUALITY,
-      );
-    };
-    img.onerror = () => reject(new Error('Failed to load image'));
-    img.src = URL.createObjectURL(file);
-  });
-}
+import { uploadToStorage } from './direct-upload';
 
 export function InfluencerForm() {
   const router = useRouter();
@@ -83,34 +42,28 @@ export function InfluencerForm() {
     setError('');
 
     try {
-      const formData = new FormData();
-      formData.append('name', name);
-      if (persona) formData.append('persona', persona);
+      // Upload image directly to storage if present
+      let storagePath: string | undefined;
       if (imageFile) {
-        const compressed = await compressImage(imageFile);
-        formData.append('image', compressed);
+        const tempId = crypto.randomUUID();
+        const result = await uploadToStorage(imageFile, 'influencer', tempId);
+        storagePath = result.path;
       }
 
+      // Create influencer via JSON (not FormData)
       const res = await fetch('/api/influencers', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          persona: persona || undefined,
+          storagePath,
+        }),
       });
 
       if (!res.ok) {
-        const text = await res.text();
-        let message = 'Failed to create influencer';
-        try {
-          const data = JSON.parse(text);
-          message = data.error || message;
-        } catch {
-          // Non-JSON response (e.g. 413 Request Entity Too Large)
-          if (res.status === 413 || text.includes('Request Entity Too Large')) {
-            message = 'Image is too large. Please use an image under 4 MB.';
-          } else {
-            message = text || message;
-          }
-        }
-        throw new Error(message);
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to create influencer');
       }
 
       router.push('/influencers');

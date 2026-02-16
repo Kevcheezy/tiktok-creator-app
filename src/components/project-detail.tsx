@@ -13,6 +13,7 @@ import { StageProgress } from './stage-progress';
 import { ToneSelector } from './tone-selector';
 import { SCRIPT_TONES } from '@/lib/constants';
 import { BattleHUD } from './battle-hud';
+import { uploadToStorage } from './direct-upload';
 import { CommandMenu } from './command-menu';
 import { GilDisplay } from './gil-display';
 
@@ -1237,12 +1238,14 @@ function ProductImageSection({ projectId, productImageUrl, onImageUpdated }: Pro
     setUploadError('');
 
     try {
-      const formData = new FormData();
-      formData.append('image', file);
+      // Upload directly to storage
+      const { path } = await uploadToStorage(file, 'project-product', projectId);
 
+      // Update project record with storage path
       const res = await fetch(`/api/projects/${projectId}/product-image`, {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storagePath: path }),
       });
 
       if (!res.ok) {
