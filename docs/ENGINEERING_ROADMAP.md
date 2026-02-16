@@ -848,7 +848,7 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 
 **Cost:** ~$0.01 per voice design (one-time per influencer). TTS cost unchanged ($0.20/video).
 
-#### R1.5.24 - ElevenLabs Voice ID Reference (Replace Voice Design API)
+#### R1.5.24 - ElevenLabs Voice ID Reference (Replace Voice Design API) 🔧 IN PROGRESS (frontend)
 **Priority:** P0 - Critical
 **Effort:** Small
 **Depends on:** R1.5.20 ✅ (replaces its Voice Design API integration)
@@ -953,6 +953,48 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 **Backend:**
 - [ ] No API changes needed — assets already have public URLs via Supabase Storage
 - [ ] If any assets use signed/expiring URLs, add `GET /api/projects/[id]/assets/[assetId]/download` for fresh download URL
+
+#### R1.5.26 - Scripting Validation Enforcement (Reject Invalid Scripts)
+**Priority:** P1 - High
+**Effort:** Small
+**Depends on:** None
+**Discovered:** 2026-02-16 (bug bash)
+**Why:** ScriptingAgent validates syllable counts, segment count, and shot_scripts count — but only logs warnings. Invalid scripts pass through to downstream agents unchecked. A script with 3 segments instead of 4 reaches CastingAgent, which generates 3 keyframe sets; DirectorAgent generates 3 videos; VoiceoverAgent generates 3 audio clips. The final video has a 15-second gap. Similarly, scripts with extreme syllable counts produce audio that clips or has dead silence. Validation must reject and auto-regenerate, not just warn.
+
+**Backend:**
+- [ ] ScriptingAgent: if segment count !== `videoModel.segment_count`, retry LLM generation (up to 2 retries) with explicit "You MUST return exactly N segments" reinforcement
+- [ ] ScriptingAgent: if any segment syllable count is outside acceptable range (±20% of target), retry with feedback on which segments are out of range
+- [ ] ScriptingAgent: if `shot_scripts` count per segment !== `videoModel.shots_per_segment`, retry with reinforcement
+- [ ] After 2 retries: fail the stage with a clear error listing which validations failed (don't silently pass bad scripts)
+- [ ] Log each retry attempt to `generation_log` (event_type: `script_validation_retry`, detail: `{ attempt, violations }`)
+
+#### R1.5.27 - LLM Call Retry in BaseAgent (Standardize Across All Agents)
+**Priority:** P1 - High
+**Effort:** Small
+**Depends on:** None
+**Discovered:** 2026-02-16 (bug bash)
+**Why:** DirectorAgent and BRollAgent have retry logic for their primary operations, but ProductAnalyzerAgent and ScriptingAgent have zero retry on LLM calls. A single WaveSpeed LLM timeout or malformed response kills the stage immediately. LLM calls are inherently unreliable (rate limits, timeouts, malformed JSON responses). A standardized retry-with-backoff in BaseAgent would protect all agents automatically instead of each agent implementing its own retry.
+
+**Backend:**
+- [ ] Add `retryableLlmCall(fn, { maxRetries: 2, baseDelay: 5000 })` method to `BaseAgent` class
+- [ ] Wraps any async function with exponential backoff retry (5s, 10s)
+- [ ] Logs each retry to `generation_log` (event_type: `llm_retry`, detail: `{ agent, attempt, error }`)
+- [ ] Distinguishes retryable errors (timeout, 429, 500, 503) from permanent errors (400, 401) — don't retry permanent failures
+- [ ] Migrate ProductAnalyzerAgent and ScriptingAgent LLM calls to use `retryableLlmCall()`
+- [ ] Migrate BRollAgent planning LLM call to use standardized retry (replace custom retry logic)
+
+#### R1.5.28 - ElevenLabs Rate Limit Protection in VoiceoverAgent
+**Priority:** P1 - Medium
+**Effort:** Small
+**Depends on:** None
+**Discovered:** 2026-02-16 (bug bash)
+**Why:** VoiceoverAgent fires 4 TTS calls in rapid succession with no delay between them. ElevenLabs enforces per-second and concurrent request rate limits. Under the free/starter tier, this can trigger 429 responses. The agent has per-segment try/catch but no backoff — a rate-limited segment is marked as failed immediately. Adding a small delay (500ms) between TTS calls and a retry-after-429 pattern would prevent most rate limit failures.
+
+**Backend:**
+- [ ] Add 500ms delay between TTS calls in VoiceoverAgent segment loop
+- [ ] On 429 response: parse `Retry-After` header, wait that duration, retry once
+- [ ] Log rate limit events to `generation_log` (event_type: `rate_limited`, detail: `{ provider: 'elevenlabs', retryAfterMs }`)
+- [ ] Add retry on Supabase Storage upload failure (1 retry with 2s delay — currently no retry on upload)
 
 ---
 
@@ -1163,7 +1205,7 @@ See R1.3 above for full implementation details.
 ## Recommended Execution Order
 
 ```
-DONE       Tier 0: Critical Bugs (B0.1-B0.11)
+DONE       Tier 0: Critical Bugs (B0.1-B0.25)
 DONE       Tier 1: Core Pipeline (R1.1, R1.2, R1.4, R1.5, R1.6)
            ▲ Full end-to-end pipeline functional: URL → analysis → script → casting → directing → voiceover → editing → finished video
 
@@ -1173,6 +1215,12 @@ DONE       R1.7 B-Roll Agent
            ▲ Two-phase: plan at script review, generate after directing. ~$0.85-1.13 added cost per video.
 
 MVP ──→    Validate: Run real product URLs through full pipeline with B-roll. Ship when videos are watchable.
+
+BUGS ──→   Tier 0 Bug Bash Findings (fix BEFORE any new Tier 1.5 work)
+           B0.27 Director cost double-charge on retry ⚠️ CRITICAL ($2.40/segment waste)
+           B0.28 B-roll stages missing from rollback map (recovery blocked)
+           B0.26 EditorAgent retry logic (elevated to High — $5-7 at stake)
+           B0.29 Select-influencer race condition (duplicate casting jobs)
 
 POLISH     Tier 1.5: UX Hardening
            R1.5.1 Influencer edit ──→ R1.5.2 Project settings ──→ R1.5.3 Navigation ──→ R1.5.4 Error handling (ALL DONE)
@@ -1190,6 +1238,9 @@ POLISH     Tier 1.5: UX Hardening
            R1.5.19 Structured Prompt Schema ✅ DONE (depends on R1.5.16 — uses model-specific negative prompts)
            R1.5.20 Influencer Voice Design System ✅ DONE (voice as first-class influencer attribute, mute Kling audio)
            R1.5.24 ElevenLabs Voice ID Reference (replaces R1.5.20 Voice Design API — paste Voice ID instead of in-app design)
+           R1.5.26 Scripting validation enforcement ──→ R1.5.27 LLM retry in BaseAgent (standardize retry across all agents)
+           (reject bad scripts, auto-regen)           (protect ProductAnalyzer + ScriptingAgent from single-failure KO)
+           R1.5.28 ElevenLabs rate limit protection (500ms delay + 429 retry in VoiceoverAgent)
            R1.5.21 Parallel Directing + Voiceover (~5 min savings per run, no deps)
            R1.5.22 B-Roll Timing in EditorAgent (depends on Creatomate template work)
            R1.5.23 Smart Cascade Editing — per-segment regeneration after script edits (depends on R1.5.8 ✅)
