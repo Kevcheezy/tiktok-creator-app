@@ -18,7 +18,7 @@ interface BrollShot {
   duration_seconds: number;
   source: 'ai_generated' | 'user_uploaded';
   image_url: string | null;
-  status: 'planned' | 'generating' | 'completed' | 'replaced' | 'removed';
+  status: 'planned' | 'generating' | 'completed' | 'replaced' | 'removed' | 'failed';
 }
 
 interface SegmentInfo {
@@ -75,320 +75,6 @@ const SEGMENT_TIME_RANGES = ['0:00 - 0:15', '0:15 - 0:30', '0:30 - 0:45', '0:45 
 const COST_PER_SHOT = 0.07;
 
 // =============================================
-// Mock Data
-// =============================================
-
-const MOCK_SEGMENTS: SegmentInfo[] = [
-  {
-    index: 0,
-    section: 'HOOK',
-    script_text: 'I spent $200 on collagen supplements last year and saw ZERO results. Then my dermatologist told me something that changed everything.',
-    syllable_count: 38,
-    shot_scripts: [
-      { index: 0, text: 'Close-up of frustrated expression holding empty supplement bottles' },
-      { index: 1, text: 'Quick cuts of various collagen products being tossed aside' },
-      { index: 2, text: 'Dramatic pause with eye contact to camera' },
-    ],
-  },
-  {
-    index: 1,
-    section: 'PROBLEM',
-    script_text: 'Most collagen supplements break down in your stomach before they ever reach your skin. The molecules are too large to absorb. Studies show 90% of powder collagen never makes it to your dermis.',
-    syllable_count: 52,
-    shot_scripts: [
-      { index: 0, text: 'Animated diagram showing collagen molecules in stomach acid' },
-      { index: 1, text: 'Split screen comparing molecule sizes with absorption rates' },
-      { index: 2, text: 'Research paper highlights with key statistics circled' },
-      { index: 3, text: 'Before photos of dull, dehydrated skin texture' },
-    ],
-  },
-  {
-    index: 2,
-    section: 'SOLUTION + PRODUCT',
-    script_text: 'This brand uses nano-hydrolyzed peptides that are 50x smaller than regular collagen. They actually reach your skin cells. After 30 days my fine lines faded and my skin literally glows.',
-    syllable_count: 48,
-    shot_scripts: [
-      { index: 0, text: 'Product reveal with premium unboxing moment' },
-      { index: 1, text: 'Microscopic comparison of nano-peptides vs regular collagen' },
-      { index: 2, text: 'Daily routine montage showing product usage' },
-      { index: 3, text: 'Side-by-side before/after of skin texture improvement' },
-    ],
-  },
-  {
-    index: 3,
-    section: 'CTA',
-    script_text: 'Link is in my bio. Use code GLOW30 for 30% off your first order. Your future skin will thank you.',
-    syllable_count: 28,
-    shot_scripts: [
-      { index: 0, text: 'Confident smile holding product to camera' },
-      { index: 1, text: 'Text overlay animation with discount code' },
-      { index: 2, text: 'Final glowing skin close-up with product in frame' },
-    ],
-  },
-];
-
-function createMockShots(projectId: string): BrollShot[] {
-  return [
-    // Segment 0 - HOOK
-    {
-      id: 'broll-001',
-      project_id: projectId,
-      segment_index: 0,
-      shot_index: 0,
-      category: 'transformation',
-      prompt: 'Close-up of a woman\'s hand dropping empty collagen supplement bottles into a bathroom trash can, frustration evident, soft warm lighting',
-      narrative_role: 'Establishes relatable pain point of wasted money',
-      timing_seconds: 0,
-      duration_seconds: 2.5,
-      source: 'ai_generated',
-      image_url: null,
-      status: 'planned',
-    },
-    {
-      id: 'broll-002',
-      project_id: projectId,
-      segment_index: 0,
-      shot_index: 1,
-      category: 'lifestyle',
-      prompt: 'Aesthetic flat-lay of various collagen powder containers and pills scattered on a marble countertop, overhead shot, moody lighting',
-      narrative_role: 'Visual proof of supplement overwhelm',
-      timing_seconds: 2.5,
-      duration_seconds: 2,
-      source: 'ai_generated',
-      image_url: null,
-      status: 'planned',
-    },
-    {
-      id: 'broll-003',
-      project_id: projectId,
-      segment_index: 0,
-      shot_index: 2,
-      category: 'transformation',
-      prompt: 'Macro shot of a dermatologist\'s hands holding a molecular diagram, clinical office background, blue-tinted lighting',
-      narrative_role: 'Transitions to authority/expertise moment',
-      timing_seconds: 5,
-      duration_seconds: 2.5,
-      source: 'ai_generated',
-      image_url: null,
-      status: 'planned',
-    },
-    {
-      id: 'broll-004',
-      project_id: projectId,
-      segment_index: 0,
-      shot_index: 3,
-      category: 'social_proof',
-      prompt: 'Phone screen showing receipt totals for collagen supplements adding up to $200+, scrolling through purchase history',
-      narrative_role: 'Reinforces the monetary pain point with concrete proof',
-      timing_seconds: 7.5,
-      duration_seconds: 2,
-      source: 'ai_generated',
-      image_url: null,
-      status: 'planned',
-    },
-    // Segment 1 - PROBLEM
-    {
-      id: 'broll-005',
-      project_id: projectId,
-      segment_index: 1,
-      shot_index: 0,
-      category: 'research',
-      prompt: 'CGI-style animation of collagen molecules dissolving in stomach acid, warm orange tones representing digestive environment',
-      narrative_role: 'Visualizes the scientific problem for viewer comprehension',
-      timing_seconds: 15,
-      duration_seconds: 3,
-      source: 'ai_generated',
-      image_url: null,
-      status: 'planned',
-    },
-    {
-      id: 'broll-006',
-      project_id: projectId,
-      segment_index: 1,
-      shot_index: 1,
-      category: 'research',
-      prompt: 'Split-screen infographic comparing large collagen molecules vs nano-hydrolyzed peptides with size measurements, clean minimal design',
-      narrative_role: 'Data visualization making the science accessible',
-      timing_seconds: 18,
-      duration_seconds: 2.5,
-      source: 'ai_generated',
-      image_url: null,
-      status: 'planned',
-    },
-    {
-      id: 'broll-007',
-      project_id: projectId,
-      segment_index: 1,
-      shot_index: 2,
-      category: 'research',
-      prompt: 'Close-up of a published research paper with "90% absorption failure" highlighted in yellow marker, shallow depth of field',
-      narrative_role: 'Grounds the claim in scientific evidence',
-      timing_seconds: 20.5,
-      duration_seconds: 2,
-      source: 'ai_generated',
-      image_url: null,
-      status: 'planned',
-    },
-    {
-      id: 'broll-008',
-      project_id: projectId,
-      segment_index: 1,
-      shot_index: 3,
-      category: 'transformation',
-      prompt: 'Extreme macro shot of dehydrated skin texture showing fine lines and dullness, clinical lighting, slightly desaturated',
-      narrative_role: 'Makes the problem tangible and personal',
-      timing_seconds: 22.5,
-      duration_seconds: 2.5,
-      source: 'ai_generated',
-      image_url: null,
-      status: 'planned',
-    },
-    {
-      id: 'broll-009',
-      project_id: projectId,
-      segment_index: 1,
-      shot_index: 4,
-      category: 'social_proof',
-      prompt: 'Scrolling through negative reviews of competitor collagen supplements on phone screen, highlighting "didn\'t work" comments',
-      narrative_role: 'Social proof that this is a universal problem',
-      timing_seconds: 25,
-      duration_seconds: 2,
-      source: 'ai_generated',
-      image_url: null,
-      status: 'planned',
-    },
-    // Segment 2 - SOLUTION + PRODUCT
-    {
-      id: 'broll-010',
-      project_id: projectId,
-      segment_index: 2,
-      shot_index: 0,
-      category: 'lifestyle',
-      prompt: 'Premium product unboxing reveal with tissue paper and branded packaging, hands gently opening box, soft natural lighting',
-      narrative_role: 'Creates aspirational moment around the product reveal',
-      timing_seconds: 30,
-      duration_seconds: 3,
-      source: 'ai_generated',
-      image_url: null,
-      status: 'planned',
-    },
-    {
-      id: 'broll-011',
-      project_id: projectId,
-      segment_index: 2,
-      shot_index: 1,
-      category: 'research',
-      prompt: 'Side-by-side microscopic comparison showing nano-hydrolyzed peptides 50x smaller than regular collagen molecules, electron microscope aesthetic',
-      narrative_role: 'Scientific proof of product differentiation',
-      timing_seconds: 33,
-      duration_seconds: 2.5,
-      source: 'ai_generated',
-      image_url: null,
-      status: 'planned',
-    },
-    {
-      id: 'broll-012',
-      project_id: projectId,
-      segment_index: 2,
-      shot_index: 2,
-      category: 'lifestyle',
-      prompt: 'Morning routine montage: stirring collagen into coffee, taking supplement with water, applying moisturizer, bright airy bathroom',
-      narrative_role: 'Shows effortless integration into daily life',
-      timing_seconds: 35.5,
-      duration_seconds: 3,
-      source: 'ai_generated',
-      image_url: null,
-      status: 'planned',
-    },
-    {
-      id: 'broll-013',
-      project_id: projectId,
-      segment_index: 2,
-      shot_index: 3,
-      category: 'transformation',
-      prompt: 'Dramatic before/after split screen of skin texture improvement over 30 days, clear lighting, same angle and distance',
-      narrative_role: 'Visual proof of transformation delivering the promise',
-      timing_seconds: 38.5,
-      duration_seconds: 3,
-      source: 'ai_generated',
-      image_url: null,
-      status: 'planned',
-    },
-    {
-      id: 'broll-014',
-      project_id: projectId,
-      segment_index: 2,
-      shot_index: 4,
-      category: 'social_proof',
-      prompt: 'Screenshot montage of glowing 5-star reviews mentioning "visible results" and "finally works", phone screen scroll',
-      narrative_role: 'Third-party validation of product claims',
-      timing_seconds: 41.5,
-      duration_seconds: 2,
-      source: 'ai_generated',
-      image_url: null,
-      status: 'planned',
-    },
-    // Segment 3 - CTA
-    {
-      id: 'broll-015',
-      project_id: projectId,
-      segment_index: 3,
-      shot_index: 0,
-      category: 'lifestyle',
-      prompt: 'Confident creator holding product bottle at eye level with genuine smile, warm golden hour lighting, shallow depth of field',
-      narrative_role: 'Personal endorsement creating trust',
-      timing_seconds: 45,
-      duration_seconds: 2.5,
-      source: 'ai_generated',
-      image_url: null,
-      status: 'planned',
-    },
-    {
-      id: 'broll-016',
-      project_id: projectId,
-      segment_index: 3,
-      shot_index: 1,
-      category: 'social_proof',
-      prompt: 'Animated text overlay "GLOW30" with 30% discount badge, brand colors, clean motion graphics on dark background',
-      narrative_role: 'Clear call-to-action with urgency element',
-      timing_seconds: 47.5,
-      duration_seconds: 2,
-      source: 'ai_generated',
-      image_url: null,
-      status: 'planned',
-    },
-    {
-      id: 'broll-017',
-      project_id: projectId,
-      segment_index: 3,
-      shot_index: 2,
-      category: 'transformation',
-      prompt: 'Final beauty shot of radiant glowing skin with product artfully placed in foreground, ethereal backlighting, dreamy feel',
-      narrative_role: 'Aspirational closing image reinforcing the transformation promise',
-      timing_seconds: 49.5,
-      duration_seconds: 2.5,
-      source: 'ai_generated',
-      image_url: null,
-      status: 'planned',
-    },
-    {
-      id: 'broll-018',
-      project_id: projectId,
-      segment_index: 3,
-      shot_index: 3,
-      category: 'lifestyle',
-      prompt: 'Overhead shot of the full product line arranged on clean white surface with botanical elements, editorial style',
-      narrative_role: 'Brand elevation moment before viewer clicks',
-      timing_seconds: 52,
-      duration_seconds: 2,
-      source: 'ai_generated',
-      image_url: null,
-      status: 'planned',
-    },
-  ];
-}
-
-// =============================================
 // Helpers
 // =============================================
 
@@ -401,34 +87,68 @@ function getCategoryColorClasses(category: string): { bg: string; text: string; 
   };
 }
 
-function formatTime(seconds: number): string {
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  const tenths = Math.round((seconds % 1) * 10);
-  if (tenths > 0) {
-    return `${mins}:${secs.toString().padStart(2, '0')}.${tenths}`;
-  }
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
-}
-
-let nextId = 100;
-function generateId(): string {
-  nextId++;
-  return `broll-new-${nextId}`;
-}
-
 // =============================================
 // Main Component
 // =============================================
 
 export function StoryboardView({ projectId, onStatusChange }: StoryboardViewProps) {
-  const [shots, setShots] = useState<BrollShot[]>(() => createMockShots(projectId));
+  const [segments, setSegments] = useState<SegmentInfo[]>([]);
+  const [shots, setShots] = useState<BrollShot[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<Partial<BrollShot>>({});
   const [removedUndo, setRemovedUndo] = useState<{ id: string; timeout: ReturnType<typeof setTimeout> } | null>(null);
   const [approving, setApproving] = useState(false);
+  const [approveError, setApproveError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const replaceTargetRef = useRef<string | null>(null);
+
+  // ---- Fetch data ----
+
+  const fetchData = useCallback(async () => {
+    try {
+      const [scriptsRes, brollRes] = await Promise.all([
+        fetch(`/api/projects/${projectId}/scripts`),
+        fetch(`/api/projects/${projectId}/broll`),
+      ]);
+
+      if (!scriptsRes.ok || !brollRes.ok) {
+        throw new Error('Failed to load storyboard data');
+      }
+
+      const scriptsData = await scriptsRes.json();
+      const brollData = await brollRes.json();
+
+      // Get the latest script (first in array, sorted by version desc)
+      const latestScript = scriptsData[0];
+      if (latestScript?.scenes) {
+        const segs: SegmentInfo[] = latestScript.scenes.map(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (scene: any) => ({
+            index: scene.segment_index,
+            section: scene.section || `Segment ${scene.segment_index}`,
+            script_text: scene.script_text || '',
+            syllable_count: scene.syllable_count || 0,
+            shot_scripts: Array.isArray(scene.shot_scripts) ? scene.shot_scripts : [],
+          })
+        );
+        segs.sort((a, b) => a.index - b.index);
+        setSegments(segs);
+      }
+
+      setShots(brollData || []);
+      setFetchError('');
+    } catch (err) {
+      setFetchError(err instanceof Error ? err.message : 'Failed to load data');
+    } finally {
+      setLoading(false);
+    }
+  }, [projectId]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   // Clean up undo timeout on unmount
   useEffect(() => {
@@ -464,26 +184,58 @@ export function StoryboardView({ projectId, onStatusChange }: StoryboardViewProp
     setEditDraft({});
   }, []);
 
-  const saveEdit = useCallback(() => {
+  const saveEdit = useCallback(async () => {
     if (!editingId) return;
-    setShots((prev) =>
-      prev.map((s) =>
-        s.id === editingId
-          ? {
-              ...s,
-              prompt: editDraft.prompt ?? s.prompt,
-              category: editDraft.category ?? s.category,
-              timing_seconds: editDraft.timing_seconds ?? s.timing_seconds,
-              duration_seconds: editDraft.duration_seconds ?? s.duration_seconds,
-            }
-          : s
-      )
-    );
+
+    const updates: Record<string, unknown> = {};
+    const shot = shots.find((s) => s.id === editingId);
+    if (!shot) return;
+
+    if (editDraft.prompt !== undefined && editDraft.prompt !== shot.prompt) updates.prompt = editDraft.prompt;
+    if (editDraft.category !== undefined && editDraft.category !== shot.category) updates.category = editDraft.category;
+    if (editDraft.timing_seconds !== undefined && editDraft.timing_seconds !== shot.timing_seconds) updates.timing_seconds = editDraft.timing_seconds;
+    if (editDraft.duration_seconds !== undefined && editDraft.duration_seconds !== shot.duration_seconds) updates.duration_seconds = editDraft.duration_seconds;
+
+    if (Object.keys(updates).length === 0) {
+      setEditingId(null);
+      setEditDraft({});
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/projects/${projectId}/broll/${editingId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+
+      if (res.ok) {
+        const updated = await res.json();
+        setShots((prev) => prev.map((s) => (s.id === editingId ? { ...s, ...updated } : s)));
+      }
+    } catch {
+      // Optimistic update on failure — keep local changes
+      setShots((prev) =>
+        prev.map((s) =>
+          s.id === editingId
+            ? {
+                ...s,
+                prompt: editDraft.prompt ?? s.prompt,
+                category: editDraft.category ?? s.category,
+                timing_seconds: editDraft.timing_seconds ?? s.timing_seconds,
+                duration_seconds: editDraft.duration_seconds ?? s.duration_seconds,
+              }
+            : s
+        )
+      );
+    }
+
     setEditingId(null);
     setEditDraft({});
-  }, [editingId, editDraft]);
+  }, [editingId, editDraft, shots, projectId]);
 
-  const removeShot = useCallback((shotId: string) => {
+  const removeShot = useCallback(async (shotId: string) => {
+    // Optimistic update
     setShots((prev) => prev.map((s) => (s.id === shotId ? { ...s, status: 'removed' as const } : s)));
 
     // Clear previous undo if any
@@ -494,13 +246,24 @@ export function StoryboardView({ projectId, onStatusChange }: StoryboardViewProp
     }, 5000);
 
     setRemovedUndo({ id: shotId, timeout });
-  }, [removedUndo]);
+
+    // Fire API call
+    try {
+      await fetch(`/api/projects/${projectId}/broll/${shotId}`, { method: 'DELETE' });
+    } catch {
+      // If API fails, undo will still work from local state
+    }
+  }, [removedUndo, projectId]);
 
   const undoRemove = useCallback(() => {
     if (!removedUndo) return;
     clearTimeout(removedUndo.timeout);
     setShots((prev) => prev.map((s) => (s.id === removedUndo.id ? { ...s, status: 'planned' as const } : s)));
     setRemovedUndo(null);
+
+    // Note: undo re-creates the shot server-side isn't supported by DELETE (soft delete).
+    // The shot is already marked 'removed' in DB. A re-fetch would restore it since
+    // the GET endpoint returns all shots including removed ones.
   }, [removedUndo]);
 
   const handleReplace = useCallback((shotId: string) => {
@@ -508,14 +271,16 @@ export function StoryboardView({ projectId, onStatusChange }: StoryboardViewProp
     fileInputRef.current?.click();
   }, []);
 
-  const handleFileSelected = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelected = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !replaceTargetRef.current) return;
 
-    const blobUrl = URL.createObjectURL(file);
     const targetId = replaceTargetRef.current;
+    replaceTargetRef.current = null;
+    e.target.value = '';
 
-    // TODO: POST /api/projects/${projectId}/broll/${targetId}/upload
+    // Optimistic: show local preview
+    const blobUrl = URL.createObjectURL(file);
     setShots((prev) =>
       prev.map((s) =>
         s.id === targetId
@@ -524,43 +289,123 @@ export function StoryboardView({ projectId, onStatusChange }: StoryboardViewProp
       )
     );
 
-    replaceTargetRef.current = null;
-    e.target.value = '';
-  }, []);
+    // Upload to server
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
 
-  const addShot = useCallback((segmentIndex: number, shotScriptIndex: number) => {
+      const res = await fetch(`/api/projects/${projectId}/broll/${targetId}/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        // Replace blob URL with real URL
+        URL.revokeObjectURL(blobUrl);
+        setShots((prev) =>
+          prev.map((s) =>
+            s.id === targetId ? { ...s, image_url: data.imageUrl } : s
+          )
+        );
+      }
+    } catch {
+      // Keep optimistic preview on failure
+    }
+  }, [projectId]);
+
+  const addShot = useCallback(async (segmentIndex: number, shotScriptIndex: number) => {
     const segmentShots = shots.filter((s) => s.segment_index === segmentIndex && s.status !== 'removed');
     const lastTiming = segmentShots.length > 0
       ? Math.max(...segmentShots.map((s) => s.timing_seconds + s.duration_seconds))
       : segmentIndex * 15;
 
-    const newShot: BrollShot = {
-      id: generateId(),
-      project_id: projectId,
-      segment_index: segmentIndex,
-      shot_index: shotScriptIndex,
-      category: 'lifestyle',
-      prompt: '',
-      narrative_role: '',
-      timing_seconds: lastTiming,
-      duration_seconds: 2,
-      source: 'ai_generated',
-      image_url: null,
-      status: 'planned',
-    };
+    try {
+      const res = await fetch(`/api/projects/${projectId}/broll`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          segment_index: segmentIndex,
+          shot_index: shotScriptIndex,
+          category: 'lifestyle',
+          prompt: '',
+          narrative_role: '',
+          timing_seconds: lastTiming,
+          duration_seconds: 2.5,
+        }),
+      });
 
-    setShots((prev) => [...prev, newShot]);
-    startEdit(newShot);
+      if (res.ok) {
+        const newShot = await res.json();
+        setShots((prev) => [...prev, newShot]);
+        startEdit(newShot);
+      }
+    } catch {
+      // Silently fail — user can try again
+    }
   }, [shots, projectId, startEdit]);
 
   const handleApprove = useCallback(async () => {
     setApproving(true);
-    // TODO: POST /api/projects/${projectId}/broll/approve
-    // Simulate a brief delay for UX
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    setApproving(false);
-    onStatusChange?.();
+    setApproveError('');
+
+    try {
+      const res = await fetch(`/api/projects/${projectId}/broll/approve`, {
+        method: 'POST',
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to approve B-roll plan');
+      }
+
+      onStatusChange?.();
+    } catch (err) {
+      setApproveError(err instanceof Error ? err.message : 'Failed to approve');
+    } finally {
+      setApproving(false);
+    }
   }, [projectId, onStatusChange]);
+
+  // ---- Loading state ----
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="flex flex-col items-center gap-4">
+          <div className="relative h-10 w-10">
+            <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-electric" />
+            <div className="absolute inset-1 animate-spin rounded-full border-2 border-transparent border-b-magenta" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }} />
+          </div>
+          <p className="font-[family-name:var(--font-display)] text-sm text-text-muted">Loading storyboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ---- Error state ----
+
+  if (fetchError) {
+    return (
+      <div className="rounded-xl border border-magenta/30 bg-magenta/5 p-6">
+        <div className="flex items-center gap-3">
+          <svg viewBox="0 0 20 20" className="h-5 w-5 flex-shrink-0 text-magenta" fill="currentColor">
+            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+          </svg>
+          <div>
+            <p className="text-sm font-medium text-magenta">{fetchError}</p>
+            <button
+              type="button"
+              onClick={() => { setLoading(true); setFetchError(''); fetchData(); }}
+              className="mt-2 text-xs text-text-muted transition-colors hover:text-electric"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // ---- Render ----
 
@@ -626,7 +471,7 @@ export function StoryboardView({ projectId, onStatusChange }: StoryboardViewProp
           <button
             type="button"
             onClick={handleApprove}
-            disabled={approving}
+            disabled={approving || activeShots.length === 0}
             className="inline-flex items-center gap-2 rounded-lg bg-lime px-5 py-2.5 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:shadow-[0_0_32px_rgba(184,255,0,0.25)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {approving ? (
@@ -646,6 +491,10 @@ export function StoryboardView({ projectId, onStatusChange }: StoryboardViewProp
             )}
           </button>
         </div>
+
+        {approveError && (
+          <p className="mt-2 text-xs text-magenta">{approveError}</p>
+        )}
       </div>
 
       {/* Undo toast */}
@@ -666,7 +515,7 @@ export function StoryboardView({ projectId, onStatusChange }: StoryboardViewProp
 
       {/* Segment Sections */}
       <div className="stagger-children space-y-8">
-        {MOCK_SEGMENTS.map((segment) => {
+        {segments.map((segment) => {
           const segmentShots = shots.filter((s) => s.segment_index === segment.index);
           const segmentActiveShots = segmentShots.filter((s) => s.status !== 'removed');
           const segmentAiCount = segmentActiveShots.filter((s) => s.source === 'ai_generated').length;

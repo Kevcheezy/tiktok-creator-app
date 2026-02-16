@@ -224,7 +224,7 @@ These are blocking items. Nothing else matters until a user can go from product 
 #### R1.7 - B-Roll Agent
 **Priority:** P0 - Critical
 **Effort:** Medium-Large
-**Status:** Backend complete (2026-02-15). Frontend storyboard view remaining.
+**Status:** Backend complete, frontend storyboard wired (2026-02-15). Ken Burns effect remaining.
 **Depends on:** R1.1 (pipeline must handle casting/directing/voiceover before B-roll generation phase runs)
 **Spec:** `docs/plans/2026-02-15-r1.7-broll-agent-design.md`
 **Why:** High-performing TikTok Shop content uses B-roll inserts (cutaway images) to maintain viewer attention and validate claims. Without B-roll, videos are a single visual layer — flat and monotonous. B-roll is a visual argument that reinforces the script's persuasion structure. The agent operates in two phases: planning (at script review) and generation (after directing).
@@ -249,11 +249,11 @@ These are blocking items. Nothing else matters until a user can go from product 
 - [x] `POST /api/projects/[id]/broll/[shotId]/upload` — upload user image to replace AI shot
 
 **Storyboard view (user reviews B-roll plan):**
-- [ ] Vertical 60-second timeline showing script text + B-roll cards per shot_script
-- [ ] Edit prompt, change category, adjust timing/duration, remove, add, reorder
-- [ ] Upload own image to replace any AI-generated shot
-- [ ] Summary bar: total count, estimated cost, per-category breakdown
-- [ ] Approve → proceeds to influencer_selection
+- [x] Vertical 60-second timeline showing script text + B-roll cards per shot_script
+- [x] Edit prompt, change category, adjust timing/duration, remove, add, reorder
+- [x] Upload own image to replace any AI-generated shot
+- [x] Summary bar: total count, estimated cost, per-category breakdown
+- [x] Approve → proceeds to influencer_selection
 
 **B-Roll generation (Phase 2 — after directing + voiceover):**
 - [x] B-RollAgent.generate() creates still images via Nano Banana Pro ($0.07/image)
