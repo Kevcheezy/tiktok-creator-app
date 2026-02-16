@@ -287,16 +287,17 @@ Influencer `<select>` options displayed the entire `persona` field (full appeara
 - [x] Clear timeout on successful response (prevent memory leaks)
 - [x] Produce clear `WaveSpeed API timeout` error message for AbortError
 - [x] Add 30s timeout to individual `pollResult()` fetch calls (retries on timeout instead of hanging)
+- [x] Fix abort error detection: replace `instanceof DOMException` with runtime-safe `isAbortError()` helper (Node.js compatibility — `DOMException` instanceof check unreliable across Node versions used by `tsx`)
 
-#### B0.26 - EditorAgent Has No Retry Logic (Single Failure Kills $5+ of Work)
+#### B0.26 - EditorAgent Has No Retry Logic (Single Failure Kills $5+ of Work) ~~FIXED~~
 **Severity:** High (elevated from Medium — final stage failure wastes $5-7 of prior API spend)
 **Scope:** Backend
 **Why:** DirectorAgent retries each segment 2x with 10s delay. VoiceoverAgent has per-segment try/catch. EditorAgent has zero retry logic — if the Creatomate render API returns an error or times out (5min), the entire editing stage fails immediately. This is the final stage where all previous investment ($5+ in API calls) is at stake. A transient Creatomate error wastes all that work and forces the user to manually retry from the UI.
 
 **Fix checklist:**
-- [ ] Add retry loop in EditorAgent: 2 retries with 15s exponential backoff before failing
-- [ ] Log each retry attempt to `generation_log` (event_type: `render_retry`, detail: `{ attempt, error, delayMs }`)
-- [ ] On final failure, include retry count in error message so debugger knows retries were exhausted
+- [x] Add retry loop in EditorAgent: 2 retries with 15s exponential backoff before failing
+- [x] Log each retry attempt to `generation_log` (event_type: `render_retry`, detail: `{ attempt, error, delayMs }`)
+- [x] On final failure, include retry count in error message so debugger knows retries were exhausted
 
 #### B0.27 - DirectorAgent Double-Charges Cost on Retry ($2.40/segment waste)
 **Severity:** Critical (direct money waste — each retried segment charges 2-3x)
@@ -848,25 +849,27 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 
 **Cost:** ~$0.01 per voice design (one-time per influencer). TTS cost unchanged ($0.20/video).
 
-#### R1.5.24 - ElevenLabs Voice ID Reference (Replace Voice Design API) 🔧 IN PROGRESS (frontend)
+#### R1.5.24 - ElevenLabs Voice ID Reference (Replace Voice Design API) ~~DONE~~
 **Priority:** P0 - Critical
 **Effort:** Small
 **Depends on:** R1.5.20 ✅ (replaces its Voice Design API integration)
 **Why:** The ElevenLabs Voice Design API is failing in production ("Voice design failed. Please try again."). Rather than debugging a complex 3-step flow (preset → design → approve) that rebuilds what ElevenLabs already provides, simplify to: user designs voice in ElevenLabs' own dashboard (better iteration, previewing, fine-tuning), then pastes the Voice ID into our app. Eliminates the `voice_preset` table, 3 voice API routes, and the 590-line VoiceSection component.
 
-**Backend:**
-- [ ] `POST /api/influencers/[id]/voice/link` — accepts `{ voiceId: string }`, calls ElevenLabs `GET /v1/voices/{voiceId}` to validate + fetch metadata (name, description, preview_url, labels), saves `voice_id`, `voice_description`, `voice_preview_url` to influencer record
-- [ ] `DELETE /api/influencers/[id]/voice` — keep existing (clears voice fields)
-- [ ] Remove dead routes: `POST /api/influencers/[id]/voice/design`, `POST /api/influencers/[id]/voice/approve`
-- [ ] Remove dead routes: `GET /api/voice-presets`, `POST /api/voice-presets`, `DELETE /api/voice-presets/[id]`
-- [ ] Drop `voice_preset` table + remove `voice_preset_id` FK from `influencer` (migration)
-- [ ] VoiceoverAgent: no changes needed (already reads `influencer.voice_id` directly)
+**Backend:** ~~DONE~~
+- [x] `POST /api/influencers/[id]/voice/link` — accepts `{ voiceId: string }`, calls ElevenLabs `GET /v1/voices/{voiceId}` to validate + fetch metadata (name, description, preview_url, labels), saves `voice_id`, `voice_description`, `voice_preview_url` to influencer record
+- [x] `DELETE /api/influencers/[id]/voice` — keep existing (clears voice fields, removed `voice_preset_id` reference)
+- [x] Remove dead routes: `POST /api/influencers/[id]/voice/design`, `POST /api/influencers/[id]/voice/approve`
+- [x] Remove dead routes: `GET /api/voice-presets`, `POST /api/voice-presets`, `DELETE /api/voice-presets/[id]`
+- [x] Drop `voice_preset` table + remove `voice_preset_id` FK from `influencer` (migration applied)
+- [x] Added `getVoice()` method to ElevenLabs client, removed `designVoice()` and `saveVoice()` dead methods
+- [x] Updated `schema.ts` — removed `voicePreset` table and `voicePresetId` column from influencer
+- [x] VoiceoverAgent: no changes needed (already reads `influencer.voice_id` directly)
 
-**Frontend:**
-- [ ] Replace VoiceSection in `influencer-detail.tsx`: remove preset grid + Design Voice flow. New UI: Voice ID text input + "Link Voice" button. On success, show voice name, description, and audio preview (fetched from ElevenLabs metadata)
-- [ ] Influencer detail: approved state shows voice name, description text, and audio preview player (kept from current State C)
-- [ ] Influencer list cards: keep existing voice badge + play preview (no changes needed)
-- [ ] Influencer selection gate: keep existing `hasVoice=true` filter (no changes needed)
+**Frontend:** ~~DONE~~
+- [x] Replace VoiceSection in `influencer-detail.tsx`: removed preset grid + Design Voice flow. New UI: Voice ID text input + "Link Voice" button. On success, shows voice name, description, Voice ID, and audio preview player
+- [x] Influencer detail: linked state shows voice name, description text, Voice ID, and audio preview player (adapted from old State C)
+- [x] Influencer list cards: keep existing voice badge + play preview (no changes needed)
+- [x] Influencer selection gate: keep existing `hasVoice=true` filter (no changes needed)
 
 **Cost:** $0 (no Voice Design API calls). TTS cost unchanged ($0.20/video).
 
@@ -1219,7 +1222,7 @@ MVP ──→    Validate: Run real product URLs through full pipeline with B-ro
 BUGS ──→   Tier 0 Bug Bash Findings (fix BEFORE any new Tier 1.5 work)
            B0.27 Director cost double-charge on retry ⚠️ CRITICAL ($2.40/segment waste)
            B0.28 B-roll stages missing from rollback map (recovery blocked)
-           B0.26 EditorAgent retry logic (elevated to High — $5-7 at stake)
+           ~~B0.26 EditorAgent retry logic (elevated to High — $5-7 at stake)~~ ✅ FIXED
            B0.29 Select-influencer race condition (duplicate casting jobs)
 
 POLISH     Tier 1.5: UX Hardening
@@ -1237,7 +1240,7 @@ POLISH     Tier 1.5: UX Hardening
            R1.5.16 Video Model Selection & Pipeline Abstraction (backend done, frontend selector + 2 agents remaining)
            R1.5.19 Structured Prompt Schema ✅ DONE (depends on R1.5.16 — uses model-specific negative prompts)
            R1.5.20 Influencer Voice Design System ✅ DONE (voice as first-class influencer attribute, mute Kling audio)
-           R1.5.24 ElevenLabs Voice ID Reference (replaces R1.5.20 Voice Design API — paste Voice ID instead of in-app design)
+           R1.5.24 ElevenLabs Voice ID Reference ✅ DONE (replaces R1.5.20 Voice Design API — paste Voice ID instead of in-app design)
            R1.5.26 Scripting validation enforcement ──→ R1.5.27 LLM retry in BaseAgent (standardize retry across all agents)
            (reject bad scripts, auto-regen)           (protect ProductAnalyzer + ScriptingAgent from single-failure KO)
            R1.5.28 ElevenLabs rate limit protection (500ms delay + 429 retry in VoiceoverAgent)

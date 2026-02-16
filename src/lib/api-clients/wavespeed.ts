@@ -32,6 +32,11 @@ export interface ApiCallContext {
   supabase?: SupabaseClient;
 }
 
+/** Detect AbortController abort errors across all Node.js versions. */
+function isAbortError(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && 'name' in err && (err as { name: string }).name === 'AbortError';
+}
+
 export class WaveSpeedClient {
   private apiKey: string;
   private baseUrl = 'https://api.wavespeed.ai';
@@ -109,7 +114,7 @@ export class WaveSpeedClient {
     } catch (err) {
       if (statusCode === undefined) {
         const latencyMs = Date.now() - start;
-        const isTimeout = err instanceof DOMException && err.name === 'AbortError';
+        const isTimeout = isAbortError(err);
         const errorMsg = isTimeout
           ? `Request timed out after ${timeoutMs / 1000}s`
           : (err as Error).message;
@@ -272,7 +277,7 @@ export class WaveSpeedClient {
         });
       } catch (pollErr) {
         clearTimeout(pollTimeout);
-        const isTimeout = pollErr instanceof DOMException && pollErr.name === 'AbortError';
+        const isTimeout = isAbortError(pollErr);
         if (isTimeout) {
           logger.warn({ taskId }, 'Poll request timed out (30s), retrying...');
           await new Promise(resolve => setTimeout(resolve, interval));
