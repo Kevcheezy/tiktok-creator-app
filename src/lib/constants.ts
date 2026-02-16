@@ -404,4 +404,5 @@ export const API_COSTS = {
   klingVideo: 1.20,
   elevenLabsTts: 0.05,
   creatomateRender: 0.50,
+  geminiVideoAnalysis: 0.02,
 } as const;
