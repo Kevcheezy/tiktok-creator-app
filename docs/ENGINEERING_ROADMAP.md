@@ -276,7 +276,19 @@ Influencer `<select>` options displayed the entire `persona` field (full appeara
 - [x] Log the raw LLM response on parse failure (currently only logs a truncated snippet — need full response for debugging)
 - [ ] Consider chunking: if the shot list is large (>20 shots), generate in batches to reduce truncation risk (deferred — not in scope for this fix)
 
-#### B0.25 - EditorAgent Has No Retry Logic (Single Failure Kills $5+ of Work)
+#### ~~B0.25 - WaveSpeed API Calls Hang Indefinitely (No Fetch Timeout)~~ FIXED
+**Severity:** Critical (worker process hangs forever, project stuck in casting/directing)
+**Scope:** Backend
+**Discovered:** 2026-02-16 (PROJECT-5: Collagen Bio-Peptides Powder — casting stuck at 2/8 keyframes)
+**Root cause:** `WaveSpeedClient.request()` calls `fetch()` with no `AbortController` or timeout. When the WaveSpeed API becomes unresponsive (common under load after burst requests), the `await fetch()` never resolves. The try-catch can't fire because no error is thrown — the Promise simply never settles. Only `pollResult()` had a timeout; all other methods (`chatCompletion`, `generateImage`, `editImage`, `generateVideo`) could hang forever.
+**Impact:** R1.5.19 structured prompt changes amplified this — the larger system prompts and StructuredPrompt JSON responses increase API processing time, making hangs more likely after segment 0's burst of requests.
+**Fix:**
+- [x] Add `AbortController` with 120s timeout to `WaveSpeedClient.request()` (covers all API methods)
+- [x] Clear timeout on successful response (prevent memory leaks)
+- [x] Produce clear `WaveSpeed API timeout` error message for AbortError
+- [x] Add 30s timeout to individual `pollResult()` fetch calls (retries on timeout instead of hanging)
+
+#### B0.26 - EditorAgent Has No Retry Logic (Single Failure Kills $5+ of Work)
 **Severity:** Medium (transient Creatomate errors waste all prior API spend)
 **Scope:** Backend
 **Why:** DirectorAgent retries each segment 2x with 10s delay. VoiceoverAgent has per-segment try/catch. EditorAgent has zero retry logic — if the Creatomate render API returns an error or times out (5min), the entire editing stage fails immediately. This is the final stage where all previous investment ($5+ in API calls) is at stake. A transient Creatomate error wastes all that work and forces the user to manually retry from the UI.
@@ -770,7 +782,7 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] isStructuredPrompt() type guard detects old string format vs new StructuredPrompt in `scene.visual_prompt`
 - [x] Existing projects continue working without migration — legacy strings pass through
 
-#### R1.5.20 - Influencer Voice Design System
+#### R1.5.20 - Influencer Voice Design System 🔧 IN PROGRESS
 **Priority:** P0 - Critical
 **Effort:** Medium
 **Spec:** `docs/plans/2026-02-16-influencer-voice-design-system.md`
@@ -778,26 +790,27 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 **Why:** Voice is currently a pipeline side effect — derived from a broken `VOICE_MAPPING[product_category]` lookup that always falls back to "pharmacist." Every influencer sounds the same regardless of persona. Voice should be a first-class influencer attribute: designed via ElevenLabs Voice Design with user-approved presets, stored permanently, and reused across projects. Kling native audio is muted in the final render — only ElevenLabs TTS is heard. Fixes Gap 3 (voice mapping mismatch) from the pipeline analysis.
 
 **Schema:**
-- [ ] `voice_preset` table (~8 system presets: Trusted Expert, Energetic Creator, Calm Reviewer, Big Sister, Hype Man, Wellness Guide, Street Smart, Trendsetter) + custom user presets
-- [ ] `influencer` table: add `voice_id`, `voice_preset_id` FK, `voice_description`, `voice_preview_url` columns
+- [x] `voice_preset` table (~8 system presets: Trusted Expert, Energetic Creator, Calm Reviewer, Big Sister, Hype Man, Wellness Guide, Street Smart, Trendsetter) + custom user presets
+- [x] `influencer` table: add `voice_id`, `voice_preset_id` FK, `voice_description`, `voice_preview_url` columns
 
 **Backend:**
-- [ ] `GET /api/voice-presets` — list all presets
-- [ ] `POST /api/voice-presets` — create custom preset
-- [ ] `DELETE /api/voice-presets/[id]` — delete custom preset (system presets immutable)
-- [ ] `POST /api/influencers/[id]/voice/design` — call ElevenLabs Voice Design, return preview audio + temporary voice ID
-- [ ] `POST /api/influencers/[id]/voice/approve` — save voice permanently to ElevenLabs + influencer record
-- [ ] `DELETE /api/influencers/[id]/voice` — clear voice (influencer becomes ineligible for selection)
-- [ ] `POST /api/projects/[id]/select-influencer` — hard gate: reject if `influencer.voice_id` is null
-- [ ] `GET /api/influencers?hasVoice=true` — filter by voice presence
-- [ ] VoiceoverAgent: remove `VOICE_MAPPING`, `FALLBACK_VOICES`, `resolveVoice()`, `isVoiceValid()`. Replace with direct `influencer.voice_id` read.
-- [ ] EditorAgent: mute Kling video audio (`volume: 0` on Video-1..4 Creatomate modifications)
+- [x] `GET /api/voice-presets` — list all presets
+- [x] `POST /api/voice-presets` — create custom preset
+- [x] `DELETE /api/voice-presets/[id]` — delete custom preset (system presets immutable)
+- [x] `POST /api/influencers/[id]/voice/design` — call ElevenLabs Voice Design, return preview audio + temporary voice ID
+- [x] `POST /api/influencers/[id]/voice/approve` — save voice permanently to ElevenLabs + influencer record
+- [x] `DELETE /api/influencers/[id]/voice` — clear voice (influencer becomes ineligible for selection)
+- [x] `POST /api/projects/[id]/select-influencer` — hard gate: reject if `influencer.voice_id` is null
+- [x] `GET /api/influencers?hasVoice=true` — filter by voice presence
+- [x] VoiceoverAgent: remove `VOICE_MAPPING`, `FALLBACK_VOICES`, `resolveVoice()`, `isVoiceValid()`. Replace with direct `influencer.voice_id` read.
+- [x] EditorAgent: mute Kling video audio (`volume: 0` on Video-1..4 Creatomate modifications)
+- [x] Remove obsolete `CATEGORY_TO_PERSONA` from `src/lib/constants.ts`
 
 **Frontend:**
-- [ ] Influencer page: voice preset card grid (same pattern as scene/interaction presets), "+ Custom" option
-- [ ] "Design Voice" button → preview audio player → approve/regenerate
-- [ ] Voice badge on influencer cards + play preview button
-- [ ] Influencer selection gate: filter `hasImage=true&hasVoice=true`, voice preview on selection cards
+- [ ] 🔧 IN PROGRESS Influencer page: voice preset card grid (same pattern as scene/interaction presets), "+ Custom" option
+- [ ] 🔧 IN PROGRESS "Design Voice" button → preview audio player → approve/regenerate
+- [ ] 🔧 IN PROGRESS Voice badge on influencer cards + play preview button
+- [ ] 🔧 IN PROGRESS Influencer selection gate: filter `hasImage=true&hasVoice=true`, voice preview on selection cards
 
 **Cost:** ~$0.01 per voice design (one-time per influencer). TTS cost unchanged ($0.20/video).
 

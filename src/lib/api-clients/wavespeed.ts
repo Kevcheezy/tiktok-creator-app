@@ -43,20 +43,29 @@ export class WaveSpeedClient {
     }
   }
 
-  private async request(path: string, options: RequestInit = {}, context?: ApiCallContext): Promise<any> {
+  private async request(path: string, options: RequestInit = {}, context?: ApiCallContext, timeoutMs: number = 120000): Promise<any> {
     const url = `${this.baseUrl}${path}`;
     const start = Date.now();
     let statusCode: number | undefined;
 
     try {
-      const response = await fetch(url, {
-        ...options,
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.apiKey}`,
-          ...options.headers,
-        },
-      });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          ...options,
+          signal: controller.signal,
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${this.apiKey}`,
+            ...options.headers,
+          },
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       statusCode = response.status;
       const latencyMs = Date.now() - start;
@@ -100,10 +109,17 @@ export class WaveSpeedClient {
     } catch (err) {
       if (statusCode === undefined) {
         const latencyMs = Date.now() - start;
+        const isTimeout = err instanceof DOMException && err.name === 'AbortError';
+        const errorMsg = isTimeout
+          ? `Request timed out after ${timeoutMs / 1000}s`
+          : (err as Error).message;
         logger.error(
-          { provider: 'WaveSpeed', endpoint: path, method: options.method || 'GET', error: (err as Error).message, latencyMs },
-          'API call failed (network error)'
+          { provider: 'WaveSpeed', endpoint: path, method: options.method || 'GET', error: errorMsg, latencyMs, timeout: isTimeout },
+          isTimeout ? 'API call timed out' : 'API call failed (network error)'
         );
+        if (isTimeout) {
+          throw new Error(`WaveSpeed API timeout (${timeoutMs / 1000}s): ${path}`);
+        }
       }
       throw err;
     }
@@ -246,9 +262,26 @@ export class WaveSpeedClient {
 
     while (Date.now() - startTime < config.maxWait) {
       const pollStart = Date.now();
-      const response = await fetch(config.url, {
-        headers: { Authorization: `Bearer ${config.authKey}` },
-      });
+      const pollController = new AbortController();
+      const pollTimeout = setTimeout(() => pollController.abort(), 30000);
+      let response: Response;
+      try {
+        response = await fetch(config.url, {
+          headers: { Authorization: `Bearer ${config.authKey}` },
+          signal: pollController.signal,
+        });
+      } catch (pollErr) {
+        clearTimeout(pollTimeout);
+        const isTimeout = pollErr instanceof DOMException && pollErr.name === 'AbortError';
+        if (isTimeout) {
+          logger.warn({ taskId }, 'Poll request timed out (30s), retrying...');
+          await new Promise(resolve => setTimeout(resolve, interval));
+          interval = Math.min(interval * config.backoffFactor, config.maxInterval);
+          continue;
+        }
+        throw pollErr;
+      }
+      clearTimeout(pollTimeout);
 
       if (!response.ok) {
         const latencyMs = Date.now() - pollStart;
