@@ -165,19 +165,43 @@ export async function DELETE(
   const { id } = await params;
 
   try {
-    // Guard: check if any projects reference this product
-    const { count } = await supabase
+    // Find all projects that reference this product
+    const { data: projects } = await supabase
       .from('project')
-      .select('id', { count: 'exact', head: true })
+      .select('id')
       .eq('product_id', id);
 
-    if (count && count > 0) {
-      return NextResponse.json(
-        { error: `Cannot delete product: ${count} project(s) still reference this product` },
-        { status: 409 }
-      );
+    const projectIds = (projects || []).map((p: { id: string }) => p.id);
+
+    if (projectIds.length > 0) {
+      // Find all scripts belonging to these projects
+      const { data: scripts } = await supabase
+        .from('script')
+        .select('id')
+        .in('project_id', projectIds);
+
+      const scriptIds = (scripts || []).map((s: { id: string }) => s.id);
+
+      // Delete in FK-safe order:
+      // 1. Assets (references scene_id and project_id)
+      await supabase.from('asset').delete().in('project_id', projectIds);
+
+      // 2. Scenes (references script_id)
+      if (scriptIds.length > 0) {
+        await supabase.from('scene').delete().in('script_id', scriptIds);
+      }
+
+      // 3. Scripts (references project_id) — broll_shot cascades automatically
+      await supabase.from('script').delete().in('project_id', projectIds);
+
+      // 4. Completed runs (references project_id)
+      await supabase.from('completed_run').delete().in('project_id', projectIds);
+
+      // 5. Projects — generation_log cascades automatically
+      await supabase.from('project').delete().in('id', projectIds);
     }
 
+    // 6. Delete the product itself
     const { error } = await supabase
       .from('product')
       .delete()
@@ -188,7 +212,10 @@ export async function DELETE(
       return NextResponse.json({ error: 'Failed to delete product' }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+      deleted: { projects: projectIds.length },
+    });
   } catch (error) {
     logger.error({ err: error, route: '/api/products/[id]' }, 'Error deleting product');
     return NextResponse.json({ error: 'Failed to delete product' }, { status: 500 });
