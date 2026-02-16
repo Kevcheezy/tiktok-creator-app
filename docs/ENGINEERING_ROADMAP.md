@@ -220,7 +220,7 @@ Seg 0 START → Seg 0 END → Seg 1 START → Seg 1 END → Seg 2 START → Seg 
 Regenerating Seg 2 END must also regenerate: Seg 3 START, Seg 3 END (and Seg 4 if it existed).
 
 **Fix checklist:**
-- [ ] Frontend: On regenerate click, count subsequent keyframes and show confirmation dialog with cascade count
+- [x] Frontend: On regenerate click, count subsequent keyframes and show confirmation dialog with cascade count
 - [ ] Backend: New endpoint or extend `POST /api/projects/[id]/assets/regenerate` to accept `{ assetId, cascade: true }`
 - [ ] Worker: New `regenerateKeyframeCascade()` handler that regenerates target keyframe, then walks forward through subsequent keyframes in order, passing each completed frame as reference to the next
 - [ ] Worker: `regenerateKeyframe()` must accept optional reference images (previous end frame, influencer, product) instead of only using `influencer.image_url`

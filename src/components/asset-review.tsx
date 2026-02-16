@@ -42,6 +42,7 @@ export function AssetReview({ projectId, onStatusChange, confirmBeforeApprove, o
   const [showConfirm, setShowConfirm] = useState(false);
   const [showRegenConfirm, setShowRegenConfirm] = useState(false);
   const [regeneratingAll, setRegeneratingAll] = useState(false);
+  const [cascadeTarget, setCascadeTarget] = useState<{ assetId: string; cascadeCount: number } | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Keyframe editing state
@@ -155,12 +156,37 @@ export function AssetReview({ projectId, onStatusChange, confirmBeforeApprove, o
     }
   }
 
-  async function handleRegenerate(assetId: string) {
+  function handleRegenerate(assetId: string) {
+    const asset = assets.find((a) => a.id === assetId);
+    if (!asset) return;
+
+    // For keyframes, count subsequent keyframes and show cascade confirmation
+    if (asset.type.startsWith('keyframe')) {
+      const segIdx = asset.scene?.segment_index ?? -1;
+      const isStart = asset.type === 'keyframe_start';
+
+      const subsequentCount = assets.filter((a) => {
+        if (!a.type.startsWith('keyframe') || a.id === assetId) return false;
+        const aSegIdx = a.scene?.segment_index ?? -1;
+        if (aSegIdx > segIdx) return true;
+        if (aSegIdx === segIdx && isStart && a.type === 'keyframe_end') return true;
+        return false;
+      }).length;
+
+      setCascadeTarget({ assetId, cascadeCount: subsequentCount });
+      return;
+    }
+
+    // Non-keyframe: regenerate directly
+    doRegenerate(assetId, false);
+  }
+
+  async function doRegenerate(assetId: string, cascade: boolean) {
     try {
       await fetch(`/api/projects/${projectId}/assets/regenerate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ assetId }),
+        body: JSON.stringify({ assetId, cascade }),
       });
       fetchAssets();
     } catch (err) {
@@ -633,6 +659,95 @@ export function AssetReview({ projectId, onStatusChange, confirmBeforeApprove, o
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cascade regeneration confirmation dialog */}
+      {cascadeTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-void/80 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-md animate-fade-in-up rounded-xl border border-phoenix/30 bg-surface p-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-phoenix/10">
+                <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4 text-phoenix" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M1.5 8a6.5 6.5 0 0111.48-4.16" />
+                  <path d="M14.5 8a6.5 6.5 0 01-11.48 4.16" />
+                  <polyline points="13 1.5 13 4.5 10 4.5" />
+                  <polyline points="3 14.5 3 11.5 6 11.5" />
+                </svg>
+              </div>
+              <h3 className="font-[family-name:var(--font-display)] text-lg font-bold text-text-primary">
+                Regenerate Keyframe
+              </h3>
+            </div>
+            {cascadeTarget.cascadeCount > 0 ? (
+              <>
+                <p className="mt-3 text-sm leading-relaxed text-text-secondary">
+                  This keyframe has <span className="font-[family-name:var(--font-mono)] font-bold text-phoenix">{cascadeTarget.cascadeCount}</span> subsequent keyframe{cascadeTarget.cascadeCount > 1 ? 's' : ''} that depend on it for visual continuity. Regenerating only this one may cause appearance inconsistencies.
+                </p>
+                <div className="mt-3 rounded-lg bg-surface-overlay px-3 py-2">
+                  <span className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                    Cascade cost
+                  </span>
+                  <p className="font-[family-name:var(--font-mono)] text-sm font-bold text-amber-hot">
+                    ~${((cascadeTarget.cascadeCount + 1) * 0.07).toFixed(2)}
+                  </p>
+                </div>
+                <div className="mt-4 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCascadeTarget(null)}
+                    className="flex-1 rounded-lg border border-border bg-surface px-3 py-2.5 font-[family-name:var(--font-display)] text-sm font-semibold text-text-secondary transition-all hover:bg-surface-raised"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { const id = cascadeTarget.assetId; setCascadeTarget(null); doRegenerate(id, false); }}
+                    className="flex-1 rounded-lg border border-electric/30 bg-electric/10 px-3 py-2.5 font-[family-name:var(--font-display)] text-sm font-semibold text-electric transition-all hover:bg-electric/20"
+                  >
+                    Just This One
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { const id = cascadeTarget.assetId; setCascadeTarget(null); doRegenerate(id, true); }}
+                    className="flex-1 rounded-lg bg-phoenix px-3 py-2.5 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:shadow-[0_0_24px_rgba(255,107,61,0.25)]"
+                  >
+                    Cascade All
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="mt-3 text-sm leading-relaxed text-text-secondary">
+                  This is the last keyframe in the chain. Regenerate it?
+                </p>
+                <div className="mt-3 rounded-lg bg-surface-overlay px-3 py-2">
+                  <span className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                    Cost
+                  </span>
+                  <p className="font-[family-name:var(--font-mono)] text-sm font-bold text-amber-hot">
+                    ~$0.07
+                  </p>
+                </div>
+                <div className="mt-4 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setCascadeTarget(null)}
+                    className="flex-1 rounded-lg border border-border bg-surface px-4 py-2.5 font-[family-name:var(--font-display)] text-sm font-semibold text-text-secondary transition-all hover:bg-surface-raised"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { const id = cascadeTarget.assetId; setCascadeTarget(null); doRegenerate(id, false); }}
+                    className="flex-1 rounded-lg bg-phoenix px-4 py-2.5 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:shadow-[0_0_24px_rgba(255,107,61,0.25)]"
+                  >
+                    Regenerate
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
