@@ -138,6 +138,21 @@ export const VOICE_MAPPING: Record<string, { gender: string; description: string
   financial_advisor: { gender: 'male', description: 'Professional, trustworthy, confident. Clear and authoritative' },
 };
 
+// Category-to-persona bridge map: maps product categories to VOICE_MAPPING persona keys
+// Resolves the mismatch where VOICE_MAPPING keys are persona names but lookup is by product_category
+export const CATEGORY_TO_PERSONA: Record<string, string> = {
+  supplements: 'pharmacist',
+  skincare: 'dermatologist',
+  fitness: 'fitness_coach',
+  tech: 'tech_reviewer',
+  kitchen: 'chef',
+  fashion: 'stylist',
+  home: 'interior_designer',
+  baby: 'pediatric_nurse',
+  pet: 'veterinarian',
+  finance: 'financial_advisor',
+};
+
 // Fallback voices if Voice Design fails
 export const FALLBACK_VOICES = {
   male: { name: 'Adam', voiceId: 'pNInz6obpgDQGcFmaJgB' },

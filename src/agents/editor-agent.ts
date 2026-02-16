@@ -110,6 +110,42 @@ export class EditorAgent extends BaseAgent {
     const videoCount = Object.keys(modifications).filter(k => k.startsWith('Video-')).length;
     if (videoCount === 0) throw new Error('No video assets to compose');
 
+    // 2b. B0.23: Pre-render validation — reject non-HTTPS asset URLs (e.g., data URIs)
+    const invalidAssetSlots: string[] = [];
+    for (const [slotKey, value] of Object.entries(modifications)) {
+      // Only validate Video and Audio slots (string URLs)
+      if (!slotKey.startsWith('Video-') && !slotKey.startsWith('Audio-')) continue;
+      const url = typeof value === 'string' ? value : null;
+      if (!url) continue;
+
+      if (url.startsWith('data:')) {
+        invalidAssetSlots.push(slotKey);
+        this.log(`Error: Asset slot "${slotKey}" has a data URI instead of an HTTPS URL — excluding from render`, { slotKey });
+        await this.logEvent(projectId, 'asset_validation_error', 'editing', {
+          slotKey,
+          issue: 'data_uri_detected',
+          urlPrefix: url.substring(0, 30),
+        });
+        // Remove the data URI slot so Creatomate does not receive it
+        delete modifications[slotKey];
+      } else if (!url.startsWith('https://')) {
+        this.log(`Warning: Asset slot "${slotKey}" has a non-HTTPS URL: ${url.substring(0, 60)}`, { slotKey });
+        await this.logEvent(projectId, 'asset_validation_warning', 'editing', {
+          slotKey,
+          issue: 'non_https_url',
+          urlPrefix: url.substring(0, 60),
+        });
+      }
+    }
+
+    if (invalidAssetSlots.length > 0) {
+      this.log(`Excluded ${invalidAssetSlots.length} invalid asset slot(s) from render: ${invalidAssetSlots.join(', ')}`);
+    }
+
+    // Re-check video count after validation
+    const validVideoCount = Object.keys(modifications).filter(k => k.startsWith('Video-')).length;
+    if (validVideoCount === 0) throw new Error('No valid video assets to compose after URL validation');
+
     // 3. Start Creatomate render
     this.log('Starting Creatomate render...');
     const render = await this.creatomate.renderVideo({

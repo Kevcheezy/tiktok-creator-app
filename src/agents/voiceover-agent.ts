@@ -1,7 +1,10 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { BaseAgent } from './base-agent';
 import { ElevenLabsClient } from '@/lib/api-clients/elevenlabs';
-import { VOICE_MAPPING, FALLBACK_VOICES, API_COSTS } from '@/lib/constants';
+import { VOICE_MAPPING, CATEGORY_TO_PERSONA, FALLBACK_VOICES, API_COSTS } from '@/lib/constants';
+
+// ElevenLabs returns ~128kbps MP3 audio. Bytes per second = 128000 / 8 = 16000.
+const ELEVENLABS_BYTES_PER_SECOND = 128000 / 8;
 
 export class VoiceoverAgent extends BaseAgent {
   private elevenlabs: ElevenLabsClient;
@@ -25,8 +28,8 @@ export class VoiceoverAgent extends BaseAgent {
 
     if (projError || !project) throw new Error('Project not found');
 
-    // 2. Resolve voice
-    const voiceId = await this.resolveVoice(project);
+    // 2. Resolve voice (B0.22: uses CATEGORY_TO_PERSONA bridge map)
+    const voiceId = await this.resolveVoice(project, projectId);
     this.log(`Using voice: ${voiceId}`);
 
     // 3. Get the approved script's latest scenes
@@ -54,6 +57,8 @@ export class VoiceoverAgent extends BaseAgent {
       }
     }
 
+    const segmentDuration = this.videoModel?.segment_duration || 15;
+
     // 4. Generate TTS for each segment (with per-segment error recovery)
     let segmentsCompleted = 0;
     for (let segIdx = 0; segIdx < this.videoModel.segment_count; segIdx++) {
@@ -69,13 +74,47 @@ export class VoiceoverAgent extends BaseAgent {
         // Generate audio
         const audioBuffer = await this.elevenlabs.textToSpeech(voiceId, scene.script_text);
 
-        // Validate audio duration: MP3 at ~128kbps, segment ≈ 16KB/s
-        // Warn if audio is unexpectedly short (<5KB) or very long (>1MB for target duration)
-        const sizeKB = audioBuffer.length / 1024;
-        if (sizeKB < 5) {
-          this.log(`Warning: Audio for segment ${segIdx} is very small (${sizeKB.toFixed(1)}KB) — may be truncated`);
-        } else if (sizeKB > 1024) {
-          this.log(`Warning: Audio for segment ${segIdx} is large (${sizeKB.toFixed(1)}KB) — may exceed ${this.videoModel.segment_duration}s target`);
+        // B0.21: Measure actual audio duration from MP3 buffer (128kbps)
+        const durationSeconds = audioBuffer.length / ELEVENLABS_BYTES_PER_SECOND;
+        const durationMs = Math.round(durationSeconds * 1000);
+        const durationRatio = durationSeconds / segmentDuration;
+
+        this.log(`Audio for segment ${segIdx}: ${durationSeconds.toFixed(2)}s (${(durationRatio * 100).toFixed(0)}% of ${segmentDuration}s target), ${(audioBuffer.length / 1024).toFixed(1)}KB`);
+
+        // B0.21: Warn if duration is outside 80%-100% of segment_duration
+        if (durationRatio < 0.80) {
+          const detail = {
+            segmentIndex: segIdx,
+            durationSeconds: parseFloat(durationSeconds.toFixed(2)),
+            segmentDuration,
+            durationRatio: parseFloat(durationRatio.toFixed(3)),
+            issue: 'audio_too_short',
+          };
+          this.log(`Warning: Audio for segment ${segIdx} is short (${(durationRatio * 100).toFixed(0)}% of target) — may leave dead silence at segment end`, detail);
+          await this.logEvent(projectId, 'audio_duration_warning', 'voiceover', detail);
+        } else if (durationRatio > 1.0) {
+          const detail = {
+            segmentIndex: segIdx,
+            durationSeconds: parseFloat(durationSeconds.toFixed(2)),
+            segmentDuration,
+            durationRatio: parseFloat(durationRatio.toFixed(3)),
+            issue: 'audio_too_long',
+          };
+          this.log(`Warning: Audio for segment ${segIdx} exceeds target (${(durationRatio * 100).toFixed(0)}% of target) — Creatomate may clip audio`, detail);
+          await this.logEvent(projectId, 'audio_duration_warning', 'voiceover', detail);
+
+          // B0.21: If audio exceeds segment duration by >2s, log a segment_error event
+          if (durationSeconds > segmentDuration + 2) {
+            const errorDetail = {
+              segmentIndex: segIdx,
+              durationSeconds: parseFloat(durationSeconds.toFixed(2)),
+              segmentDuration,
+              excessSeconds: parseFloat((durationSeconds - segmentDuration).toFixed(2)),
+              issue: 'audio_exceeds_segment_by_2s',
+            };
+            this.log(`Error: Audio for segment ${segIdx} exceeds segment duration by ${(durationSeconds - segmentDuration).toFixed(1)}s — will be clipped`, errorDetail);
+            await this.logEvent(projectId, 'segment_error', 'voiceover', errorDetail);
+          }
         }
 
         // Upload to Supabase Storage
@@ -87,37 +126,49 @@ export class VoiceoverAgent extends BaseAgent {
             upsert: true,
           });
 
+        // B0.23: If Storage upload fails, treat as segment failure (no data URI fallback)
         if (uploadError) {
-          this.log(`Storage upload failed: ${uploadError.message}. Storing as data URI instead.`);
-          // Fallback: store as base64 data URI
-          const base64 = audioBuffer.toString('base64');
-          const dataUri = `data:audio/mpeg;base64,${base64}`;
+          const uploadErrorDetail = {
+            segmentIndex: segIdx,
+            bucket: 'assets',
+            path: fileName,
+            error: uploadError.message,
+          };
+          this.log(`Storage upload failed for segment ${segIdx}: ${uploadError.message}`, uploadErrorDetail);
+          await this.logEvent(projectId, 'segment_error', 'voiceover', uploadErrorDetail);
 
+          // Create failed asset instead of storing a data URI
           await this.supabase.from('asset').insert({
             project_id: projectId,
             scene_id: scene.id,
             type: 'audio',
             provider: 'elevenlabs',
-            status: 'completed',
-            url: dataUri,
+            status: 'failed',
             cost_usd: API_COSTS.elevenLabsTts,
+            metadata: { error: `Storage upload failed: ${uploadError.message}`, durationMs },
           });
-        } else {
-          // Get public URL
-          const { data: urlData } = this.supabase.storage
-            .from('assets')
-            .getPublicUrl(fileName);
 
-          await this.supabase.from('asset').insert({
-            project_id: projectId,
-            scene_id: scene.id,
-            type: 'audio',
-            provider: 'elevenlabs',
-            status: 'completed',
-            url: urlData.publicUrl,
-            cost_usd: API_COSTS.elevenLabsTts,
-          });
+          // Still track cost since the TTS API call was made
+          await this.trackCost(projectId, API_COSTS.elevenLabsTts);
+          continue;
         }
+
+        // Get public URL
+        const { data: urlData } = this.supabase.storage
+          .from('assets')
+          .getPublicUrl(fileName);
+
+        // B0.21: Store measured duration in asset.metadata.durationMs
+        await this.supabase.from('asset').insert({
+          project_id: projectId,
+          scene_id: scene.id,
+          type: 'audio',
+          provider: 'elevenlabs',
+          status: 'completed',
+          url: urlData.publicUrl,
+          cost_usd: API_COSTS.elevenLabsTts,
+          metadata: { durationMs },
+        });
 
         await this.trackCost(projectId, API_COSTS.elevenLabsTts);
         segmentsCompleted++;
@@ -125,6 +176,10 @@ export class VoiceoverAgent extends BaseAgent {
       } catch (error) {
         const errMsg = error instanceof Error ? error.message : String(error);
         this.log(`TTS failed for segment ${segIdx}: ${errMsg}`);
+        await this.logEvent(projectId, 'segment_error', 'voiceover', {
+          segmentIndex: segIdx,
+          error: errMsg,
+        });
         await this.supabase.from('asset').insert({
           project_id: projectId,
           scene_id: scene.id,
@@ -132,6 +187,7 @@ export class VoiceoverAgent extends BaseAgent {
           provider: 'elevenlabs',
           status: 'failed',
           cost_usd: 0,
+          metadata: { error: errMsg },
         });
       }
     }
@@ -145,7 +201,11 @@ export class VoiceoverAgent extends BaseAgent {
     this.log(`Voiceover complete for project ${projectId}`);
   }
 
-  private async resolveVoice(project: any): Promise<string> {
+  /**
+   * Resolve the ElevenLabs voice ID for a project.
+   * B0.22: Uses CATEGORY_TO_PERSONA bridge map to correctly resolve product_category → persona → voice.
+   */
+  private async resolveVoice(project: any, projectId: string): Promise<string> {
     const character = project.character;
     const category = project.product_category || 'supplements';
 
@@ -158,12 +218,36 @@ export class VoiceoverAgent extends BaseAgent {
       this.log(`Cached voice ${character.voice_id} is invalid, generating new one`);
     }
 
-    // 2. Try to generate a voice via Voice Design
-    const voiceMapping = VOICE_MAPPING[category.toLowerCase()] ||
-      VOICE_MAPPING[Object.keys(VOICE_MAPPING)[0]];
+    // 2. B0.22: Resolve persona via CATEGORY_TO_PERSONA bridge map
+    const persona = CATEGORY_TO_PERSONA[category.toLowerCase()];
+    const voiceMapping = persona
+      ? VOICE_MAPPING[persona]
+      : VOICE_MAPPING[Object.keys(VOICE_MAPPING)[0]];
+
+    if (!persona) {
+      this.log(`Warning: No persona mapping for category "${category}", falling back to first persona (${Object.keys(VOICE_MAPPING)[0]})`);
+    }
+
+    const resolvedPersona = persona || Object.keys(VOICE_MAPPING)[0];
     const gender = voiceMapping?.gender || 'male';
     const voiceDescription = voiceMapping?.description || 'Professional, clear, engaging speaker';
 
+    // B0.22: Log which persona was selected for debugging
+    await this.logEvent(projectId, 'voice_selected', 'voiceover', {
+      category,
+      persona: resolvedPersona,
+      gender,
+      voiceDescription,
+      mappedViaBridge: !!persona,
+    });
+
+    this.log(`Voice persona resolved: category="${category}" -> persona="${resolvedPersona}" (${gender})`, {
+      category,
+      persona: resolvedPersona,
+      gender,
+    });
+
+    // 3. Try to generate a voice via Voice Design
     try {
       const sampleText = 'Hey, I just tried this product and honestly, I was not expecting these results.';
 
@@ -189,7 +273,7 @@ export class VoiceoverAgent extends BaseAgent {
     } catch (error) {
       this.log(`Voice design failed: ${error instanceof Error ? error.message : error}. Using fallback.`);
 
-      // 3. Fallback to preset voices
+      // 4. Fallback to preset voices
       const fallback = gender === 'female' ? FALLBACK_VOICES.female : FALLBACK_VOICES.male;
       return fallback.voiceId;
     }

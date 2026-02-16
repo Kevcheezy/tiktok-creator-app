@@ -224,38 +224,38 @@ Influencer `<select>` options displayed the entire `persona` field (full appeara
 - [x] Worker: `regenerateKeyframe()` now uses full reference images (previous frame, influencer, product) matching CastingAgent
 - [x] Backend: Error stored in `asset.metadata.lastRegenError` on regeneration failure
 
-#### B0.21 - No Audio Duration Validation in VoiceoverAgent 🔧 IN PROGRESS
+#### ~~B0.21 - No Audio Duration Validation in VoiceoverAgent~~ FIXED
 **Severity:** High (audio silently clips or leaves dead silence in final video)
 **Scope:** Backend
 **Why:** VoiceoverAgent generates TTS audio from `scene.script_text` but never measures the actual audio duration. The only validation is file size (warn if <5KB or >1MB). If ElevenLabs produces audio longer than the segment duration (possible with slower voice styles or longer scripts), the Creatomate template silently clips it. If audio is too short, there's dead silence at the segment end. Users get a broken final video with no indication of why.
 
 **Fix checklist:**
-- [ ] After TTS generation, measure audio duration (parse MP3 headers or use a lightweight approach)
-- [ ] Warn via `logToGenerationLog()` if audio duration is outside acceptable range (e.g., <80% or >100% of `segment_duration`)
-- [ ] Store measured duration in `asset.metadata.durationMs` for EditorAgent to reference
-- [ ] If audio exceeds segment duration by >2s, log a `segment_error` event (don't fail — but make it visible)
+- [x] After TTS generation, measure audio duration (128kbps MP3: `duration = buffer.length / 16000`)
+- [x] Warn via `logToGenerationLog()` if audio duration is outside acceptable range (<80% or >100% of `segment_duration`)
+- [x] Store measured duration in `asset.metadata.durationMs` for EditorAgent to reference
+- [x] If audio exceeds segment duration by >2s, log a `segment_error` event (don't fail — but make it visible)
 
-#### B0.22 - Voice Mapping Mismatch (Every Video Gets Same Voice) 🔧 IN PROGRESS
+#### ~~B0.22 - Voice Mapping Mismatch (Every Video Gets Same Voice)~~ FIXED
 **Severity:** Medium (defeats voice personalization — all categories sound identical)
 **Scope:** Backend
 **Why:** `VOICE_MAPPING` in VoiceoverAgent uses persona names as keys (`pharmacist`, `dermatologist`) but the lookup is by `project.product_category` (`supplements`, `skincare`, `fitness`, etc.). The fallback `VOICE_MAPPING[Object.keys(VOICE_MAPPING)[0]]` always resolves to the first key (`pharmacist`), so every product category gets the same deep/calm/professional voice regardless of the product type.
 
 **Fix checklist:**
-- [ ] Add a `CATEGORY_TO_PERSONA` bridge map in `src/lib/constants.ts` that maps product categories to persona keys (e.g., `supplements → pharmacist`, `skincare → dermatologist`, `fitness → trainer`)
-- [ ] VoiceoverAgent: resolve voice via `CATEGORY_TO_PERSONA[category]` → `VOICE_MAPPING[persona]`
-- [ ] Log which persona was selected for the category in `logToGenerationLog()` (aids debugging)
-- [ ] Ensure unmapped categories still fall back gracefully (log warning, use first persona)
+- [x] Add a `CATEGORY_TO_PERSONA` bridge map in `src/lib/constants.ts` that maps product categories to persona keys (e.g., `supplements` -> `pharmacist`, `skincare` -> `dermatologist`, `fitness` -> `fitness_coach`)
+- [x] VoiceoverAgent: resolve voice via `CATEGORY_TO_PERSONA[category]` -> `VOICE_MAPPING[persona]`
+- [x] Log which persona was selected for the category in `logToGenerationLog()` (event_type: `voice_selected`)
+- [x] Ensure unmapped categories still fall back gracefully (log warning, use first persona)
 
-#### B0.23 - Data URI Audio Fallback Causes Silent Render Failures 🔧 IN PROGRESS
+#### ~~B0.23 - Data URI Audio Fallback Causes Silent Render Failures~~ FIXED
 **Severity:** Medium (EditorAgent render fails with no clear error pointing to the cause)
 **Scope:** Backend
 **Why:** When Supabase Storage upload fails, VoiceoverAgent stores audio as `data:audio/mpeg;base64,...` in `asset.url`. EditorAgent passes this URL directly to Creatomate. Creatomate's support for data URIs as audio sources is undocumented and untested. If Creatomate rejects the data URI, the render fails with a generic error that doesn't indicate the audio format was the problem.
 
 **Fix checklist:**
-- [ ] VoiceoverAgent: if Storage upload fails, treat it as a segment failure (create `status: 'failed'` asset) instead of storing a data URI
-- [ ] Remove the data URI fallback path entirely — it creates a time bomb for EditorAgent
-- [ ] Log Storage upload failures as `segment_error` events with detail (bucket, path, error message)
-- [ ] EditorAgent: add pre-render validation that all asset URLs are HTTPS (reject data URIs with a clear error message)
+- [x] VoiceoverAgent: if Storage upload fails, treat it as a segment failure (create `status: 'failed'` asset) instead of storing a data URI
+- [x] Remove the data URI fallback path entirely — it creates a time bomb for EditorAgent
+- [x] Log Storage upload failures as `segment_error` events with detail (bucket, path, error message)
+- [x] EditorAgent: add pre-render validation that all asset URLs are HTTPS (reject data URIs with a clear error message)
 
 #### B0.24 - BRollAgent JSON Parse Failure — No Retry on Malformed LLM Response
 **Severity:** High (B-roll planning KOs the entire project with no recovery)
