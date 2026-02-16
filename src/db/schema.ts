@@ -80,6 +80,30 @@ export const product = pgTable('product', {
 
 export const productRelations = relations(product, ({ many }) => ({
   projects: many(project),
+  images: many(productImage),
+}));
+
+// ─── Product Image ─────────────────────────────────────────────────────────
+
+export const productImage = pgTable('product_image', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  productId: uuid('product_id')
+    .notNull()
+    .references(() => product.id, { onDelete: 'cascade' }),
+  url: text('url').notNull(),
+  urlClean: text('url_clean'),
+  angle: text('angle').notNull().default('front'),
+  isPrimary: boolean('is_primary').notNull().default(false),
+  sortOrder: integer('sort_order').notNull().default(0),
+  metadata: jsonb('metadata').default({}),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const productImageRelations = relations(productImage, ({ one }) => ({
+  product: one(product, {
+    fields: [productImage.productId],
+    references: [product.id],
+  }),
 }));
 
 // ─── Script Template ─────────────────────────────────────────────────────────

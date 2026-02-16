@@ -657,15 +657,16 @@ These features separate "generates a video" from "generates a video that sells."
 - [ ] Avatar gallery: Preview all 11 characters with sample keyframes before selecting
 - [ ] Custom avatar upload: Users bring their own reference images
 
-#### R2.4 - Product Image Integration 🔧 IN PROGRESS
+#### ~~R2.4 - Product Image Integration~~ ~~DONE~~ (backend)
 **Priority:** P1 - High
 **Effort:** Small
+**Status:** Complete (2026-02-15). Multi-angle product images with per-segment angle-aware selection and async background removal.
 **Why:** Real product images in videos dramatically increase conversion. Currently the pipeline generates AI representations of products, which can look off-brand.
 
-- [ ] Accept product image uploads (multiple angles) — `product_image` table with angle/is_primary/url_clean columns
-- [ ] Composite real product images into generated video frames — angle-aware per-segment selection in CastingAgent via VISIBILITY_ANGLE_MAP
-- [ ] Product image enhancement (background removal, lighting correction) — async bg removal via WaveSpeed editImage, stored in `url_clean`
-- [ ] Product placement choreography matching the PRODUCT_PLACEMENT_ARC — segment 0 none, segment 1 lifestyle/side, segment 2 front/label, segment 3 front/side
+- [x] Accept product image uploads (multiple angles) — `product_image` table with angle/is_primary/url_clean columns. CRUD: `GET/POST /api/products/:id/images`, `PATCH/DELETE /api/products/:id/images/:imageId`. Auto-seed from analysis.
+- [x] Composite real product images into generated video frames — CastingAgent `selectProductImageForSegment()` selects best angle per segment via `VISIBILITY_ANGLE_MAP`. Legacy fallback to `project.product_image_url`.
+- [x] Product image enhancement (background removal, lighting correction) — async bg removal via WaveSpeed editImage on upload, stored in `url_clean`. 4K upscale on upload.
+- [x] Product placement choreography matching the PRODUCT_PLACEMENT_ARC — segment 0 none (no product ref), segment 1 lifestyle/side, segment 2 front/label (hero), segment 3 front/side
 
 #### ~~R2.5 - Reference Video Intelligence~~ DONE *(completed as R1.3)*
 **Status:** Complete (2026-02-15) — Implemented ahead of schedule as part of Tier 1 (R1.3).
@@ -797,9 +798,9 @@ POLISH     Tier 1.5: UX Hardening
            R1.5.15 Project sequential numbering (PROJECT-N)
 
 NEXT       Tier 2: Quality & Conversion
-           R2.0 Performance Tracking ✅ DONE (backend) ──→ R2.4 Product Images ──→ R2.3 Avatar Consistency ──→ R2.1 Hook Testing ──→ R2.2 Trends
-           (data foundation complete)                        (quick win, big impact)  (builds trust)             (optimizes output)    (stays fresh)
-           ▲ R2.0 fully wired (KPIs, leaderboard, breakdown live; RunTable still mock). R2.5 already done as R1.3.
+           R2.0 Performance Tracking ✅ DONE (backend) ──→ R2.4 Product Images ✅ DONE (backend) ──→ R2.3 Avatar Consistency ──→ R2.1 Hook Testing ──→ R2.2 Trends
+           (data foundation complete)                        (multi-angle + bg removal)               (builds trust)             (optimizes output)    (stays fresh)
+           ▲ R2.0 fully wired (KPIs, leaderboard, breakdown live; RunTable still mock). R2.4 backend done. R2.5 already done as R1.3.
 
 THEN       Tier 3: Scale
            R3.2 Script Library ──→ R3.1 Batch Generation ──→ R3.3 Cost Optimization

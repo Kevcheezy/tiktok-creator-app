@@ -323,6 +323,26 @@ async function writeAnalysisToProduct(
     .eq('id', productId);
 
   jobLog.info({ productId }, 'Product table updated with analysis');
+
+  // Seed product_image table for multi-angle support (R2.4)
+  if (analysis.product_image_url) {
+    const { data: existingImages } = await supabase
+      .from('product_image')
+      .select('id')
+      .eq('product_id', productId)
+      .limit(1);
+
+    if (!existingImages || existingImages.length === 0) {
+      await supabase.from('product_image').insert({
+        product_id: productId,
+        url: analysis.product_image_url,
+        angle: 'front',
+        is_primary: true,
+        sort_order: 0,
+      });
+      jobLog.info({ productId }, 'Auto-created product_image from analysis');
+    }
+  }
 }
 
 async function handleScripting(projectId: string, correlationId: string, jobLog: ReturnType<typeof createLogger>) {

@@ -33,7 +33,14 @@ export async function GET(
     .eq('product_id', id)
     .order('created_at', { ascending: false });
 
-  return NextResponse.json({ ...prod, project_count: count || 0, projects: projects || [] });
+  // Get product images for multi-angle support
+  const { data: images } = await supabase
+    .from('product_image')
+    .select('*')
+    .eq('product_id', id)
+    .order('sort_order');
+
+  return NextResponse.json({ ...prod, project_count: count || 0, projects: projects || [], images: images || [] });
 }
 
 export async function PATCH(

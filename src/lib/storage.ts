@@ -17,7 +17,7 @@ const EXTENSION_MAP: Record<string, string> = {
   'image/gif': 'gif',
 };
 
-export type EntityType = 'influencer' | 'product' | 'project-product';
+export type EntityType = 'influencer' | 'product' | 'project-product' | 'product-image';
 
 export function isAllowedImageType(contentType: string): boolean {
   return ALLOWED_IMAGE_TYPES.includes(contentType);
@@ -38,6 +38,8 @@ export function generateUploadPath(
       return `products/${entityId}/product-${uniqueSuffix}.${ext}`;
     case 'project-product':
       return `products/${entityId}/product-${uniqueSuffix}.${ext}`;
+    case 'product-image':
+      return `products/${entityId}/angles/${uniqueSuffix}.${ext}`;
     default:
       throw new Error(`Unknown entity type: ${entityType}`);
   }

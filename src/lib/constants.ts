@@ -110,6 +110,18 @@ export const PRODUCT_PLACEMENT_ARC = [
   { segment: 4, section: 'CTA', visibility: 'set_down', description: 'Product set down but still in frame' },
 ] as const;
 
+// Valid product image angles for multi-angle product photography
+export const PRODUCT_IMAGE_ANGLES = ['front', 'side', 'back', 'label', 'lifestyle'] as const;
+export type ProductImageAngle = typeof PRODUCT_IMAGE_ANGLES[number];
+
+// Maps PRODUCT_PLACEMENT_ARC visibility → preferred product image angles for CastingAgent
+export const VISIBILITY_ANGLE_MAP: Record<string, ProductImageAngle[]> = {
+  none: [],
+  subtle: ['lifestyle', 'side'],
+  hero: ['front', 'label'],
+  set_down: ['front', 'side'],
+};
+
 // Energy arc per segment
 export const ENERGY_ARC = [
   { segment: 1, section: 'Hook', pattern: { start: 'HIGH', middle: 'HIGH', end: 'HIGH' }, description: 'Sustained high energy (exception)' },
@@ -432,6 +444,7 @@ export const API_COSTS = {
   geminiVideoAnalysis: 0.02,
   brollPlanning: 0.01, // 1 LLM call for B-roll shot list
   imageUpscaler: 0.01, // WaveSpeed image upscaler to 4K
+  productBgRemoval: 0.07, // WaveSpeed edit used for product background removal
 } as const;
 
 // ─── B-Roll Presets ─────────────────────────────────────────────────────────

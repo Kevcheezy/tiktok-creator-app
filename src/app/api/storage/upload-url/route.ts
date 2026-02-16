@@ -10,7 +10,7 @@ import {
 } from '@/lib/storage';
 
 const UploadUrlSchema = z.object({
-  entityType: z.enum(['influencer', 'product', 'project-product']),
+  entityType: z.enum(['influencer', 'product', 'project-product', 'product-image']),
   entityId: z.string().uuid(),
   contentType: z.string().refine(isAllowedImageType, {
     message: 'Content type must be image/jpeg, image/png, image/webp, or image/gif',
