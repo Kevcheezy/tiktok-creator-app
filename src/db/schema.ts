@@ -117,6 +117,7 @@ export const project = pgTable('project', {
   influencerId: uuid('influencer_id').references(() => influencer.id),
   inputMode: text('input_mode').default('product_only'),
   videoUrl: text('video_url'),
+  videoAnalysis: jsonb('video_analysis'),
   previewOnly: boolean('preview_only').default(false),
   renderUrl: text('render_url'),
   costUsd: numeric('cost_usd', { precision: 10, scale: 4 }).default('0'),
