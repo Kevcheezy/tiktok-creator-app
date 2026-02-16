@@ -110,7 +110,7 @@ export function formatGil(amount: number | string | null | undefined): string {
 // =============================================
 
 export const BATTLE_TEXT = {
-  enemyName: 'BLANK VIDEO',
+  enemyName: 'PROGRESS',
   victory: 'VICTORY',
   ko: 'KO',
   yourTurn: 'YOUR TURN',

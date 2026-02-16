@@ -33,8 +33,8 @@ function getCurrentStage(status: string, failedAtStatus?: string | null): string
   return null;
 }
 
-function getEnemyHp(status: string, failedAtStatus?: string | null): number {
-  if (status === 'completed') return 0;
+function getProgress(status: string, failedAtStatus?: string | null): number {
+  if (status === 'completed') return 100;
   const effectiveStatus = status === 'failed' && failedAtStatus ? failedAtStatus : status;
 
   // All pipeline stages (including review gates)
@@ -44,10 +44,10 @@ function getEnemyHp(status: string, failedAtStatus?: string | null): number {
     'casting', 'casting_review', 'directing', 'voiceover', 'asset_review', 'editing',
   ];
   const idx = allStages.indexOf(effectiveStatus);
-  if (idx < 0) return 100;
-  // Each completed stage chips away at HP proportionally
+  if (idx < 0) return 0;
+  // Each completed stage fills progress proportionally
   const pctPerStage = 100 / allStages.length;
-  return Math.max(0, Math.round(100 - idx * pctPerStage));
+  return Math.min(100, Math.round(idx * pctPerStage));
 }
 
 /** FF7-style battle HUD overlay for project detail pages. */
@@ -56,7 +56,7 @@ export function BattleHUD({ status, costUsd, failedAtStatus, children }: BattleH
   const isFailed = status === 'failed';
   const completed = getCompletedStages(status, failedAtStatus);
   const current = getCurrentStage(status, failedAtStatus);
-  const enemyHp = getEnemyHp(status, failedAtStatus);
+  const progress = getProgress(status, failedAtStatus);
 
   return (
     <div className="relative">
@@ -77,15 +77,15 @@ export function BattleHUD({ status, costUsd, failedAtStatus, children }: BattleH
           </span>
           <div className="relative h-2.5 w-32 overflow-hidden rounded-sm border border-magenta/30 bg-surface-overlay">
             <div
-              className="h-full rounded-sm transition-all duration-1000 ease-out animate-enemy-hp-drain"
+              className="h-full rounded-sm transition-all duration-1000 ease-out"
               style={{
-                width: `${enemyHp}%`,
-                backgroundColor: enemyHp > 50 ? '#ff2d55' : enemyHp > 25 ? '#ff8c42' : '#ffc933',
+                width: `${progress}%`,
+                backgroundColor: progress < 50 ? '#ff8c42' : progress < 80 ? '#ffc933' : '#33ff66',
               }}
             />
           </div>
           <span className="font-[family-name:var(--font-mono)] text-[10px] text-magenta">
-            {enemyHp}%
+            {progress}%
           </span>
         </div>
       </div>
