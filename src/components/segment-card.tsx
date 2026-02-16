@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { countTextSyllables } from '@/lib/syllables';
 import { ToneSelector } from './tone-selector';
+import { HighlightedText } from './highlighted-text';
 import { DEFAULT_TONE } from '@/lib/constants';
 
 interface Scene {
@@ -29,6 +30,7 @@ interface SegmentCardProps {
   projectId?: string;
   scriptId?: string;
   onSegmentUpdate?: () => void;
+  productTerms?: string[];
 }
 
 const SECTION_COLORS: Record<string, { accent: string; bg: string; label: string }> = {
@@ -143,7 +145,7 @@ function Spinner() {
   );
 }
 
-export function SegmentCard({ scene, editable = false, projectId, scriptId, onSegmentUpdate }: SegmentCardProps) {
+export function SegmentCard({ scene, editable = false, projectId, scriptId, onSegmentUpdate, productTerms }: SegmentCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(scene.script_text || '');
   const [saving, setSaving] = useState(false);
@@ -375,7 +377,7 @@ export function SegmentCard({ scene, editable = false, projectId, scriptId, onSe
           scene.script_text && (
             <div>
               <p className="text-sm leading-relaxed text-text-primary">
-                &ldquo;{scene.script_text}&rdquo;
+                &ldquo;<HighlightedText text={scene.script_text} terms={productTerms} productVisibility={scene.product_visibility} />&rdquo;
               </p>
             </div>
           )

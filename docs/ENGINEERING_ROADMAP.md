@@ -435,7 +435,7 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 
 - [ ] Auto-tag script segments with: props needed, interaction type (requires backend tagging)
 - [x] Visual breakdown view at script review: full 60-second timeline with energy arc overlay, B-roll markers, product visibility, text overlays, shot scripts, audio sync peaks
-- [ ] Highlighted product mentions in script text (clickable to see product placement details for that segment)
+- [x] Highlighted product mentions in script text (clickable to see product placement details for that segment)
 - [ ] Camera/shot specs surfaced as editable fields: angle (close-up/medium/wide), movement (static/pan/zoom), lighting direction
 - [x] Beat board view option: 4-segment visual arc (Hook → Problem → Solution → CTA) with energy levels, B-roll placements, scene previews
 - [x] Cards / Timeline / Beats toggle in script-review.tsx

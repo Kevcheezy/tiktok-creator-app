@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { SegmentCard } from './segment-card';
 import { ScriptBreakdown } from './script-breakdown';
+import { HighlightedText } from './highlighted-text';
 import { ApproveControls } from './approve-controls';
 import { ScriptUpload } from './script-upload';
 import { SCRIPT_TONES } from '@/lib/constants';
@@ -43,10 +44,12 @@ export function ScriptReview({
   projectId,
   onStatusChange,
   readOnly,
+  productTerms,
 }: {
   projectId: string;
   onStatusChange?: () => void;
   readOnly?: boolean;
+  productTerms?: string[];
 }) {
   const [scripts, setScripts] = useState<Script[]>([]);
   const [loading, setLoading] = useState(true);
@@ -205,7 +208,7 @@ export function ScriptReview({
             Full Script
           </h3>
           <p className="text-sm leading-relaxed text-text-secondary">
-            {script.full_text}
+            <HighlightedText text={script.full_text} terms={productTerms} />
           </p>
         </div>
       )}
@@ -244,12 +247,13 @@ export function ScriptReview({
               projectId={projectId}
               scriptId={script.id}
               onSegmentUpdate={() => fetchScripts()}
+              productTerms={productTerms}
             />
           ))}
         </div>
       )}
-      {breakdownView === 'timeline' && <ScriptBreakdown scenes={script.scenes} view="timeline" />}
-      {breakdownView === 'beats' && <ScriptBreakdown scenes={script.scenes} view="beats" />}
+      {breakdownView === 'timeline' && <ScriptBreakdown scenes={script.scenes} view="timeline" productTerms={productTerms} />}
+      {breakdownView === 'beats' && <ScriptBreakdown scenes={script.scenes} view="beats" productTerms={productTerms} />}
 
       {/* Approve / Regenerate controls */}
       {!readOnly && (

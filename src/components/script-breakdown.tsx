@@ -1,5 +1,7 @@
 'use client';
 
+import { HighlightedText } from './highlighted-text';
+
 // ─── Types ────────────────────────────────────────────
 
 interface BrollCue {
@@ -26,6 +28,7 @@ interface Scene {
 interface ScriptBreakdownProps {
   scenes: Scene[];
   view: 'timeline' | 'beats';
+  productTerms?: string[];
 }
 
 // ─── Constants ────────────────────────────────────────
@@ -65,11 +68,11 @@ const VISIBILITY_LABELS: Record<string, { label: string; opacity: number }> = {
 
 // ─── Main Component ───────────────────────────────────
 
-export function ScriptBreakdown({ scenes, view }: ScriptBreakdownProps) {
+export function ScriptBreakdown({ scenes, view, productTerms }: ScriptBreakdownProps) {
   const sorted = [...scenes].sort((a, b) => a.segment_index - b.segment_index);
   if (sorted.length === 0) return null;
 
-  if (view === 'beats') return <BeatBoard scenes={sorted} />;
+  if (view === 'beats') return <BeatBoard scenes={sorted} productTerms={productTerms} />;
   return <TimelineView scenes={sorted} />;
 }
 
@@ -304,7 +307,7 @@ function ProductIcon({ visibility }: { visibility: string }) {
 // BEAT BOARD VIEW
 // ═══════════════════════════════════════════════════════
 
-function BeatBoard({ scenes }: { scenes: Scene[] }) {
+function BeatBoard({ scenes, productTerms }: { scenes: Scene[]; productTerms?: string[] }) {
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       {scenes.map((s) => {
@@ -352,7 +355,7 @@ function BeatBoard({ scenes }: { scenes: Scene[] }) {
             {/* Script preview */}
             {s.script_text && (
               <p className="mt-3 line-clamp-2 text-xs leading-relaxed text-text-secondary">
-                &ldquo;{s.script_text}&rdquo;
+                &ldquo;<HighlightedText text={s.script_text} terms={productTerms} productVisibility={s.product_visibility} />&rdquo;
               </p>
             )}
 

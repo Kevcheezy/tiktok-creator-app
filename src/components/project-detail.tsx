@@ -269,6 +269,14 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
 
   const data = project.product_data;
 
+  // Build product terms for highlighting mentions in script text
+  const productTerms = [
+    project.product_name,
+    data?.product_name,
+    data?.brand,
+    data?.product_type,
+  ].filter((t): t is string => !!t && t.length >= 3);
+
   return (
     <BattleHUD status={project.status} costUsd={project.cost_usd} failedAtStatus={project.failed_at_status}>
     <div className="animate-fade-in-up space-y-8">
@@ -525,7 +533,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
 
       {/* Script Review */}
       {displayStage === 'script_review' && (
-        <ScriptReview projectId={projectId} onStatusChange={fetchProject} readOnly={readOnlyMode} />
+        <ScriptReview projectId={projectId} onStatusChange={fetchProject} readOnly={readOnlyMode} productTerms={productTerms} />
       )}
 
       {/* B-Roll Storyboard Review */}
