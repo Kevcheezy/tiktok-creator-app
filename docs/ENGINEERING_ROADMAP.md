@@ -543,7 +543,7 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] Array fields (Selling Points, Key Claims, Benefits): inline edit, add, remove items with auto-save on blur
 - [x] Text fields (Usage, Hook Angle, Avatar Description): textarea editing with auto-save on blur
 - [x] Saving indicator per field
-- [x] Per-field regeneration via LLM — `POST /api/projects/[id]/regenerate-field` accepts `{ field, feedback? }`, regenerates one field via WaveSpeed LLM, updates `product_data`. Frontend "regenerate" button is a frontend agent task.
+- [x] Per-field regeneration via LLM — `POST /api/projects/[id]/regenerate-field` accepts `{ field, feedback? }`, regenerates one field via WaveSpeed LLM, updates `product_data`. Frontend: regenerate button (refresh icon) + optional feedback input wired to all array and text fields in AnalysisResults.
 
 #### R1.5.15 - Project Sequential Numbering ~~DONE~~
 **Priority:** P1 - Medium
@@ -657,15 +657,15 @@ These features separate "generates a video" from "generates a video that sells."
 - [ ] Avatar gallery: Preview all 11 characters with sample keyframes before selecting
 - [ ] Custom avatar upload: Users bring their own reference images
 
-#### R2.4 - Product Image Integration
+#### R2.4 - Product Image Integration 🔧 IN PROGRESS
 **Priority:** P1 - High
 **Effort:** Small
 **Why:** Real product images in videos dramatically increase conversion. Currently the pipeline generates AI representations of products, which can look off-brand.
 
-- [ ] Accept product image uploads (multiple angles)
-- [ ] Composite real product images into generated video frames
-- [ ] Product image enhancement (background removal, lighting correction)
-- [ ] Product placement choreography matching the PRODUCT_PLACEMENT_ARC
+- [ ] Accept product image uploads (multiple angles) — `product_image` table with angle/is_primary/url_clean columns
+- [ ] Composite real product images into generated video frames — angle-aware per-segment selection in CastingAgent via VISIBILITY_ANGLE_MAP
+- [ ] Product image enhancement (background removal, lighting correction) — async bg removal via WaveSpeed editImage, stored in `url_clean`
+- [ ] Product placement choreography matching the PRODUCT_PLACEMENT_ARC — segment 0 none, segment 1 lifestyle/side, segment 2 front/label, segment 3 front/side
 
 #### ~~R2.5 - Reference Video Intelligence~~ DONE *(completed as R1.3)*
 **Status:** Complete (2026-02-15) — Implemented ahead of schedule as part of Tier 1 (R1.3).
