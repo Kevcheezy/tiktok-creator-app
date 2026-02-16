@@ -1,5 +1,5 @@
 /**
- * Version module for the TikTok Creator App.
+ * Version module for the MONEY PRINTER 3000.
  *
  * Works in both contexts:
  * - Next.js (build-time env injection via next.config.ts)

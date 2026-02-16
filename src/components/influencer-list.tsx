@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ConfirmDialog } from './confirm-dialog';
 
 interface Influencer {
@@ -28,22 +29,32 @@ function timeAgo(date: string | null): string {
 }
 
 export function InfluencerList() {
+  const router = useRouter();
   const [influencers, setInfluencers] = useState<Influencer[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<Influencer | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function handleDelete() {
     if (!deleteTarget) return;
     setDeleting(true);
+    setDeleteError(null);
     try {
       const res = await fetch(`/api/influencers/${deleteTarget.id}`, { method: 'DELETE' });
       if (res.ok) {
         setInfluencers((prev) => prev.filter((i) => i.id !== deleteTarget.id));
+        setDeleteTarget(null);
+      } else {
+        const data = await res.json().catch(() => ({ error: 'Failed to delete influencer' }));
+        setDeleteError(data.error || 'Failed to delete influencer');
+        setDeleteTarget(null);
       }
+    } catch {
+      setDeleteError('Failed to delete influencer');
+      setDeleteTarget(null);
     } finally {
       setDeleting(false);
-      setDeleteTarget(null);
     }
   }
 
@@ -142,11 +153,19 @@ export function InfluencerList() {
 
   return (
     <div className="stagger-children grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {/* Delete error banner */}
+      {deleteError && (
+        <div className="col-span-full rounded-lg border border-magenta/30 bg-magenta/10 px-4 py-3 flex items-center justify-between">
+          <p className="text-sm text-magenta">{deleteError}</p>
+          <button onClick={() => setDeleteError(null)} className="text-magenta/60 hover:text-magenta text-sm ml-4">Dismiss</button>
+        </div>
+      )}
+
       {influencers.map((influencer) => (
-        <Link
+        <div
           key={influencer.id}
-          href={`/influencers/${influencer.id}`}
-          className="group relative overflow-hidden rounded-xl border border-border bg-surface p-5 transition-all duration-300 hover:bg-surface-raised hover:shadow-lg hover:shadow-black/20 hover:border-magenta/40"
+          onClick={() => router.push(`/influencers/${influencer.id}`)}
+          className="group relative cursor-pointer overflow-hidden rounded-xl border border-border bg-surface p-5 transition-all duration-300 hover:bg-surface-raised hover:shadow-lg hover:shadow-black/20 hover:border-magenta/40"
         >
           {/* Top gradient line */}
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border-bright to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
@@ -204,7 +223,6 @@ export function InfluencerList() {
             <button
               type="button"
               onClick={(e) => {
-                e.preventDefault();
                 e.stopPropagation();
                 setDeleteTarget(influencer);
               }}
@@ -218,7 +236,7 @@ export function InfluencerList() {
               </svg>
             </button>
           </div>
-        </Link>
+        </div>
       ))}
 
       <ConfirmDialog

@@ -1,7 +1,7 @@
 # Frontend Designer Agent — Design Doc
 
 ## Problem
-The TikTok Creator App needs a consistent, high-quality frontend across all phases. Without a dedicated design agent, frontend work risks producing generic, inconsistent UI. The `frontend-design` Claude Code plugin provides aesthetic guidelines but needs project-specific context to be effective.
+The MONEY PRINTER 3000 needs a consistent, high-quality frontend across all phases. Without a dedicated design agent, frontend work risks producing generic, inconsistent UI. The `frontend-design` Claude Code plugin provides aesthetic guidelines but needs project-specific context to be effective.
 
 ## Solution
 A project-level Claude Code skill at `.claude/skills/frontend-designer/SKILL.md` that acts as the mandatory gateway for all frontend changes.

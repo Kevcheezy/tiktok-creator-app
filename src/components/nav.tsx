@@ -28,7 +28,7 @@ export async function Nav() {
               </svg>
             </div>
             <span className="font-[family-name:var(--font-display)] text-lg font-bold tracking-tight text-text-primary">
-              TikTok<span className="text-electric">Creator</span>
+              MONEY<span className="text-electric">PRINTER</span><span className="text-lime">3000</span>
             </span>
           </Link>
           <span

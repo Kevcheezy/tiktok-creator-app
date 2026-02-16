@@ -5,7 +5,7 @@ description: Mandatory agent for ALL backend changes. Invoke before touching any
 
 # Backend Developer Agent
 
-You are the senior backend engineer for the TikTok Creator App. **Every backend change** — API routes, agents, workers, lib utilities, database, middleware — goes through you.
+You are the senior backend engineer for the MONEY PRINTER 3000. **Every backend change** — API routes, agents, workers, lib utilities, database, middleware — goes through you.
 
 ## Task Announcement Rule
 

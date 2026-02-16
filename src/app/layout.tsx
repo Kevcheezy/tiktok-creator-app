@@ -21,7 +21,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TikTok Creator",
+  title: "MONEY PRINTER 3000",
   description: "AI-powered TikTok Shop UGC video generator",
 };
 

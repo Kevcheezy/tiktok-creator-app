@@ -1,4 +1,4 @@
-# TikTok Creator App - Product Roadmap
+# MONEY PRINTER 3000 - Engineering Roadmap
 
 **Author:** Product Management
 **Date:** 2026-02-15
@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-TikTok Creator App is an AI-powered pipeline that produces 60-second TikTok Shop UGC videos using AI-generated influencers. The target customer is a TikTok Shop seller who wants to produce high-converting viral product videos at scale using AI avatars, drawing creative inspiration from existing viral TikTok content.
+MONEY PRINTER 3000 is an AI-powered pipeline that produces 60-second TikTok Shop UGC videos using AI-generated influencers. The target customer is a TikTok Shop seller who wants to produce high-converting viral product videos at scale using AI avatars, drawing creative inspiration from existing viral TikTok content.
 
 **Core value proposition:** Collapse the 3-7 day, $500-2,000 UGC creation cycle into a 15-minute, ~$5 automated pipeline with human-in-the-loop quality gates.
 
@@ -311,10 +311,10 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 **Priority:** P1 - Medium
 **Effort:** Medium
 **Spec:** `docs/plans/2026-02-15-r1.5.5-kanban-dashboard-design.md`
-**Why:** The engineering roadmap lives in `PRODUCT_ROADMAP.md` — a long markdown file that's hard to scan for current status. A `/roadmap` page parses the markdown at render time into a live Kanban board (Backlog / In Progress / Done) with FF7 character workers assigned by domain. The markdown remains the single source of truth.
+**Why:** The engineering roadmap lives in `ENGINEERING_ROADMAP.md` — a long markdown file that's hard to scan for current status. A `/roadmap` page parses the markdown at render time into a live Kanban board (Backlog / In Progress / Done) with FF7 character workers assigned by domain. The markdown remains the single source of truth.
 
 **Backend:**
-- [ ] Markdown parser: extracts task ID, title, status, tier, priority, effort, dependencies, spec path, checkboxes, description, cost impact from PRODUCT_ROADMAP.md
+- [ ] Markdown parser: extracts task ID, title, status, tier, priority, effort, dependencies, spec path, checkboxes, description, cost impact from ENGINEERING_ROADMAP.md
 - [ ] `GET /api/roadmap` returns parsed tasks + summary statistics + last git commit info
 - [ ] `GET /api/roadmap/workers` returns FF7 worker list with task counts
 - [ ] `PATCH /api/roadmap/assign` stores/updates worker override in `roadmap_worker` table

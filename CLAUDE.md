@@ -1,4 +1,4 @@
-# TikTok Creator App
+# MONEY PRINTER 3000
 
 Full-stack app for producing 60-second TikTok Shop UGC videos using AI agents.
 
@@ -97,15 +97,15 @@ Upstash requires TLS. Both `src/lib/queue.ts` and `src/workers/pipeline.worker.t
 6. EditorAgent (Phase 4) -- Video composition
 
 ## Roadmap Rule
-**`docs/PRODUCT_ROADMAP.md` is the single source of truth for all roadmap content.** CLAUDE.md must NEVER contain roadmap items, tier listings, completion status, or dependency chains. All progress updates go in PRODUCT_ROADMAP.md only.
+**`docs/ENGINEERING_ROADMAP.md` is the single source of truth for all roadmap content.** CLAUDE.md must NEVER contain roadmap items, tier listings, completion status, or dependency chains. All progress updates go in ENGINEERING_ROADMAP.md only.
 
 ## Feature Prioritization Rule
-**Before building any new feature, check `docs/PRODUCT_ROADMAP.md`.** Enforce these rules:
+**Before building any new feature, check `docs/ENGINEERING_ROADMAP.md`.** Enforce these rules:
 1. **Tier ordering**: Do not start work from a lower tier while higher-tier items remain incomplete. Tier 0 bugs ALWAYS come first.
 2. **Dependency chain**: Check the `Depends on:` field on each roadmap item. Never build a feature before its dependencies are complete.
-3. **New features**: If a requested feature isn't on the roadmap, flag it, determine where it fits in the tier/dependency structure, and update `docs/PRODUCT_ROADMAP.md` before implementing.
+3. **New features**: If a requested feature isn't on the roadmap, flag it, determine where it fits in the tier/dependency structure, and update `docs/ENGINEERING_ROADMAP.md` before implementing.
 4. **Bug discoveries**: New bugs found during development get added to Tier 0 with severity and slotted above current feature work.
-5. **Progress tracking**: When picking up a roadmap item, mark it `🔧 IN PROGRESS` in `docs/PRODUCT_ROADMAP.md` before writing any code. When completed, update to `~~DONE~~` / `~~FIXED~~`. Never update CLAUDE.md with progress — roadmap file only.
+5. **Progress tracking**: When picking up a roadmap item, mark it `🔧 IN PROGRESS` in `docs/ENGINEERING_ROADMAP.md` before writing any code. When completed, update to `~~DONE~~` / `~~FIXED~~`. Never update CLAUDE.md with progress — roadmap file only.
 
 ## Git Rule
 **Always push to GitHub after committing.** Every commit should be followed by `git push`. This applies to bug fixes, feature completions, and roadmap/doc updates. Do not let local commits accumulate unpushed.

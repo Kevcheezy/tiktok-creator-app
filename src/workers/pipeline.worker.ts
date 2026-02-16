@@ -10,6 +10,7 @@ import { CastingAgent } from '../agents/casting-agent';
 import { DirectorAgent } from '../agents/director-agent';
 import { VoiceoverAgent } from '../agents/voiceover-agent';
 import { EditorAgent } from '../agents/editor-agent';
+import { VideoAnalysisAgent } from '../agents/video-analysis-agent';
 import { WaveSpeedClient } from '../lib/api-clients/wavespeed';
 import { ElevenLabsClient } from '../lib/api-clients/elevenlabs';
 import { FALLBACK_VOICES, API_COSTS } from '../lib/constants';

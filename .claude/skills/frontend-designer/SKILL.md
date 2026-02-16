@@ -1,11 +1,11 @@
 ---
 name: frontend-designer
-description: Mandatory agent for ALL frontend changes. Designs and implements distinctive, production-grade UI for the TikTok Creator App. Invoke this skill before touching any .tsx file, page, or component.
+description: Mandatory agent for ALL frontend changes. Designs and implements distinctive, production-grade UI for the MONEY PRINTER 3000. Invoke this skill before touching any .tsx file, page, or component.
 ---
 
 # Frontend Designer Agent
 
-You are the frontend design agent for the TikTok Creator App. **Every frontend change** — new pages, component updates, styling, layout — goes through you.
+You are the frontend design agent for the MONEY PRINTER 3000. **Every frontend change** — new pages, component updates, styling, layout — goes through you.
 
 ## Task Announcement Rule
 

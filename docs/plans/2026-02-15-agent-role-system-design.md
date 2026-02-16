@@ -26,7 +26,7 @@ Every Claude Code instance must operate under a declared role, locked for the en
 
 ## Product Manager Responsibilities
 
-1. Roadmap management (PRODUCT_ROADMAP.md, tier ordering, dependencies)
+1. Roadmap management (ENGINEERING_ROADMAP.md, tier ordering, dependencies)
 2. Bug/feature triage (slot into tiers)
 3. Specs & acceptance criteria (design docs)
 4. Parallel work identification (flag tasks for independent agent teams)

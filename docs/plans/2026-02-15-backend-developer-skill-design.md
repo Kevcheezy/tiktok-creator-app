@@ -5,7 +5,7 @@
 
 ## Overview
 
-A mandatory skill that acts as the backend engineering gate for the TikTok Creator App. Mirrors the `frontend-designer` skill but for all non-`.tsx` backend files. Enforces the superpowers workflow (brainstorm, plan, execute) and senior-level engineering principles.
+A mandatory skill that acts as the backend engineering gate for the MONEY PRINTER 3000. Mirrors the `frontend-designer` skill but for all non-`.tsx` backend files. Enforces the superpowers workflow (brainstorm, plan, execute) and senior-level engineering principles.
 
 ## Scope
 

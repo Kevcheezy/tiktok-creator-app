@@ -2,7 +2,7 @@
 
 ## Goal
 
-Add email/password authentication to the TikTok Creator App using Supabase Auth. Unauthenticated users are redirected to a login page. All data remains shared across authenticated users (no per-user isolation yet).
+Add email/password authentication to the MONEY PRINTER 3000 using Supabase Auth. Unauthenticated users are redirected to a login page. All data remains shared across authenticated users (no per-user isolation yet).
 
 ## Approach
 

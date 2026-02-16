@@ -1,4 +1,4 @@
-# TikTok Creator App - Roadmap
+# MONEY PRINTER 3000 - Roadmap
 
 ## Phase 1: MVP (Current)
 - [x] Project scaffold (Next.js + Tailwind + TypeScript)

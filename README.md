@@ -1,4 +1,4 @@
-# TikTok Creator App
+# MONEY PRINTER 3000
 
 Full-stack app for producing 60-second TikTok Shop UGC videos using AI agents. Give it a product URL and an AI character, and the pipeline generates scripts, images, voiceovers, and a final composed video.
 
