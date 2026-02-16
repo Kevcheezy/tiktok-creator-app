@@ -4,6 +4,8 @@ import { AVATAR_MAPPING, PRODUCT_PLACEMENT_ARC, ENERGY_ARC, API_COSTS, RESOLUTIO
 
 const NEGATIVE_PROMPT = 'watermark, text, logo, blurry, deformed, ugly, duplicate, extra limbs, poorly drawn';
 
+const CONTINUITY_PROMPT = 'CONTINUITY: This frame continues directly from the previous segment. The FIRST reference image is the previous segment\'s end frame. Preserve the EXACT same person, room, lighting, and wardrobe. Only change: pose, energy level, and product visibility as specified.';
+
 const SEGMENTS = [0, 1, 2, 3];
 
 export class CastingAgent extends BaseAgent {
@@ -78,8 +80,12 @@ export class CastingAgent extends BaseAgent {
       | { segment: number; visibility: string; description: string; notes?: string }[]
       | null;
 
-    // 6. For each segment, generate start + end keyframes (with per-segment error recovery)
+    // 6. Sequential chained keyframe generation
+    //    Each segment's end frame feeds into the next segment as the primary reference image.
+    //    This ensures visual consistency (same person, room, lighting) across all 4 segments.
     let segmentsCompleted = 0;
+    let previousEndFrameUrl: string | null = null;
+
     for (const segIdx of SEGMENTS) {
       const scene = latestScenes.get(segIdx);
       if (!scene) {
@@ -110,6 +116,8 @@ export class CastingAgent extends BaseAgent {
             await new Promise(resolve => setTimeout(resolve, 5000));
           }
 
+          const isContinuation = segIdx > 0 && !!previousEndFrameUrl;
+
           // Use LLM to generate detailed prompts for start and end frames
           const sealSegment = project.video_analysis?.segments?.[segIdx] || null;
           const hasProductRef = !!productImageUrl;
@@ -118,10 +126,11 @@ export class CastingAgent extends BaseAgent {
             scene, placement, energyArc,
             project.product_name || 'the product',
             projectId,
-            useInfluencer || hasProductRef,
+            useInfluencer || hasProductRef || isContinuation,
             sealSegment,
             interactionDescription,
             hasProductRef,
+            isContinuation,
           );
 
           // Save visual prompts to scene
@@ -130,63 +139,83 @@ export class CastingAgent extends BaseAgent {
             .update({ visual_prompt: promptPair })
             .eq('id', scene.id);
 
-          // Build reference images array: influencer + product image
+          // Build reference images: previous end frame (chain) + influencer + product
           const referenceImages: string[] = [];
+          if (previousEndFrameUrl) referenceImages.push(previousEndFrameUrl);
           if (useInfluencer) referenceImages.push(influencer.image_url);
           if (productImageUrl) referenceImages.push(productImageUrl);
 
+          let endUrl = '';
+
           if (referenceImages.length > 0) {
-            // Image-to-image: edit with reference images (influencer and/or product)
+            // Edit mode: use reference images
+            const editOpts = { aspectRatio: RESOLUTION.aspectRatio, resolution: '1k' as const };
+
             const refLabels = [
+              previousEndFrameUrl ? 'prev_end_frame' : null,
               useInfluencer ? `influencer: ${influencer.name}` : null,
               productImageUrl ? 'product image' : null,
             ].filter(Boolean).join(' + ');
-            this.log(`Using reference images: ${refLabels}`);
+            this.log(`Segment ${segIdx}: edit with refs [${refLabels}] (attempt ${attempt + 1})`);
 
-            const editOpts = { aspectRatio: RESOLUTION.aspectRatio, resolution: '1k' as const };
+            // Generate start + end in parallel (they don't chain to each other)
+            const [startResult, endResult] = await Promise.all([
+              this.wavespeed.editImage(referenceImages, promptPair.start, editOpts),
+              this.wavespeed.editImage(referenceImages, promptPair.end, editOpts),
+            ]);
 
-            this.log(`Generating start keyframe (edit) for segment ${segIdx} (attempt ${attempt + 1})`);
-            const startResult = await this.wavespeed.editImage(referenceImages, promptPair.start, editOpts);
-            await this.createAsset(projectId, scene.id, 'keyframe_start', startResult.taskId, 'nano-banana-pro-edit');
+            await Promise.all([
+              this.createAsset(projectId, scene.id, 'keyframe_start', startResult.taskId, 'nano-banana-pro-edit'),
+              this.createAsset(projectId, scene.id, 'keyframe_end', endResult.taskId, 'nano-banana-pro-edit'),
+            ]);
 
-            this.log(`Generating end keyframe (edit) for segment ${segIdx}`);
-            const endResult = await this.wavespeed.editImage(referenceImages, promptPair.end, editOpts);
-            await this.createAsset(projectId, scene.id, 'keyframe_end', endResult.taskId, 'nano-banana-pro-edit');
+            // Poll both in parallel
+            const [startPoll, endPoll] = await Promise.all([
+              this.wavespeed.pollResult(startResult.taskId, { maxWait: 120000, initialInterval: 5000 }),
+              this.wavespeed.pollResult(endResult.taskId, { maxWait: 120000, initialInterval: 5000 }),
+            ]);
 
-            // Poll both tasks
-            this.log(`Polling start keyframe task ${startResult.taskId}`);
-            const startPoll = await this.wavespeed.pollResult(startResult.taskId, { maxWait: 120000, initialInterval: 5000 });
-            await this.updateAssetUrl(startResult.taskId, startPoll.url || '');
+            await Promise.all([
+              this.updateAssetUrl(startResult.taskId, startPoll.url || ''),
+              this.updateAssetUrl(endResult.taskId, endPoll.url || ''),
+            ]);
 
-            this.log(`Polling end keyframe task ${endResult.taskId}`);
-            const endPoll = await this.wavespeed.pollResult(endResult.taskId, { maxWait: 120000, initialInterval: 5000 });
-            await this.updateAssetUrl(endResult.taskId, endPoll.url || '');
-
-            // Track cost: 2 edit images
+            endUrl = endPoll.url || '';
             await this.trackCost(projectId, API_COSTS.nanoBananaProEdit * 2);
           } else {
-            // Text-to-image: no reference images available
+            // Text-to-image: segment 0 with no references at all
             const imgOpts = { aspectRatio: RESOLUTION.aspectRatio, width: RESOLUTION.width, height: RESOLUTION.height };
 
-            this.log(`Generating start keyframe for segment ${segIdx} (attempt ${attempt + 1})`);
-            const startResult = await this.wavespeed.generateImage(promptPair.start, imgOpts);
-            await this.createAsset(projectId, scene.id, 'keyframe_start', startResult.taskId);
+            this.log(`Segment ${segIdx}: text-to-image (no references) (attempt ${attempt + 1})`);
 
-            this.log(`Generating end keyframe for segment ${segIdx}`);
-            const endResult = await this.wavespeed.generateImage(promptPair.end, imgOpts);
-            await this.createAsset(projectId, scene.id, 'keyframe_end', endResult.taskId);
+            const [startResult, endResult] = await Promise.all([
+              this.wavespeed.generateImage(promptPair.start, imgOpts),
+              this.wavespeed.generateImage(promptPair.end, imgOpts),
+            ]);
 
-            // Poll both tasks
-            this.log(`Polling start keyframe task ${startResult.taskId}`);
-            const startPoll = await this.wavespeed.pollResult(startResult.taskId, { maxWait: 120000, initialInterval: 5000 });
-            await this.updateAssetUrl(startResult.taskId, startPoll.url || '');
+            await Promise.all([
+              this.createAsset(projectId, scene.id, 'keyframe_start', startResult.taskId),
+              this.createAsset(projectId, scene.id, 'keyframe_end', endResult.taskId),
+            ]);
 
-            this.log(`Polling end keyframe task ${endResult.taskId}`);
-            const endPoll = await this.wavespeed.pollResult(endResult.taskId, { maxWait: 120000, initialInterval: 5000 });
-            await this.updateAssetUrl(endResult.taskId, endPoll.url || '');
+            const [startPoll, endPoll] = await Promise.all([
+              this.wavespeed.pollResult(startResult.taskId, { maxWait: 120000, initialInterval: 5000 }),
+              this.wavespeed.pollResult(endResult.taskId, { maxWait: 120000, initialInterval: 5000 }),
+            ]);
 
-            // Track cost: 2 text-to-image generations
+            await Promise.all([
+              this.updateAssetUrl(startResult.taskId, startPoll.url || ''),
+              this.updateAssetUrl(endResult.taskId, endPoll.url || ''),
+            ]);
+
+            endUrl = endPoll.url || '';
             await this.trackCost(projectId, API_COSTS.nanoBananaPro * 2);
+          }
+
+          // Chain: pass this segment's end frame URL to next segment
+          if (endUrl) {
+            previousEndFrameUrl = endUrl;
+            this.log(`Segment ${segIdx} end frame chained → next segment`);
           }
 
           segmentSuccess = true;
@@ -200,17 +229,19 @@ export class CastingAgent extends BaseAgent {
             attempt: attempt + 1,
             error: errMsg,
             useInfluencer,
+            chained: !!previousEndFrameUrl,
           });
         }
       }
 
       if (!segmentSuccess) {
-        const failedProvider = (useInfluencer || productImageUrl) ? 'nano-banana-pro-edit' : 'nano-banana-pro';
+        const failedProvider = (useInfluencer || productImageUrl || previousEndFrameUrl) ? 'nano-banana-pro-edit' : 'nano-banana-pro';
         this.log(`All retries exhausted for segment ${segIdx}, creating failed assets`);
         await this.supabase.from('asset').insert([
           { project_id: projectId, scene_id: scene.id, type: 'keyframe_start', provider: failedProvider, status: 'failed', cost_usd: 0 },
           { project_id: projectId, scene_id: scene.id, type: 'keyframe_end', provider: failedProvider, status: 'failed', cost_usd: 0 },
         ]);
+        // previousEndFrameUrl stays at last successful value — graceful degradation
       }
     }
 
@@ -219,8 +250,8 @@ export class CastingAgent extends BaseAgent {
     }
 
     const durationMs = Date.now() - stageStart;
-    await this.logEvent(projectId, 'stage_complete', 'casting', { durationMs });
-    this.log(`Casting complete for project ${projectId}`);
+    await this.logEvent(projectId, 'stage_complete', 'casting', { durationMs, segmentsCompleted });
+    this.log(`Casting complete for project ${projectId} (${segmentsCompleted}/4 segments, chained=${!!previousEndFrameUrl})`);
   }
 
   private async generateVisualPrompts(
@@ -236,6 +267,7 @@ export class CastingAgent extends BaseAgent {
     sealData?: any | null,
     interactionDescription?: string | null,
     hasProductImage: boolean = false,
+    isContinuation: boolean = false,
   ): Promise<{ start: string; end: string }> {
     const consistencyRule = `CONSISTENCY RULE: All 4 segments MUST use the same room, lighting setup, and props. Only vary: character pose, energy level, product visibility, and camera micro-adjustments (slight angle shift, subtle lighting warmth change matching energy arc). The video must look like one continuous shoot in one location.`;
 
@@ -243,11 +275,15 @@ export class CastingAgent extends BaseAgent {
       ? `\nPRODUCT IMAGE RULE: A reference image of the real product is provided. The product in the generated image MUST match this reference EXACTLY — same packaging, shape, colors, label, and branding. Do NOT imagine or invent a different product appearance. The real product image is the ground truth.`
       : '';
 
+    const continuityNote = isContinuation
+      ? `\nThe FIRST reference image is the previous segment's end frame. Preserve its exact appearance — same person, room, lighting, wardrobe. Evolve only the pose and energy.`
+      : '';
+
     const systemPrompt = isEdit
       ? `You are a visual prompt engineer for Nano Banana Pro image EDITING.
 Generate two edit prompts that describe how to transform reference images into specific scene contexts.
 ${hasProductImage ? 'Reference images include the person AND the actual product. Preserve both likenesses.' : 'Keep the person\'s likeness but change their pose, wardrobe, setting, and energy.'}
-${consistencyRule}${productImageRule}
+${consistencyRule}${productImageRule}${continuityNote}
 Output ONLY valid JSON: { "start": "...", "end": "..." }`
       : `You are a visual prompt engineer for Nano Banana Pro image generation.
 Generate two detailed image prompts for a TikTok video keyframe: one for the START of the segment and one for the END.
@@ -269,7 +305,7 @@ Output ONLY valid JSON: { "start": "...", "end": "..." }`;
       ? `\nIMPORTANT: The real product image is provided as a reference. Preserve the EXACT product appearance — packaging, shape, colors, label, and branding. Do not invent or alter the product's look.`
       : '';
 
-    const userPrompt = isEdit
+    let userPrompt = isEdit
       ? `Transform the reference images into the following scene context:
 Wardrobe: ${wardrobe}
 Scene: ${sceneDescription}
@@ -303,10 +339,14 @@ Keep the scene LOCKED — same room, same lighting, same props across all segmen
 Aspect ratio: 9:16 portrait. Photorealistic. No text/watermarks in the image.
 Negative: ${NEGATIVE_PROMPT}`;
 
+    // Prepend continuity instruction for chained segments
+    if (isContinuation) {
+      userPrompt = `${CONTINUITY_PROMPT}\n\n${userPrompt}`;
+    }
+
     // Enrich with SEAL reference data if available
-    let enrichedUserPrompt = userPrompt;
     if (sealData) {
-      enrichedUserPrompt += `\n\nREFERENCE VIDEO SEAL DATA (match this visual style):
+      userPrompt += `\n\nREFERENCE VIDEO SEAL DATA (match this visual style):
   Scene: ${sealData.scene?.setting || 'N/A'}, ${sealData.scene?.composition || 'N/A'}
   Props: ${(sealData.scene?.props || []).join(', ') || 'none'}
   Shot type: ${sealData.angle?.shotType || 'medium'}, Camera: ${sealData.angle?.cameraMovement || 'static'}
@@ -316,7 +356,7 @@ Negative: ${NEGATIVE_PROMPT}`;
 Match this reference video's visual style: use similar lighting, camera angle, and composition.`;
     }
 
-    const response = await this.wavespeed.chatCompletion(systemPrompt, enrichedUserPrompt);
+    const response = await this.wavespeed.chatCompletion(systemPrompt, userPrompt);
     await this.trackCost(projectId, API_COSTS.wavespeedChat);
 
     try {

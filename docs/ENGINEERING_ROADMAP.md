@@ -22,7 +22,7 @@ MONEY PRINTER 3000 is an AI-powered pipeline that produces 60-second TikTok Shop
 ### Core Pipeline (Complete — all 6 stages functional)
 - **ProductAnalyzerAgent** — Extracts structured product data from TikTok Shop URLs via WaveSpeed LLM
 - **ScriptingAgent** — 4-segment, 60-second scripts with syllable validation, hook scoring (14-point), 10 tone presets
-- **CastingAgent** — Keyframe image generation via WaveSpeed Nano Banana Pro, influencer reference image editing, per-segment retry
+- **CastingAgent** — Keyframe image generation via WaveSpeed Nano Banana Pro, chained sequential generation (end frame → next segment reference), 4K influencer + product references, continuity prompts, per-segment retry
 - **DirectorAgent** — Video generation via WaveSpeed Kling 3.0 Pro, multi-prompt support, per-segment retry
 - **VoiceoverAgent** — TTS audio via ElevenLabs, Voice Design API with fallback voices, per-segment error handling
 - **EditorAgent** — Final video composition via Creatomate, template-based rendering with video/audio/text slots
@@ -462,7 +462,7 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] Defaults pre-selected (Bedroom Ring Light + Hold & Show)
 - [x] Custom presets saved to DB for reuse across projects
 
-#### R1.5.10 - Visual Script Breakdown ~~DONE~~
+#### ~~R1.5.10 - Visual Script Breakdown~~ ~~DONE~~
 **Priority:** P2 - Medium (backlog)
 **Effort:** Medium
 **Why:** The ScriptingAgent already outputs structured data per segment (shot_scripts, audio_sync, text_overlay, broll_cues), but the user sees these as scattered metadata — never as a unified "breakdown." A visual breakdown view at script review would show the full 60-second plan at a glance: script text with highlighted product mentions, tagged elements (props, wardrobe, interaction type, scene setting), B-roll cue markers on a timeline, camera/shot specs, and energy arc visualization. Inspired by Studiovity's auto-tagging script breakdown. Lets creators see their whole video plan before committing to expensive generation steps.
@@ -475,17 +475,16 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] Cards / Timeline / Beats toggle in script-review.tsx
 - [x] `broll_cues` typed in Scene interface across components
 
-#### R1.5.11 - Keyframe Consistency Validation
+#### ~~R1.5.11 - Keyframe Consistency Validation~~ SUPERSEDED
 **Priority:** P2 - Medium (backlog)
 **Effort:** Small
 **Depends on:** R1.5.9 (scene presets provide the consistency baseline)
-**Why:** Even with a locked scene preset, the CastingAgent generates 4 keyframe pairs independently — each LLM call can drift (different room appearance, lighting shift, face mismatch). Studiovity solves this with persistent character profiles. We should solve it with post-generation consistency validation. After CastingAgent generates all keyframes, run a consistency check and flag drift before the user reviews.
+**Status:** Superseded (2026-02-15) — Replaced by chained keyframe generation. Instead of detecting drift post-generation, the CastingAgent now prevents drift by chaining each segment's end frame as a reference image for the next segment. Sequential processing with continuity prompts ensures visual consistency across all 4 segments.
+**Spec:** `docs/plans/2026-02-15-chained-keyframes-design.md`
 
-- [ ] After CastingAgent generates all 8 keyframes (4 start + 4 end), run consistency scoring via LLM
-- [ ] Score dimensions: face similarity, room/background match, lighting consistency, wardrobe continuity, props placement
-- [ ] Flag segments with visual drift (e.g., "Segment 3 background differs from segments 1-2-4")
-- [ ] Surface drift warnings in casting review UI — user can approve anyway or regenerate flagged segments
-- [ ] Optional: auto-regenerate drifted segments with "match segment 1" reference in prompt
+- [x] ~~Post-generation consistency scoring~~ → Replaced by chained generation (end frame → next segment reference)
+- [x] ~~Drift detection~~ → Prevented by continuity prompt + reference image chaining
+- [x] ~~Auto-regenerate drifted segments~~ → Not needed; segments inherit visual context from previous end frame
 
 #### R1.5.12 - Projects Quest Board (FF7 World Map Kanban)
 **Priority:** P1 - High
@@ -508,26 +507,25 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 **Assets:**
 - [ ] 6 pixel location icons via Nano Banana Pro (~$0.42): Midgar reactor, Kalm village, Cosmo Canyon observatory, Junon cannon, Gold Saucer dome, Northern Crater
 
-#### R1.5.13 - Auto-Upscale Influencer Images to 4K
+#### ~~R1.5.13 - Auto-Upscale Influencer Images to 4K~~ ~~DONE~~
 **Priority:** P1 - High
 **Effort:** Small
-**Spec:** `docs/plans/2026-02-15-influencer-image-upscale-design.md`
-**Depends on:** B0.14 (image filtering bug)
-**Why:** Influencer reference images are stored at whatever resolution the user uploads. Low-res images degrade CastingAgent keyframe quality since the AI uses the reference for face/appearance matching. Auto-upscaling to 4K via WaveSpeed ($0.01/image) on every upload ensures the pipeline always works from high-quality references.
+**Status:** Complete (2026-02-15) — Simplified from original spec. Upscale runs inline at upload time (matching product image pattern), no separate columns or async worker needed. 4K URL stored directly in `image_url`.
+**Spec:** `docs/plans/2026-02-15-chained-keyframes-design.md` (Part 1)
+**Depends on:** ~~B0.14~~ (image filtering bug — already fixed)
 
 **Schema:**
-- [ ] Add `image_url_4k`, `upscale_status`, `upscale_task_id` columns to `influencer` table
+- [x] ~~`image_url_4k`, `upscale_status`, `upscale_task_id` columns~~ → Simplified: added `cost_usd` column only. 4K URL stored directly in `image_url`.
 
 **Backend:**
-- [ ] `GET /api/influencers?hasImage=true` filter (fixes B0.14)
-- [ ] POST/PATCH influencer: enqueue BullMQ `upscale-influencer-image` job on image change
-- [ ] Worker job: call `WaveSpeedClient.upscaleImage()` with `targetResolution: '4k'`, poll, save result
-- [ ] CastingAgent: use `image_url_4k ?? image_url` for reference image
+- [x] `GET /api/influencers?hasImage=true` filter (fixed in B0.14)
+- [x] POST influencer: inline 4K upscale via `WaveSpeedClient.upscaleImage()` after image upload, non-fatal fallback
+- [x] PATCH influencer: same inline 4K upscale on image change, cumulative cost tracking
+- [x] ~~CastingAgent: use `image_url_4k ?? image_url`~~ → Not needed; `image_url` is already 4K after upload
 
 **Frontend:**
-- [ ] WHO selection grid: fetch with `hasImage=true`, show 4K image when available
-- [ ] Influencer detail: "4K" badge when upscaled, spinner when processing
-- [ ] All image references: `image_url_4k || image_url` pattern
+- [x] WHO selection grid: fetches with `hasImage=true` (done in B0.14)
+- [x] ~~4K badge / spinner~~ → Not needed; upscale is synchronous at upload time
 
 **Cost:** $0.01 per upload. ~$0.20 for 20 influencers.
 
@@ -772,10 +770,10 @@ POLISH     Tier 1.5: UX Hardening
            R1.5.7 Direct-to-Storage Uploads ✅ DONE
            R1.5.8 Navigable Pipeline Stages ✅ DONE
            R1.5.9 Scene & Interaction Presets ✅ DONE
-           R1.5.10 Visual Script Breakdown 🔧 IN PROGRESS (frontend done, backend tagging remaining)
-           R1.5.11 Keyframe Consistency Validation (backlog — depends on R1.5.9 ✅)
+           R1.5.10 Visual Script Breakdown ✅ DONE
+           R1.5.11 Keyframe Consistency ✅ SUPERSEDED (chained keyframe generation prevents drift)
            R1.5.12 Projects Quest Board (FF7 World Map Kanban — depends on R1.5.6 ✅)
-           B0.14 + R1.5.13 Influencer image filtering + auto-upscale to 4K
+           R1.5.13 Influencer 4K Upscale ✅ DONE (inline at upload time)
 
 NEXT       Tier 2: Quality & Conversion
            R2.0 Performance Tracking ✅ DONE (backend) ──→ R2.4 Product Images ──→ R2.3 Avatar Consistency ──→ R2.1 Hook Testing ──→ R2.2 Trends

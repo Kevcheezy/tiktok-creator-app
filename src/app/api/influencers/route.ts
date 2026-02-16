@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/db';
 import { logger } from '@/lib/logger';
 import { getPublicUrl } from '@/lib/storage';
+import { WaveSpeedClient } from '@/lib/api-clients/wavespeed';
+import { API_COSTS } from '@/lib/constants';
+
+const wavespeed = new WaveSpeedClient();
 
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
@@ -35,13 +39,11 @@ export async function POST(request: NextRequest) {
     let storagePath: string | null = null;
 
     if (contentType.includes('application/json')) {
-      // JSON body: direct-to-storage flow (storagePath already uploaded)
       const body = await request.json();
       name = body.name || null;
       persona = body.persona || null;
       storagePath = body.storagePath || null;
     } else {
-      // FormData: legacy server-side upload flow
       const formData = await request.formData();
       name = formData.get('name') as string | null;
       persona = formData.get('persona') as string | null;
@@ -73,26 +75,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to create influencer' }, { status: 500 });
     }
 
-    // Direct-to-storage: file already uploaded, just resolve public URL
+    // Resolve image URL from either path
+    let imageUrl: string | null = null;
+
     if (storagePath) {
-      const publicUrl = getPublicUrl(storagePath);
-      const { data: updated, error: updateError } = await supabase
-        .from('influencer')
-        .update({ image_url: publicUrl })
-        .eq('id', influencer.id)
-        .select()
-        .single();
-
-      if (updateError) {
-        logger.error({ err: updateError, route: '/api/influencers' }, 'Error updating influencer image_url');
-        return NextResponse.json(influencer, { status: 201 });
-      }
-
-      return NextResponse.json(updated, { status: 201 });
-    }
-
-    // Legacy: server-side upload via FormData
-    if (image) {
+      imageUrl = getPublicUrl(storagePath);
+    } else if (image) {
       const ext = image.name.split('.').pop() || 'png';
       const legacyPath = `influencers/${influencer.id}/reference.${ext}`;
       const buffer = Buffer.from(await image.arrayBuffer());
@@ -109,23 +97,52 @@ export async function POST(request: NextRequest) {
       const { data: publicUrlData } = supabase.storage
         .from('assets')
         .getPublicUrl(legacyPath);
-
-      const { data: updated, error: updateError } = await supabase
-        .from('influencer')
-        .update({ image_url: publicUrlData.publicUrl })
-        .eq('id', influencer.id)
-        .select()
-        .single();
-
-      if (updateError) {
-        logger.error({ err: updateError, route: '/api/influencers' }, 'Error updating influencer image_url');
-        return NextResponse.json(influencer, { status: 201 });
-      }
-
-      return NextResponse.json(updated, { status: 201 });
+      imageUrl = publicUrlData.publicUrl;
     }
 
-    return NextResponse.json(influencer, { status: 201 });
+    if (!imageUrl) {
+      return NextResponse.json(influencer, { status: 201 });
+    }
+
+    // Upscale to 4K via WaveSpeed (non-fatal)
+    let finalUrl = imageUrl;
+    let upscaleCost = 0;
+    try {
+      logger.info({ influencerId: influencer.id, route: '/api/influencers' }, 'Upscaling influencer image to 4K');
+      const { taskId } = await wavespeed.upscaleImage(imageUrl, {
+        targetResolution: '4k',
+        outputFormat: 'png',
+      });
+      const result = await wavespeed.pollResult(taskId, {
+        maxWait: 60000,
+        initialInterval: 3000,
+      });
+      if (result.url) {
+        finalUrl = result.url;
+        upscaleCost = API_COSTS.imageUpscaler;
+        logger.info({ influencerId: influencer.id, taskId }, 'Influencer image upscaled to 4K');
+      }
+    } catch (upscaleErr) {
+      logger.error({ err: upscaleErr, influencerId: influencer.id, route: '/api/influencers' }, 'Influencer image upscale failed, using original');
+    }
+
+    // Update influencer with (upscaled) image URL
+    const { data: updated, error: updateError } = await supabase
+      .from('influencer')
+      .update({
+        image_url: finalUrl,
+        ...(upscaleCost > 0 ? { cost_usd: upscaleCost.toFixed(4) } : {}),
+      })
+      .eq('id', influencer.id)
+      .select()
+      .single();
+
+    if (updateError) {
+      logger.error({ err: updateError, route: '/api/influencers' }, 'Error updating influencer image_url');
+      return NextResponse.json(influencer, { status: 201 });
+    }
+
+    return NextResponse.json({ ...updated, upscaled: finalUrl !== imageUrl }, { status: 201 });
   } catch (error) {
     logger.error({ err: error, route: '/api/influencers' }, 'Error creating influencer');
     return NextResponse.json(

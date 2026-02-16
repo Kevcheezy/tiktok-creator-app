@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/db';
 import { logger } from '@/lib/logger';
 import { getPublicUrl, extractStoragePath, deleteStorageFile } from '@/lib/storage';
+import { WaveSpeedClient } from '@/lib/api-clients/wavespeed';
+import { API_COSTS } from '@/lib/constants';
+
+const wavespeed = new WaveSpeedClient();
 
 export async function GET(
   _request: NextRequest,
@@ -108,6 +112,35 @@ export async function PATCH(
         .from('assets')
         .getPublicUrl(legacyPath);
       updates.image_url = publicUrlData.publicUrl;
+    }
+
+    // Upscale new image to 4K via WaveSpeed (non-fatal)
+    if (hasNewImage && updates.image_url) {
+      try {
+        logger.info({ influencerId: id, route: '/api/influencers/[id]' }, 'Upscaling influencer image to 4K');
+        const { taskId } = await wavespeed.upscaleImage(updates.image_url, {
+          targetResolution: '4k',
+          outputFormat: 'png',
+        });
+        const result = await wavespeed.pollResult(taskId, {
+          maxWait: 60000,
+          initialInterval: 3000,
+        });
+        if (result.url) {
+          updates.image_url = result.url;
+          // Track upscale cost
+          const { data: currentInf } = await supabase
+            .from('influencer')
+            .select('cost_usd')
+            .eq('id', id)
+            .single();
+          const currentCost = parseFloat(currentInf?.cost_usd || '0');
+          (updates as Record<string, unknown>).cost_usd = (currentCost + API_COSTS.imageUpscaler).toFixed(4);
+          logger.info({ influencerId: id, taskId }, 'Influencer image upscaled to 4K');
+        }
+      } catch (upscaleErr) {
+        logger.error({ err: upscaleErr, influencerId: id, route: '/api/influencers/[id]' }, 'Influencer image upscale failed, using original');
+      }
     }
 
     updates.updated_at = new Date().toISOString();
