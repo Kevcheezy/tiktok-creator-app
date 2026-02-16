@@ -2,8 +2,8 @@
 
 **Author:** Product Management
 **Date:** 2026-02-15
-**Status:** DRAFT - Pending Admin Approval
-**Last audit:** 2026-02-15 (codebase bug + UX audit)
+**Status:** MVP Ready - Pipeline functional end-to-end
+**Last audit:** 2026-02-15 (full codebase audit — pipeline, agents, auth, frontend verified)
 
 ---
 
@@ -17,25 +17,39 @@ TikTok Creator App is an AI-powered pipeline that produces 60-second TikTok Shop
 
 ## Current State Assessment
 
-### What's Built (Phases 1-2: Complete)
-- Full project scaffold with Next.js 16, Supabase, BullMQ
-- **ProductAnalyzerAgent** - Extracts structured product data from TikTok Shop URLs
-- **ScriptingAgent** - Generates 4-segment, 60-second scripts with syllable validation, hook scoring (14-point scale), and 10 psychologically-targeted tone presets
-- Human review gates at analysis and script stages
-- Script versioning, per-segment editing, regeneration with feedback
-- Script upload (user-provided scripts)
-- Dark cinematic frontend with pipeline visualization
+*Last updated: 2026-02-15 (codebase audit)*
 
-### What's In Progress (Phase 3: ~40%)
-- CastingAgent, DirectorAgent, VoiceoverAgent stubs exist
-- ElevenLabs API client built
-- Asset review components created
-- Currently limited to segment 0 only (test mode)
+### Core Pipeline (Complete — all 6 stages functional)
+- **ProductAnalyzerAgent** — Extracts structured product data from TikTok Shop URLs via WaveSpeed LLM
+- **ScriptingAgent** — 4-segment, 60-second scripts with syllable validation, hook scoring (14-point), 10 tone presets
+- **CastingAgent** — Keyframe image generation via WaveSpeed Nano Banana Pro, influencer reference image editing, per-segment retry
+- **DirectorAgent** — Video generation via WaveSpeed Kling 3.0 Pro, multi-prompt support, per-segment retry
+- **VoiceoverAgent** — TTS audio via ElevenLabs, Voice Design API with fallback voices, per-segment error handling
+- **EditorAgent** — Final video composition via Creatomate, template-based rendering with video/audio/text slots
 
-### What's Not Started
-- Video composition/editing (Phase 4)
-- CLI/batch mode (Phase 5)
-- Self-hosted rendering (Phase 6)
+### Infrastructure (Complete)
+- Full project scaffold: Next.js 16 App Router, Supabase (PostgreSQL + Storage), BullMQ + Upstash Redis
+- Supabase Auth with middleware-enforced route protection
+- BullMQ worker (Railway) with all 6 pipeline stages wired, retry logic, error recovery
+- Pino structured logging with `generation_log` table, correlation IDs, API call audit trail
+- Products as first-class entity: analyze once, reuse across projects, override tracking
+- Cost tracking: per-API call costs, atomic increments, cost confirmation dialogs
+
+### Frontend (Complete)
+- Dark cinematic UI with pipeline visualization and progress tracking
+- Full CRUD pages: projects, products, influencers (list, detail, create)
+- Human review gates at analysis, script, influencer selection, casting, and asset stages
+- Script versioning, per-segment editing, regeneration with feedback, script upload
+- Asset review: per-segment image/video/audio preview with approve/reject/regenerate
+- Final video: HTML5 player, download, copy link, recipe summary, archive to `completed_run`
+- Failed pipeline recovery: retry/rollback buttons, error messaging, timeout detection
+
+### What's Not Built
+- Reference video intelligence (R1.3 — `video_url` field stored but not analyzed)
+- CLI/batch mode (R3.1)
+- Self-hosted rendering (R3.3)
+- Multi-user/teams (R4.1)
+- TikTok direct publishing (R4.2)
 
 ### Per-Video Cost Estimate (Current Architecture)
 | Step | Cost |
@@ -149,10 +163,10 @@ These are blocking items. Nothing else matters until a user can go from product 
 - [x] Render status tracking and progress indicator — progress API polls final_video asset completion, StageProgress shows generating/completed/failed counts
 - [x] **Run archive:** `POST /api/projects/[id]/archive` snapshots full recipe into `completed_run` table. Archive button in completed UI.
 
-#### R1.3 - Reference Video Intelligence
-**Priority:** P0 - Critical
+#### R1.3 - Reference Video Intelligence *(moved to Tier 2)*
+**Priority:** ~~P0 - Critical~~ → P1 - High (Tier 2)
 **Effort:** Medium
-**Why:** This is the core differentiator. "Drawing influence from existing TikTok videos" is the stated customer need. The `video_url` input field exists but does nothing today.
+**Why:** Core differentiator long-term, but NOT an MVP blocker. The pipeline produces complete videos without reference analysis. The `video_url` field is stored but unused — acceptable for MVP. Reclassified to Tier 2 because it's a quality enhancer, not a functional requirement. See R2.5 below.
 
 - [ ] Video analysis agent: Download and analyze reference TikTok videos
 - [ ] Extract pacing, hook style, energy arc, visual composition from reference
@@ -242,13 +256,19 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 #### R1.5.4 - Error Handling & Recovery
 **Priority:** P1 - Medium
 **Effort:** Medium
-**Why:** Most components silently swallow errors. Users see blank states with no explanation.
+**Why:** Backend error infrastructure is solid (structured logging, status tracking, retry endpoints). Frontend needs to surface these errors to users instead of showing blank states.
 
+**Backend (done):**
+- [x] Status transition validation: `VALID_STATUS_TRANSITIONS`, `REVIEW_GATE_STATUSES`, `EDITABLE_PROJECT_FIELDS`, `RESTART_STAGE_MAP` constants in `src/lib/constants.ts`
+- [x] Pipeline failure tracking: `failed_at_status` + `error_message` columns, all 6 worker handlers record failure state
+- [x] Recovery endpoints: `POST /api/projects/[id]/retry` (failed retry + stage restart), `POST /api/projects/[id]/rollback`
+- [x] Structured logging: Pino logger across all API routes, agents, worker, API clients
+
+**Frontend (remaining):**
 - [ ] Error boundary component with retry button for failed data fetches
 - [ ] Error state display in ScriptReview, AssetReview (currently console.error only)
 - [ ] Network failure recovery: exponential backoff on polling, offline indicator
-- [ ] Failed pipeline recovery: surface error_message on project card (not just detail page)
-- [x] Status transition validation: `VALID_STATUS_TRANSITIONS`, `REVIEW_GATE_STATUSES`, `EDITABLE_PROJECT_FIELDS`, `RESTART_STAGE_MAP` constants added to `src/lib/constants.ts`
+- [ ] Failed pipeline recovery: surface `error_message` on project card (not just detail page)
 
 ---
 
@@ -324,6 +344,18 @@ These features separate "generates a video" from "generates a video that sells."
 - [ ] Composite real product images into generated video frames
 - [ ] Product image enhancement (background removal, lighting correction)
 - [ ] Product placement choreography matching the PRODUCT_PLACEMENT_ARC
+
+#### R2.5 - Reference Video Intelligence *(moved from R1.3)*
+**Priority:** P1 - High
+**Effort:** Medium
+**Depends on:** R2.0 (performance data validates whether reference-influenced videos actually convert better)
+**Why:** Core differentiator long-term. Analyzing viral TikTok videos and feeding their pacing, hooks, and visual patterns into script/video generation. The `video_url` field is accepted and stored today but not analyzed. Not MVP-blocking — videos generate fine without it.
+
+- [ ] Video analysis agent: Download and analyze reference TikTok videos
+- [ ] Extract pacing, hook style, energy arc, visual composition from reference
+- [ ] Feed reference analysis into ScriptingAgent (match proven viral patterns)
+- [ ] Feed reference analysis into DirectorAgent (match camera work, transitions)
+- [ ] UI: Show reference video alongside generated output for comparison
 
 ---
 
@@ -412,24 +444,21 @@ These features separate "generates a video" from "generates a video that sells."
 ## Recommended Execution Order
 
 ```
-DONE       Tier 0: Critical Bugs
-           All bugs fixed (B0.1-B0.11)
+DONE       Tier 0: Critical Bugs (B0.1-B0.11)
+DONE       Tier 1: Core Pipeline (R1.1, R1.2, R1.4, R1.5, R1.6)
+           ▲ Full end-to-end pipeline functional: URL → analysis → script → casting → directing → voiceover → editing → finished video
 
-NOW        Tier 1: Complete Pipeline
-           ~~R1.5 Versioning~~ ──→ ~~R1.4 Observability~~ ──→ R1.6 Products Entity ─┬─→ R1.2 Video Composition ──→ R1.3 Reference Video Intel
-           DONE                    DONE                        (analyze once, reuse)  │    (ship the deliverable)    (core differentiator)
-                                                               R1.1 Asset Generation ─┘
-                                                               (finish what's started)
-           ▲ R1.6 + R1.1 can run in parallel (different pipeline stages)
+MVP ──→    Validate: Run real product URLs through full pipeline. Ship when videos are watchable.
 
-POLISH     Tier 1.5: UX Hardening
-           R1.5.1 Influencer CRUD ──→ R1.5.2 Project editing ──→ R1.5.3 Navigation ──→ R1.5.4 Error handling
-           (complete the basics)       (reduce friction)          (state consistency)   (graceful failures)
+POLISH     Tier 1.5: UX Hardening (backend done, frontend remaining)
+           R1.5.1 Influencer edit UI ──→ R1.5.3 Navigation ──→ R1.5.4 Frontend error handling
+           (inline editing)              (back links, search)   (error boundaries, offline indicator)
+           ▲ R1.5.2 backend complete (PATCH whitelist + retry restart). Frontend settings UI remaining.
 
 NEXT       Tier 2: Quality & Conversion
-           R2.0 Performance Tracking ──→ R2.4 Product Images ──→ R2.3 Avatar Consistency ──→ R2.1 Hook Testing ──→ R2.2 Trends
-           (close the feedback loop)     (quick win, big impact)  (builds trust)             (optimizes output)    (stays fresh)
-           ▲ data foundation for R2.1, R2.2, and Tier 3 decisions
+           R2.0 Performance Tracking ──→ R2.4 Product Images ──→ R2.5 Reference Video Intel ──→ R2.3 Avatar Consistency ──→ R2.1 Hook Testing ──→ R2.2 Trends
+           (close the feedback loop)     (quick win, big impact)  (core differentiator)         (builds trust)             (optimizes output)    (stays fresh)
+           ▲ R2.0 is data foundation for R2.1, R2.2, R2.5, and Tier 3 decisions
 
 THEN       Tier 3: Scale
            R3.2 Script Library ──→ R3.1 Batch Generation ──→ R3.3 Cost Optimization
