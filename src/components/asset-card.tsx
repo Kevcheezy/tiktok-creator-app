@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { GilDisplay } from './gil-display';
 import { DownloadButton } from './download-button';
 import { downloadViaProxy } from '@/lib/download-utils';
+import { serializeForImage } from '@/lib/prompt-serializer';
+import { isStructuredPrompt } from '@/lib/prompt-schema';
 
 interface AssetCardProps {
   asset: {
@@ -50,10 +52,18 @@ export function AssetCard({ asset, showGrade, compact, onGrade, onReject, onRege
   const isKeyframe = asset.type.startsWith('keyframe');
 
   // Extract the prompt for this specific keyframe (start or end)
-  const keyframePrompt = isKeyframe && asset.scene?.visual_prompt
+  // visual_prompt is a JSONB { start: StructuredPrompt, end: StructuredPrompt }
+  const rawPrompt = isKeyframe && asset.scene?.visual_prompt
     ? asset.type === 'keyframe_start'
-      ? asset.scene.visual_prompt.start
-      : asset.scene.visual_prompt.end
+      ? (asset.scene.visual_prompt as Record<string, unknown>)?.start
+      : (asset.scene.visual_prompt as Record<string, unknown>)?.end
+    : null;
+  const keyframePrompt = rawPrompt
+    ? typeof rawPrompt === 'string'
+      ? rawPrompt
+      : isStructuredPrompt(rawPrompt)
+        ? serializeForImage(rawPrompt)
+        : JSON.stringify(rawPrompt, null, 2)
     : null;
 
   async function handleGrade(grade: string) {
