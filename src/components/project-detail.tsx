@@ -438,6 +438,83 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
             </button>
           </div>
 
+          {/* Reference Comparison — shown only when a SEAL reference video was used */}
+          {project.video_analysis && finalVideoUrl && (() => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const va = project.video_analysis as any;
+            const hookType = va.hook?.type;
+            const energyArc = va.overall?.energyArc;
+            const dominantStyle = va.overall?.dominantStyle;
+            const referenceVideoUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/assets/projects/${project.id}/reference.mp4`;
+
+            return (
+              <div className="rounded-xl border border-border bg-surface p-5">
+                <div className="mb-4 flex items-center gap-3">
+                  <h3 className="font-[family-name:var(--font-display)] text-sm font-semibold text-text-primary">
+                    Reference Comparison
+                  </h3>
+                  <span className="inline-flex items-center rounded-md bg-electric/10 px-2 py-0.5 font-[family-name:var(--font-mono)] text-[10px] font-semibold uppercase tracking-wider text-electric ring-1 ring-inset ring-electric/20">
+                    SEAL
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  {/* Reference Video */}
+                  <div>
+                    <p className="mb-2 font-[family-name:var(--font-display)] text-xs font-semibold uppercase tracking-wider text-text-muted">
+                      Reference
+                    </p>
+                    <video
+                      controls
+                      className="w-full rounded-lg border border-border aspect-[9/16] bg-void"
+                      src={referenceVideoUrl}
+                    >
+                      <track kind="captions" />
+                    </video>
+                  </div>
+
+                  {/* Generated Video */}
+                  <div>
+                    <p className="mb-2 font-[family-name:var(--font-display)] text-xs font-semibold uppercase tracking-wider text-text-muted">
+                      Generated
+                    </p>
+                    <video
+                      controls
+                      className="w-full rounded-lg border border-border aspect-[9/16] bg-void"
+                      src={finalVideoUrl}
+                    >
+                      <track kind="captions" />
+                    </video>
+                  </div>
+                </div>
+
+                {/* SEAL Elements Matched */}
+                {(hookType || energyArc || dominantStyle) && (
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <span className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                      SEAL Elements Matched:
+                    </span>
+                    {hookType && (
+                      <span className="inline-flex rounded-md bg-magenta/10 px-2 py-0.5 font-[family-name:var(--font-mono)] text-[10px] font-medium text-magenta ring-1 ring-inset ring-magenta/20">
+                        Hook: {hookType}
+                      </span>
+                    )}
+                    {energyArc && (
+                      <span className="inline-flex rounded-md bg-electric/10 px-2 py-0.5 font-[family-name:var(--font-mono)] text-[10px] font-medium text-electric ring-1 ring-inset ring-electric/20">
+                        Energy: {energyArc}
+                      </span>
+                    )}
+                    {dominantStyle && (
+                      <span className="inline-flex rounded-md bg-lime/10 px-2 py-0.5 font-[family-name:var(--font-mono)] text-[10px] font-medium text-lime ring-1 ring-inset ring-lime/20">
+                        Style: {dominantStyle}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
           <div className="glass rounded-xl border border-border p-6">
             <h3 className="mb-4 font-[family-name:var(--font-display)] text-xs font-semibold text-text-muted uppercase tracking-wider">
               Recipe
