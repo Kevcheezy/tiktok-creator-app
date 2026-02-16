@@ -1,6 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { BaseAgent } from './base-agent';
-import { AVATAR_MAPPING, PRODUCT_PLACEMENT_ARC, ENERGY_ARC, API_COSTS, RESOLUTION } from '@/lib/constants';
+import { AVATAR_MAPPING, PRODUCT_PLACEMENT_ARC, ENERGY_ARC, API_COSTS, RESOLUTION, VISIBILITY_ANGLE_MAP } from '@/lib/constants';
 
 const NEGATIVE_PROMPT = 'watermark, text, logo, blurry, deformed, ugly, duplicate, extra limbs, poorly drawn';
 
@@ -26,6 +26,25 @@ export class CastingAgent extends BaseAgent {
       .single();
 
     if (projError || !project) throw new Error('Project not found');
+
+    // Fetch multi-angle product images
+    type ProductImg = { id: string; url: string; url_clean: string | null; angle: string; is_primary: boolean };
+    let productImages: ProductImg[] = [];
+    const productId = project.product_id || project.product?.id;
+    if (productId) {
+      const { data: imgs } = await this.supabase
+        .from('product_image')
+        .select('id, url, url_clean, angle, is_primary')
+        .eq('product_id', productId)
+        .order('sort_order');
+      productImages = (imgs || []) as ProductImg[];
+    }
+
+    // Legacy fallback: if no product_image rows, use single URL
+    const legacyProductImageUrl: string | null =
+      productImages.length === 0
+        ? (project.product_image_url || project.product?.image_url || null)
+        : null;
 
     // 2. Get the approved script's latest scenes
     const { data: scripts } = await this.supabase
@@ -53,10 +72,9 @@ export class CastingAgent extends BaseAgent {
       }
     }
 
-    // 3. Detect influencer-based generation and product image
+    // 3. Detect influencer-based generation
     const influencer = project.influencer;
     const useInfluencer = !!influencer?.image_url;
-    const productImageUrl: string | null = project.product_image_url || project.product?.image_url || null;
 
     // 4. Determine avatar info
     const character = project.character;
@@ -120,6 +138,7 @@ export class CastingAgent extends BaseAgent {
         : defaultPlacement;
       const energyArc = ENERGY_ARC[segIdx];
 
+      const segmentProductImage = this.selectProductImageForSegment(segIdx, productImages, legacyProductImageUrl);
       const maxRetries = 1;
       let segmentSuccess = false;
 
@@ -134,7 +153,7 @@ export class CastingAgent extends BaseAgent {
 
           // Use LLM to generate detailed prompts for start and end frames
           const sealSegment = project.video_analysis?.segments?.[segIdx] || null;
-          const hasProductRef = !!productImageUrl;
+          const hasProductRef = !!segmentProductImage;
           const promptPair = await this.generateVisualPrompts(
             appearance, wardrobe, sceneDescription,
             scene, placement, energyArc,
@@ -157,8 +176,9 @@ export class CastingAgent extends BaseAgent {
           const referenceImages: string[] = [];
           if (previousEndFrameUrl) referenceImages.push(previousEndFrameUrl);
           if (useInfluencer) referenceImages.push(influencer.image_url);
-          if (productImageUrl) referenceImages.push(productImageUrl);
+          if (segmentProductImage) referenceImages.push(segmentProductImage);
 
+          let startUrl = '';
           let endUrl = '';
 
           if (referenceImages.length > 0) {
@@ -168,62 +188,59 @@ export class CastingAgent extends BaseAgent {
             const refLabels = [
               previousEndFrameUrl ? 'prev_end_frame' : null,
               useInfluencer ? `influencer: ${influencer.name}` : null,
-              productImageUrl ? 'product image' : null,
+              segmentProductImage ? `product (${productImages.find(i => (i.url_clean || i.url) === segmentProductImage)?.angle || 'legacy'})` : null,
             ].filter(Boolean).join(' + ');
-            this.log(`Segment ${segIdx}: edit with refs [${refLabels}] (attempt ${attempt + 1})`);
 
-            // Generate start + end in parallel (they don't chain to each other)
-            const [startResult, endResult] = await Promise.all([
-              this.wavespeed.editImage(referenceImages, promptPair.start, editOpts),
-              this.wavespeed.editImage(referenceImages, promptPair.end, editOpts),
-            ]);
+            // INNER CHAIN: Generate start first, then use start as reference for end.
+            // This ensures the same person appears in both keyframes of a segment.
+            this.log(`Segment ${segIdx}: generating START keyframe with refs [${refLabels}] (attempt ${attempt + 1})`);
+            const startResult = await this.wavespeed.editImage(referenceImages, promptPair.start, editOpts);
+            await this.createAsset(projectId, scene.id, 'keyframe_start', startResult.taskId, 'nano-banana-pro-edit');
+            const startPoll = await this.wavespeed.pollResult(startResult.taskId, { maxWait: 120000, initialInterval: 5000 });
+            startUrl = startPoll.url || '';
+            await this.updateAssetUrl(startResult.taskId, startUrl);
 
-            await Promise.all([
-              this.createAsset(projectId, scene.id, 'keyframe_start', startResult.taskId, 'nano-banana-pro-edit'),
-              this.createAsset(projectId, scene.id, 'keyframe_end', endResult.taskId, 'nano-banana-pro-edit'),
-            ]);
-
-            // Poll both in parallel
-            const [startPoll, endPoll] = await Promise.all([
-              this.wavespeed.pollResult(startResult.taskId, { maxWait: 120000, initialInterval: 5000 }),
-              this.wavespeed.pollResult(endResult.taskId, { maxWait: 120000, initialInterval: 5000 }),
-            ]);
-
-            await Promise.all([
-              this.updateAssetUrl(startResult.taskId, startPoll.url || ''),
-              this.updateAssetUrl(endResult.taskId, endPoll.url || ''),
-            ]);
-
+            // End frame: prepend the start frame as primary reference for face/scene consistency
+            const endRefs = startUrl ? [startUrl, ...referenceImages] : referenceImages;
+            this.log(`Segment ${segIdx}: generating END keyframe with start frame as primary ref (attempt ${attempt + 1})`);
+            const endResult = await this.wavespeed.editImage(endRefs, promptPair.end, editOpts);
+            await this.createAsset(projectId, scene.id, 'keyframe_end', endResult.taskId, 'nano-banana-pro-edit');
+            const endPoll = await this.wavespeed.pollResult(endResult.taskId, { maxWait: 120000, initialInterval: 5000 });
             endUrl = endPoll.url || '';
+            await this.updateAssetUrl(endResult.taskId, endUrl);
+
             await this.trackCost(projectId, API_COSTS.nanoBananaProEdit * 2);
           } else {
-            // Text-to-image: segment 0 with no references at all
+            // Text-to-image for start, then edit for end using start as reference
             const imgOpts = { aspectRatio: RESOLUTION.aspectRatio, width: RESOLUTION.width, height: RESOLUTION.height };
 
-            this.log(`Segment ${segIdx}: text-to-image (no references) (attempt ${attempt + 1})`);
+            this.log(`Segment ${segIdx}: text-to-image START (no references) (attempt ${attempt + 1})`);
+            const startResult = await this.wavespeed.generateImage(promptPair.start, imgOpts);
+            await this.createAsset(projectId, scene.id, 'keyframe_start', startResult.taskId);
+            const startPoll = await this.wavespeed.pollResult(startResult.taskId, { maxWait: 120000, initialInterval: 5000 });
+            startUrl = startPoll.url || '';
+            await this.updateAssetUrl(startResult.taskId, startUrl);
 
-            const [startResult, endResult] = await Promise.all([
-              this.wavespeed.generateImage(promptPair.start, imgOpts),
-              this.wavespeed.generateImage(promptPair.end, imgOpts),
-            ]);
-
-            await Promise.all([
-              this.createAsset(projectId, scene.id, 'keyframe_start', startResult.taskId),
-              this.createAsset(projectId, scene.id, 'keyframe_end', endResult.taskId),
-            ]);
-
-            const [startPoll, endPoll] = await Promise.all([
-              this.wavespeed.pollResult(startResult.taskId, { maxWait: 120000, initialInterval: 5000 }),
-              this.wavespeed.pollResult(endResult.taskId, { maxWait: 120000, initialInterval: 5000 }),
-            ]);
-
-            await Promise.all([
-              this.updateAssetUrl(startResult.taskId, startPoll.url || ''),
-              this.updateAssetUrl(endResult.taskId, endPoll.url || ''),
-            ]);
-
-            endUrl = endPoll.url || '';
-            await this.trackCost(projectId, API_COSTS.nanoBananaPro * 2);
+            if (startUrl) {
+              // Use start frame as reference for end frame (edit mode) to preserve face
+              const editOpts = { aspectRatio: RESOLUTION.aspectRatio, resolution: '1k' as const };
+              this.log(`Segment ${segIdx}: generating END keyframe using start frame as ref (attempt ${attempt + 1})`);
+              const endResult = await this.wavespeed.editImage([startUrl], promptPair.end, editOpts);
+              await this.createAsset(projectId, scene.id, 'keyframe_end', endResult.taskId, 'nano-banana-pro-edit');
+              const endPoll = await this.wavespeed.pollResult(endResult.taskId, { maxWait: 120000, initialInterval: 5000 });
+              endUrl = endPoll.url || '';
+              await this.updateAssetUrl(endResult.taskId, endUrl);
+              await this.trackCost(projectId, API_COSTS.nanoBananaPro + API_COSTS.nanoBananaProEdit);
+            } else {
+              // Fallback: generate end independently if start failed
+              this.log(`Segment ${segIdx}: text-to-image END (start failed) (attempt ${attempt + 1})`);
+              const endResult = await this.wavespeed.generateImage(promptPair.end, imgOpts);
+              await this.createAsset(projectId, scene.id, 'keyframe_end', endResult.taskId);
+              const endPoll = await this.wavespeed.pollResult(endResult.taskId, { maxWait: 120000, initialInterval: 5000 });
+              endUrl = endPoll.url || '';
+              await this.updateAssetUrl(endResult.taskId, endUrl);
+              await this.trackCost(projectId, API_COSTS.nanoBananaPro * 2);
+            }
           }
 
           // Chain: pass this segment's end frame URL to next segment
@@ -249,7 +266,7 @@ export class CastingAgent extends BaseAgent {
       }
 
       if (!segmentSuccess) {
-        const failedProvider = (useInfluencer || productImageUrl || previousEndFrameUrl) ? 'nano-banana-pro-edit' : 'nano-banana-pro';
+        const failedProvider = (useInfluencer || segmentProductImage || previousEndFrameUrl) ? 'nano-banana-pro-edit' : 'nano-banana-pro';
         this.log(`All retries exhausted for segment ${segIdx}, creating failed assets`);
         await this.supabase.from('asset').insert([
           { project_id: projectId, scene_id: scene.id, type: 'keyframe_start', provider: failedProvider, status: 'failed', cost_usd: 0 },
@@ -390,6 +407,39 @@ Match this reference video's visual style: use similar lighting, camera angle, a
         end: `${base}, ${energyArc.pattern.end.toLowerCase()} energy, closing pose, ${placement.visibility} product visibility`,
       };
     }
+  }
+
+  private selectProductImageForSegment(
+    segmentIndex: number,
+    productImages: Array<{ url: string; url_clean: string | null; angle: string; is_primary: boolean }>,
+    legacyUrl: string | null,
+  ): string | null {
+    const placement = PRODUCT_PLACEMENT_ARC[segmentIndex];
+    if (!placement) return null;
+
+    const visibility = placement.visibility;
+
+    // No product image for 'none' visibility (hook segment)
+    if (visibility === 'none') return null;
+
+    // Legacy fallback
+    if (productImages.length === 0) return legacyUrl;
+
+    // Get preferred angles for this visibility level
+    const preferredAngles = VISIBILITY_ANGLE_MAP[visibility] || ['front'];
+
+    // Try to find a matching angle in priority order
+    for (const angle of preferredAngles) {
+      const match = productImages.find(img => img.angle === angle);
+      if (match) return match.url_clean || match.url;
+    }
+
+    // Fallback: primary image
+    const primary = productImages.find(img => img.is_primary);
+    if (primary) return primary.url_clean || primary.url;
+
+    // Last resort: first image
+    return productImages[0].url_clean || productImages[0].url;
   }
 
   private async createAsset(
