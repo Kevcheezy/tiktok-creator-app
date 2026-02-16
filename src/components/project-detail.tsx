@@ -7,6 +7,7 @@ import { StatusBadge } from './status-badge';
 import { PipelineProgress } from './pipeline-progress';
 import { ScriptReview } from './script-review';
 import { AssetReview } from './asset-review';
+import { StoryboardView } from './storyboard-view';
 import { ConfirmDialog } from './confirm-dialog';
 import { StageProgress } from './stage-progress';
 
@@ -342,6 +343,11 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       {/* Script Review */}
       {project.status === 'script_review' && (
         <ScriptReview projectId={projectId} onStatusChange={fetchProject} />
+      )}
+
+      {/* B-Roll Storyboard Review */}
+      {project.status === 'broll_review' && (
+        <StoryboardView projectId={projectId} onStatusChange={fetchProject} />
       )}
 
       {/* Influencer Selection Gate */}
@@ -1030,6 +1036,9 @@ function InfluencerSelection({ projectId, currentInfluencerId, onSelected }: Inf
 const STAGE_LABELS: Record<string, string> = {
   analyzing: 'Product Analysis',
   scripting: 'Script Generation',
+  broll_planning: 'B-Roll Planning',
+  broll_review: 'B-Roll Review',
+  broll_generation: 'B-Roll Generation',
   casting: 'Keyframe Casting',
   directing: 'Video Directing',
   voiceover: 'Voiceover Generation',
@@ -1039,6 +1048,9 @@ const STAGE_LABELS: Record<string, string> = {
 const ROLLBACK_LABELS: Record<string, string> = {
   analyzing: 'Start',
   scripting: 'Analysis Review',
+  broll_planning: 'Script Review',
+  broll_review: 'Script Review',
+  broll_generation: 'B-Roll Review',
   casting: 'Influencer Selection',
   directing: 'Casting Review',
   voiceover: 'Casting Review',

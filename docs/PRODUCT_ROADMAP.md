@@ -237,7 +237,7 @@ These are blocking items. Nothing else matters until a user can go from product 
 - [ ] New `broll_shot` table stores planned shots (prompt, category, timing, duration, status)
 - [ ] New pipeline statuses: `broll_planning`, `broll_review`
 
-**Storyboard view (user reviews B-roll plan):**
+**Storyboard view (user reviews B-roll plan):** 🔧 IN PROGRESS (UI shell with mock data)
 - [ ] Vertical 60-second timeline showing script text + B-roll cards per shot_script
 - [ ] Edit prompt, change category, adjust timing/duration, remove, add, reorder
 - [ ] Upload own image to replace any AI-generated shot
