@@ -125,15 +125,24 @@ export async function DELETE(
   const { id } = await params;
 
   try {
-    // Check if any projects reference this influencer
-    const { count } = await supabase
+    // Check if any active projects reference this influencer
+    const TERMINAL_STATUSES = ['completed', 'failed'];
+    const { data: activeProjects } = await supabase
       .from('project')
-      .select('id', { count: 'exact', head: true })
-      .eq('influencer_id', id);
+      .select('id, name, status')
+      .eq('influencer_id', id)
+      .not('status', 'in', `(${TERMINAL_STATUSES.join(',')})`);
 
-    if (count && count > 0) {
+    if (activeProjects && activeProjects.length > 0) {
       return NextResponse.json(
-        { error: `Cannot delete influencer: ${count} project(s) still reference this influencer` },
+        {
+          error: `Cannot delete influencer: ${activeProjects.length} active project(s) still reference this influencer`,
+          projects: activeProjects.map((p: { id: string; name: string | null; status: string }) => ({
+            id: p.id,
+            name: p.name,
+            status: p.status,
+          })),
+        },
         { status: 409 }
       );
     }

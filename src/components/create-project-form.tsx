@@ -29,6 +29,7 @@ export function CreateProjectForm() {
   const router = useRouter();
   const [productUrl, setProductUrl] = useState('');
   const [selectedProductId, setSelectedProductId] = useState('');
+  const [inputMode, setInputMode] = useState<'existing' | 'new'>('new');
   const [videoUrl, setVideoUrl] = useState('');
   const [influencerId, setInfluencerId] = useState('');
   const [characterId, setCharacterId] = useState('');
@@ -54,6 +55,15 @@ export function CreateProjectForm() {
       .catch(() => setCharacters([]));
   }, []);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const pid = params.get('productId');
+    if (pid) {
+      setInputMode('existing');
+      setSelectedProductId(pid);
+    }
+  }, []);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -64,8 +74,9 @@ export function CreateProjectForm() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          productUrl: selectedProductId ? undefined : productUrl,
-          productId: selectedProductId || undefined,
+          ...(inputMode === 'existing' && selectedProductId
+            ? { productId: selectedProductId }
+            : { productUrl }),
           videoUrl: videoUrl || undefined,
           influencerId: influencerId || undefined,
           characterId: characterId || undefined,
@@ -96,60 +107,124 @@ export function CreateProjectForm() {
         </div>
       )}
 
-      {/* Product: existing or new URL */}
-      {products.length > 0 && (
-        <div>
-          <label
-            htmlFor="existingProduct"
-            className="mb-2 block font-[family-name:var(--font-display)] text-sm font-medium text-text-primary"
-          >
-            Existing Product{' '}
-            <span className="font-normal text-text-muted">(skip analysis)</span>
-          </label>
-          <div className="relative">
-            <select
-              id="existingProduct"
-              value={selectedProductId}
-              onChange={(e) => {
-                setSelectedProductId(e.target.value);
-                if (e.target.value) setProductUrl('');
-              }}
-              className="block w-full appearance-none rounded-lg border border-border bg-surface-raised px-4 py-3 pr-10 text-sm text-text-primary transition-all focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric"
-            >
-              <option value="">Enter new URL instead</option>
-              {products.map((prod) => (
-                <option key={prod.id} value={prod.id}>
-                  {prod.name || prod.url}{prod.category ? ` (${prod.category})` : ''}
-                </option>
-              ))}
-            </select>
-            <svg viewBox="0 0 16 16" fill="none" className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="4 6 8 10 12 6" />
-            </svg>
-          </div>
-        </div>
-      )}
+      {/* Product selector */}
+      <div>
+        <label className="mb-2 block font-[family-name:var(--font-display)] text-sm font-medium text-text-primary">
+          Product <span className="text-magenta">*</span>
+        </label>
 
-      {/* Product URL (hidden when existing product selected) */}
-      {!selectedProductId && (
-        <div>
-          <label
-            htmlFor="productUrl"
-            className="mb-2 block font-[family-name:var(--font-display)] text-sm font-medium text-text-primary"
+        {/* Mode toggle tabs */}
+        <div className="mb-3 flex gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setInputMode('new');
+              setSelectedProductId('');
+            }}
+            className={`rounded-lg border px-4 py-2 text-sm font-medium transition-all ${
+              inputMode === 'new'
+                ? 'bg-surface-raised text-electric border-electric/30'
+                : 'bg-transparent text-text-muted border-border hover:text-text-secondary'
+            }`}
           >
-            Product URL <span className="text-magenta">*</span>
-          </label>
+            New Product URL
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setInputMode('existing');
+              setProductUrl('');
+            }}
+            disabled={products.length === 0}
+            className={`rounded-lg border px-4 py-2 text-sm font-medium transition-all ${
+              inputMode === 'existing'
+                ? 'bg-surface-raised text-electric border-electric/30'
+                : 'bg-transparent text-text-muted border-border hover:text-text-secondary'
+            } disabled:opacity-40 disabled:cursor-not-allowed`}
+          >
+            Existing Product
+          </button>
+        </div>
+
+        {/* New URL input */}
+        {inputMode === 'new' && (
           <input
             type="url"
             id="productUrl"
-            required={!selectedProductId}
+            required
             value={productUrl}
             onChange={(e) => setProductUrl(e.target.value)}
             placeholder="https://www.tiktok.com/shop/pdp/..."
             className="block w-full rounded-lg border border-border bg-surface-raised px-4 py-3 text-sm text-text-primary placeholder:text-text-muted transition-all focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric"
           />
-        </div>
-      )}
+        )}
+
+        {/* Existing product selector */}
+        {inputMode === 'existing' && (
+          <>
+            <div className="relative">
+              <select
+                id="existingProduct"
+                value={selectedProductId}
+                onChange={(e) => setSelectedProductId(e.target.value)}
+                required
+                className="block w-full appearance-none rounded-lg border border-border bg-surface-raised px-4 py-3 pr-10 text-sm text-text-primary transition-all focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric"
+              >
+                <option value="">Select an analyzed product...</option>
+                {products.map((prod) => (
+                  <option key={prod.id} value={prod.id}>
+                    {prod.name || prod.url}
+                    {prod.category ? ` (${prod.category})` : ''}
+                  </option>
+                ))}
+              </select>
+              <svg
+                viewBox="0 0 16 16"
+                fill="none"
+                className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polyline points="4 6 8 10 12 6" />
+              </svg>
+            </div>
+
+            {/* Product preview card */}
+            {(() => {
+              const selectedProduct = products.find((p) => p.id === selectedProductId);
+              if (!selectedProduct) return null;
+              return (
+                <div className="mt-3 flex items-center gap-3 rounded-lg border border-border bg-surface p-3">
+                  {selectedProduct.image_url && (
+                    <img
+                      src={selectedProduct.image_url}
+                      alt={selectedProduct.name || 'Product'}
+                      className="h-12 w-12 shrink-0 rounded-md border border-border object-cover"
+                    />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-[family-name:var(--font-display)] text-sm font-medium text-text-primary">
+                      {selectedProduct.name || 'Untitled Product'}
+                    </p>
+                    <div className="mt-1 flex items-center gap-2">
+                      {selectedProduct.category && (
+                        <span className="inline-flex rounded-md border border-electric/20 bg-electric/10 px-2 py-0.5 font-[family-name:var(--font-display)] text-xs text-electric">
+                          {selectedProduct.category}
+                        </span>
+                      )}
+                      <span className="truncate font-[family-name:var(--font-mono)] text-xs text-text-muted">
+                        {selectedProduct.url}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </>
+        )}
+      </div>
 
       {/* Video URL */}
       <div>
