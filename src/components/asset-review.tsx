@@ -40,6 +40,14 @@ export function AssetReview({ projectId, onStatusChange, confirmBeforeApprove }:
   const [showConfirm, setShowConfirm] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Keyframe editing state
+  const [editTarget, setEditTarget] = useState<{ assetId: string; type: string; segmentIndex: number } | null>(null);
+  const [editPrompt, setEditPrompt] = useState('');
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [propagateTarget, setPropagateTarget] = useState<{ assetId: string; prompt: string; subsequentCount: number } | null>(null);
+  const [propagateSubmitting, setPropagateSubmitting] = useState(false);
+  const lastEditRef = useRef<{ assetId: string; prompt: string } | null>(null);
+
   const fetchAssets = useCallback(async () => {
     try {
       const res = await fetch(`/api/projects/${projectId}/assets`);
@@ -62,12 +70,12 @@ export function AssetReview({ projectId, onStatusChange, confirmBeforeApprove }:
     fetchAssets();
   }, [fetchAssets]);
 
-  // Auto-poll while any asset is generating
+  // Auto-poll while any asset is generating or editing
   useEffect(() => {
-    const hasGenerating = assets.some((a) => a.status === 'generating');
-    if (hasGenerating && !pollRef.current) {
+    const hasPending = assets.some((a) => a.status === 'generating' || a.status === 'editing');
+    if (hasPending && !pollRef.current) {
       pollRef.current = setInterval(fetchAssets, 3000);
-    } else if (!hasGenerating && pollRef.current) {
+    } else if (!hasPending && pollRef.current) {
       clearInterval(pollRef.current);
       pollRef.current = null;
     }
@@ -78,6 +86,31 @@ export function AssetReview({ projectId, onStatusChange, confirmBeforeApprove }:
       }
     };
   }, [assets, fetchAssets]);
+
+  // Detect edit completion and offer propagation
+  useEffect(() => {
+    if (!lastEditRef.current) return;
+    const { assetId, prompt } = lastEditRef.current;
+    const editedAsset = assets.find((a) => a.id === assetId);
+    if (!editedAsset || editedAsset.status !== 'completed') return;
+
+    // Edit completed — check for subsequent keyframes
+    lastEditRef.current = null;
+    const segIdx = editedAsset.scene?.segment_index ?? -1;
+    const isStart = editedAsset.type === 'keyframe_start';
+
+    const subsequentCount = assets.filter((a) => {
+      if (!a.type.startsWith('keyframe') || a.status !== 'completed' || a.id === assetId) return false;
+      const aSegIdx = a.scene?.segment_index ?? -1;
+      if (aSegIdx > segIdx) return true;
+      if (aSegIdx === segIdx && isStart && a.type === 'keyframe_end') return true;
+      return false;
+    }).length;
+
+    if (subsequentCount > 0) {
+      setPropagateTarget({ assetId, prompt, subsequentCount });
+    }
+  }, [assets]);
 
   async function handleApprove() {
     setApproving(true);
@@ -127,6 +160,55 @@ export function AssetReview({ projectId, onStatusChange, confirmBeforeApprove }:
       fetchAssets();
     } catch (err) {
       console.error('Failed to regenerate asset:', err);
+    }
+  }
+
+  function openEditModal(assetId: string) {
+    const asset = assets.find((a) => a.id === assetId);
+    if (!asset) return;
+    setEditTarget({
+      assetId,
+      type: asset.type,
+      segmentIndex: asset.scene?.segment_index ?? -1,
+    });
+    setEditPrompt('');
+  }
+
+  async function handleEditSubmit() {
+    if (!editTarget || !editPrompt.trim()) return;
+    setEditSubmitting(true);
+    try {
+      await fetch(`/api/projects/${projectId}/keyframes/edit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assetId: editTarget.assetId, prompt: editPrompt.trim() }),
+      });
+      lastEditRef.current = { assetId: editTarget.assetId, prompt: editPrompt.trim() };
+      setEditTarget(null);
+      setEditPrompt('');
+      fetchAssets();
+    } catch (err) {
+      console.error('Failed to submit keyframe edit:', err);
+    } finally {
+      setEditSubmitting(false);
+    }
+  }
+
+  async function handlePropagate() {
+    if (!propagateTarget) return;
+    setPropagateSubmitting(true);
+    try {
+      await fetch(`/api/projects/${projectId}/keyframes/propagate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assetId: propagateTarget.assetId, prompt: propagateTarget.prompt }),
+      });
+      setPropagateTarget(null);
+      fetchAssets();
+    } catch (err) {
+      console.error('Failed to propagate keyframe edit:', err);
+    } finally {
+      setPropagateSubmitting(false);
     }
   }
 
@@ -190,6 +272,7 @@ export function AssetReview({ projectId, onStatusChange, confirmBeforeApprove }:
   const failedAssets = assets.filter((a) => a.status === 'failed').length;
   const rejectedAssets = assets.filter((a) => a.status === 'rejected').length;
   const generatingAssets = assets.filter((a) => a.status === 'generating').length;
+  const editingAssets = assets.filter((a) => a.status === 'editing').length;
   const hasIssues = failedAssets > 0 || rejectedAssets > 0;
 
   return (
@@ -210,6 +293,15 @@ export function AssetReview({ projectId, onStatusChange, confirmBeforeApprove }:
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-electric" />
               </span>
               {generatingAssets} generating
+            </span>
+          )}
+          {editingAssets > 0 && (
+            <span className="flex items-center gap-1.5 text-amber-hot">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-hot opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-hot" />
+              </span>
+              {editingAssets} editing
             </span>
           )}
           {failedAssets > 0 && (
@@ -259,6 +351,7 @@ export function AssetReview({ projectId, onStatusChange, confirmBeforeApprove }:
                         onGrade={handleGrade}
                         onReject={handleReject}
                         onRegenerate={handleRegenerate}
+                        onEdit={confirmBeforeApprove ? openEditModal : undefined}
                       />
                     )}
                     {keyframeEnd && (
@@ -268,6 +361,7 @@ export function AssetReview({ projectId, onStatusChange, confirmBeforeApprove }:
                         onGrade={handleGrade}
                         onReject={handleReject}
                         onRegenerate={handleRegenerate}
+                        onEdit={confirmBeforeApprove ? openEditModal : undefined}
                       />
                     )}
                   </div>
@@ -323,7 +417,7 @@ export function AssetReview({ projectId, onStatusChange, confirmBeforeApprove }:
           <button
             type="button"
             onClick={() => confirmBeforeApprove ? setShowConfirm(true) : handleApprove()}
-            disabled={approving || generatingAssets > 0}
+            disabled={approving || generatingAssets > 0 || editingAssets > 0}
             className="inline-flex items-center gap-2 rounded-lg bg-lime px-6 py-3 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:shadow-[0_0_32px_rgba(184,255,0,0.25)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {approving ? (
@@ -378,6 +472,139 @@ export function AssetReview({ projectId, onStatusChange, confirmBeforeApprove }:
                 className="flex-1 rounded-lg bg-lime px-4 py-2.5 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:shadow-[0_0_24px_rgba(184,255,0,0.25)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Confirm & Generate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Keyframe edit modal */}
+      {editTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-void/80 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-md animate-fade-in-up rounded-xl border border-amber-hot/30 bg-surface p-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-hot/10">
+                <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4 text-amber-hot" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M11.5 1.5l3 3L5 14H2v-3L11.5 1.5z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="font-[family-name:var(--font-display)] text-lg font-bold text-text-primary">
+                  Edit Keyframe
+                </h3>
+                <span className={`inline-flex rounded-md border px-1.5 py-0.5 font-[family-name:var(--font-display)] text-[9px] font-semibold uppercase tracking-wider ${
+                  editTarget.type === 'keyframe_start'
+                    ? 'bg-electric/10 text-electric border-electric/30'
+                    : 'bg-electric/10 text-electric border-electric/30'
+                }`}>
+                  {editTarget.type === 'keyframe_start' ? 'Start' : 'End'} — Segment {editTarget.segmentIndex + 1}
+                </span>
+              </div>
+            </div>
+            <p className="mt-3 text-sm leading-relaxed text-text-secondary">
+              Describe how you want this keyframe edited. The AI will apply your instructions while preserving the character and scene.
+            </p>
+            <textarea
+              value={editPrompt}
+              onChange={(e) => setEditPrompt(e.target.value)}
+              placeholder="e.g. Make the lighting warmer, add a slight smile, change background to outdoor setting..."
+              maxLength={2000}
+              rows={4}
+              autoFocus
+              className="mt-3 block w-full resize-none rounded-lg border border-border bg-surface-raised px-4 py-3 text-sm text-text-primary placeholder:text-text-muted transition-all focus:border-amber-hot focus:outline-none focus:ring-1 focus:ring-amber-hot"
+            />
+            <div className="mt-1 text-right">
+              <span className="font-[family-name:var(--font-mono)] text-[10px] text-text-muted">
+                {editPrompt.length}/2000
+              </span>
+            </div>
+            <div className="mt-3 rounded-lg bg-surface-overlay px-3 py-2">
+              <span className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                Cost
+              </span>
+              <p className="font-[family-name:var(--font-mono)] text-sm font-bold text-amber-hot">
+                ~0.07 Gil
+              </p>
+            </div>
+            <div className="mt-4 flex gap-3">
+              <button
+                type="button"
+                onClick={() => { setEditTarget(null); setEditPrompt(''); }}
+                className="flex-1 rounded-lg border border-border bg-surface px-4 py-2.5 font-[family-name:var(--font-display)] text-sm font-semibold text-text-secondary transition-all hover:bg-surface-raised"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleEditSubmit}
+                disabled={editSubmitting || !editPrompt.trim()}
+                className="flex-1 rounded-lg bg-amber-hot px-4 py-2.5 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:shadow-[0_0_24px_rgba(255,171,0,0.25)] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {editSubmitting ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="60" strokeDashoffset="15" strokeLinecap="round" />
+                    </svg>
+                    Submitting...
+                  </span>
+                ) : (
+                  'Edit Keyframe'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Propagation confirmation dialog */}
+      {propagateTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-void/80 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-md animate-fade-in-up rounded-xl border border-electric/30 bg-surface p-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-electric/10">
+                <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4 text-electric" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M8 3v10M5 10l3 3 3-3" />
+                </svg>
+              </div>
+              <h3 className="font-[family-name:var(--font-display)] text-lg font-bold text-text-primary">
+                Propagate Edit?
+              </h3>
+            </div>
+            <p className="mt-3 text-sm leading-relaxed text-text-secondary">
+              Apply this edit to <span className="font-[family-name:var(--font-mono)] font-bold text-electric">{propagateTarget.subsequentCount}</span> subsequent keyframe{propagateTarget.subsequentCount > 1 ? 's' : ''}? This ensures visual consistency across the remaining segments.
+            </p>
+            <div className="mt-3 rounded-lg bg-surface-overlay px-3 py-2">
+              <span className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                Estimated cost
+              </span>
+              <p className="font-[family-name:var(--font-mono)] text-sm font-bold text-amber-hot">
+                ~{(propagateTarget.subsequentCount * 0.07).toFixed(2)} Gil
+              </p>
+            </div>
+            <div className="mt-4 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setPropagateTarget(null)}
+                className="flex-1 rounded-lg border border-border bg-surface px-4 py-2.5 font-[family-name:var(--font-display)] text-sm font-semibold text-text-secondary transition-all hover:bg-surface-raised"
+              >
+                Skip
+              </button>
+              <button
+                type="button"
+                onClick={handlePropagate}
+                disabled={propagateSubmitting}
+                className="flex-1 rounded-lg bg-electric px-4 py-2.5 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:shadow-[0_0_24px_rgba(0,229,160,0.25)] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {propagateSubmitting ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="60" strokeDashoffset="15" strokeLinecap="round" />
+                    </svg>
+                    Propagating...
+                  </span>
+                ) : (
+                  `Propagate to ${propagateTarget.subsequentCount}`
+                )}
               </button>
             </div>
           </div>
