@@ -3,12 +3,20 @@ import { supabase } from '@/db';
 import { logger } from '@/lib/logger';
 import { getPublicUrl } from '@/lib/storage';
 
-export async function GET() {
-  const { data: influencers, error } = await supabase
+export async function GET(request: NextRequest) {
+  const { searchParams } = request.nextUrl;
+
+  let query = supabase
     .from('influencer')
     .select('*')
     .eq('status', 'active')
     .order('created_at', { ascending: false });
+
+  if (searchParams.get('hasImage') === 'true') {
+    query = query.not('image_url', 'is', null);
+  }
+
+  const { data: influencers, error } = await query;
 
   if (error) {
     logger.error({ err: error, route: '/api/influencers' }, 'Error listing influencers');

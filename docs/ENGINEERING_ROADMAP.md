@@ -129,9 +129,26 @@ Influencer `<select>` options displayed the entire `persona` field (full appeara
 **Spec:** `docs/plans/2026-02-15-influencer-image-upscale-design.md` (Part 1)
 **Why:** WHO selection grid at `influencer_selection` stage shows influencers without images as disabled cards with "No image" label. If they can't be selected, they shouldn't be shown. Fix: add `?hasImage=true` query param to `GET /api/influencers` and use it in the selection picker.
 
-- [ ] `GET /api/influencers?hasImage=true` filters out `image_url IS NULL`
-- [ ] WHO selection grid fetches with `hasImage=true`
-- [ ] Influencers management page still shows all influencers
+- [x] `GET /api/influencers?hasImage=true` filters out `image_url IS NULL`
+- [ ] WHO selection grid fetches with `hasImage=true` *(frontend agent task)*
+- [x] Influencers management page still shows all influencers (no param = no filter)
+
+#### ~~B0.15 - Build-Breaking Type Errors in Analytics & TikTok Routes~~ FIXED
+**Severity:** Critical (blocks `npm run build`)
+**Why:** 14 Pino logger calls in `analytics/` and `tiktok/` API routes had reversed argument order (`logger.error('msg', {obj})` instead of `logger.error({obj}, 'msg')`). Additionally, `tiktok/sync/route.ts` had: `TikTokVideoMetrics.video_id` (correct field: `id`), `computeRoi` called with 3 args (accepts 2), `computePerformanceBadge` called with wrong params. These errors were masked because earlier build failures stopped TypeScript from reaching these files. Uncovered and fixed during unrelated frontend work.
+
+- [x] Fix Pino logger argument order in 14 calls across `analytics/breakdown`, `analytics/dashboard`, `analytics/leaderboard`, `tiktok/auth`, `tiktok/callback`, `tiktok/disconnect`, `tiktok/status`, `tiktok/sync`
+- [x] Fix `metric.video_id` → `metric.id` in tiktok sync route
+- [x] Fix `computeRoi(views, cost, gmv)` → `computeRoi(gmv, cost)` in tiktok sync route
+- [x] Fix `computePerformanceBadge` params to match function signature
+
+#### ~~B0.16 - Product Image Not Resolved From Linked Product Entity~~ FIXED
+**Severity:** Medium (UX friction — forces unnecessary re-upload)
+**Why:** When a project is created from an existing Product (R1.6), `product_image_url` is copied at creation time. If the Product's 4K upscaled image was uploaded *after* the project was created, the project's copy stays null — showing "No product image found. Upload one to continue." even though the Product has a valid image. The project detail API (`GET /api/projects/[id]`) didn't join the `product` table, so the frontend couldn't fall back to the Product's `image_url`.
+
+- [x] Added `product:product(*)` join to `GET /api/projects/[id]` select query
+- [x] Added `product_id` and `product` relation to frontend `ProjectData` interface
+- [x] Product image resolution chain: `project.product_image_url → project.product?.image_url → data.product_image_url`
 
 ---
 
@@ -506,6 +523,20 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [ ] All image references: `image_url_4k || image_url` pattern
 
 **Cost:** $0.01 per upload. ~$0.20 for 20 influencers.
+
+#### ~~R1.5.14 - Editable Analysis Review~~ DONE
+**Priority:** P1 - High
+**Effort:** Small
+**Status:** Complete (2026-02-15)
+**Why:** The analysis review stage showed product data (selling points, key claims, benefits, usage, hook angle, avatar description) as read-only cards. Users couldn't correct AI mistakes or tailor the analysis before proceeding to script generation. The Product detail page (`/products/[id]`) already had inline editing, but the project-level analysis review did not.
+
+- [x] Added `product_data` to `ALWAYS_ALLOWED` fields in `PATCH /api/projects/[id]`
+- [x] `AnalysisResults` component: new `editable`, `projectId`, `onDataUpdated` props
+- [x] "Edit Analysis" toggle button at analysis review (hidden in read-only/past stage views)
+- [x] Array fields (Selling Points, Key Claims, Benefits): inline edit, add, remove items with auto-save on blur
+- [x] Text fields (Usage, Hook Angle, Avatar Description): textarea editing with auto-save on blur
+- [x] Saving indicator per field
+- [ ] Per-field regeneration via LLM (e.g., "regenerate just the selling points") — requires backend endpoint
 
 ---
 
