@@ -157,10 +157,10 @@ export class WaveSpeedClient {
   async editImage(
     images: string[],
     prompt: string,
-    options?: { aspectRatio?: string; resolution?: string; width?: number; height?: number },
+    options?: { aspectRatio?: string; resolution?: string },
     context?: ApiCallContext
   ): Promise<{ taskId: string }> {
-    const { aspectRatio = '9:16', resolution = '1080p', width, height } = options || {};
+    const { aspectRatio = '9:16', resolution = '1k' } = options || {};
 
     const body: Record<string, unknown> = {
       images,
@@ -170,9 +170,6 @@ export class WaveSpeedClient {
       output_format: 'png',
       enable_sync_mode: false,
     };
-
-    if (width) body.width = width;
-    if (height) body.height = height;
 
     const data = await this.request('/api/v3/google/nano-banana-pro/edit', {
       method: 'POST',

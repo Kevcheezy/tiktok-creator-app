@@ -121,7 +121,7 @@ export class CastingAgent extends BaseAgent {
             // Image-to-image: edit the influencer's reference photo
             this.log(`Using influencer reference: ${influencer.name}`);
 
-            const editOpts = { aspectRatio: RESOLUTION.aspectRatio, width: RESOLUTION.width, height: RESOLUTION.height };
+            const editOpts = { aspectRatio: RESOLUTION.aspectRatio, resolution: '1k' as const };
 
             this.log(`Generating start keyframe (edit) for segment ${segIdx} (attempt ${attempt + 1})`);
             const startResult = await this.wavespeed.editImage([influencer.image_url], promptPair.start, editOpts);
@@ -173,6 +173,12 @@ export class CastingAgent extends BaseAgent {
         } catch (error) {
           const errMsg = error instanceof Error ? error.message : String(error);
           this.log(`Casting failed for segment ${segIdx} (attempt ${attempt + 1}): ${errMsg}`);
+          await this.logEvent(projectId, 'segment_error', 'casting', {
+            segment: segIdx,
+            attempt: attempt + 1,
+            error: errMsg,
+            useInfluencer,
+          });
         }
       }
 
