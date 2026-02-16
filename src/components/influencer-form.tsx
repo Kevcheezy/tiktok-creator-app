@@ -52,8 +52,20 @@ export function InfluencerForm() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to create influencer');
+        const text = await res.text();
+        let message = 'Failed to create influencer';
+        try {
+          const data = JSON.parse(text);
+          message = data.error || message;
+        } catch {
+          // Non-JSON response (e.g. 413 Request Entity Too Large)
+          if (res.status === 413 || text.includes('Request Entity Too Large')) {
+            message = 'Image is too large. Please use an image under 4 MB.';
+          } else {
+            message = text || message;
+          }
+        }
+        throw new Error(message);
       }
 
       router.push('/influencers');
