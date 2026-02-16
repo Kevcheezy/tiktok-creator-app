@@ -193,6 +193,7 @@ export const scene = pgTable('scene', {
   textOverlay: text('text_overlay'),
   visualPrompt: jsonb('visual_prompt'),
   productVisibility: text('product_visibility'),
+  brollCues: jsonb('broll_cues'),
   tone: text('tone'),
   version: integer('version').default(1),
   createdAt: timestamp('created_at').defaultNow(),
@@ -234,6 +235,47 @@ export const assetRelations = relations(asset, ({ one }) => ({
   scene: one(scene, {
     fields: [asset.sceneId],
     references: [scene.id],
+  }),
+}));
+
+// ─── B-Roll Shot ────────────────────────────────────────────────────────────
+
+export const brollShot = pgTable('broll_shot', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id')
+    .notNull()
+    .references(() => project.id, { onDelete: 'cascade' }),
+  scriptId: uuid('script_id')
+    .notNull()
+    .references(() => script.id, { onDelete: 'cascade' }),
+  segmentIndex: integer('segment_index').notNull(),
+  shotIndex: integer('shot_index').notNull(),
+  category: text('category').notNull(),
+  prompt: text('prompt').notNull(),
+  narrativeRole: text('narrative_role'),
+  timingSeconds: numeric('timing_seconds').notNull(),
+  durationSeconds: numeric('duration_seconds').default('2.5'),
+  source: text('source').notNull().default('ai_generated'),
+  imageUrl: text('image_url'),
+  status: text('status').notNull().default('planned'),
+  assetId: uuid('asset_id').references(() => asset.id),
+  metadata: jsonb('metadata').default({}),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const brollShotRelations = relations(brollShot, ({ one }) => ({
+  project: one(project, {
+    fields: [brollShot.projectId],
+    references: [project.id],
+  }),
+  script: one(script, {
+    fields: [brollShot.scriptId],
+    references: [script.id],
+  }),
+  asset: one(asset, {
+    fields: [brollShot.assetId],
+    references: [asset.id],
   }),
 }));
 

@@ -10,6 +10,7 @@ import { CastingAgent } from '../agents/casting-agent';
 import { DirectorAgent } from '../agents/director-agent';
 import { VoiceoverAgent } from '../agents/voiceover-agent';
 import { EditorAgent } from '../agents/editor-agent';
+import { BRollAgent } from '../agents/broll-agent';
 import { VideoAnalysisAgent } from '../agents/video-analysis-agent';
 import { WaveSpeedClient } from '../lib/api-clients/wavespeed';
 import { ElevenLabsClient } from '../lib/api-clients/elevenlabs';
@@ -58,6 +59,10 @@ const worker = new Worker(
       await handleDirecting(projectId, correlationId, jobLog);
     } else if (step === 'voiceover') {
       await handleVoiceover(projectId, correlationId, jobLog);
+    } else if (step === 'broll_planning') {
+      await handleBrollPlanning(projectId, correlationId, jobLog);
+    } else if (step === 'broll_generation') {
+      await handleBrollGeneration(projectId, correlationId, jobLog);
     } else if (step === 'editing') {
       await handleEditing(projectId, correlationId, jobLog);
     } else if (step === 'regenerate_asset') {
@@ -502,10 +507,11 @@ async function handleVoiceover(projectId: string, correlationId: string, jobLog:
     agent.setCorrelationId(correlationId);
     await agent.run(projectId);
 
-    await supabase
-      .from('project')
-      .update({ status: 'asset_review', updated_at: new Date().toISOString() })
-      .eq('id', projectId);
+    // Auto-enqueue B-roll generation (runs before asset review)
+    await getPipelineQueue().add('broll_generation', {
+      projectId,
+      step: 'broll_generation',
+    });
 
     const durationMs = Date.now() - stageStart;
     await logToGenerationLog(supabase, {
@@ -513,7 +519,7 @@ async function handleVoiceover(projectId: string, correlationId: string, jobLog:
       event_type: 'stage_complete', agent_name: 'VoiceoverAgent', stage,
       detail: { durationMs },
     });
-    jobLog.info({ durationMs }, 'Voiceover complete');
+    jobLog.info({ durationMs }, 'Voiceover complete, B-roll generation enqueued');
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     const durationMs = Date.now() - stageStart;
@@ -585,6 +591,116 @@ async function handleEditing(projectId: string, correlationId: string, jobLog: R
       .update({
         status: 'failed',
         failed_at_status: 'editing',
+        error_message: errorMessage,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', projectId);
+
+    throw error;
+  }
+}
+
+async function handleBrollPlanning(projectId: string, correlationId: string, jobLog: ReturnType<typeof createLogger>) {
+  const stage = 'broll_planning';
+  const stageStart = Date.now();
+  try {
+    await supabase
+      .from('project')
+      .update({ status: 'broll_planning', updated_at: new Date().toISOString() })
+      .eq('id', projectId);
+
+    await logToGenerationLog(supabase, {
+      project_id: projectId, correlation_id: correlationId,
+      event_type: 'stage_start', agent_name: 'BRollAgent', stage,
+    });
+
+    const agent = new BRollAgent(supabase);
+    agent.setCorrelationId(correlationId);
+    await agent.plan(projectId);
+
+    await supabase
+      .from('project')
+      .update({ status: 'broll_review', updated_at: new Date().toISOString() })
+      .eq('id', projectId);
+
+    const durationMs = Date.now() - stageStart;
+    await logToGenerationLog(supabase, {
+      project_id: projectId, correlation_id: correlationId,
+      event_type: 'stage_complete', agent_name: 'BRollAgent', stage,
+      detail: { durationMs },
+    });
+    jobLog.info({ durationMs }, 'B-roll planning complete');
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const durationMs = Date.now() - stageStart;
+    jobLog.error({ err: error, durationMs }, 'B-roll planning failed');
+
+    await logToGenerationLog(supabase, {
+      project_id: projectId, correlation_id: correlationId,
+      event_type: 'stage_error', agent_name: 'BRollAgent', stage,
+      detail: { error: errorMessage, durationMs },
+    });
+
+    await supabase
+      .from('project')
+      .update({
+        status: 'failed',
+        failed_at_status: 'broll_planning',
+        error_message: errorMessage,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', projectId);
+
+    throw error;
+  }
+}
+
+async function handleBrollGeneration(projectId: string, correlationId: string, jobLog: ReturnType<typeof createLogger>) {
+  const stage = 'broll_generation';
+  const stageStart = Date.now();
+  try {
+    await supabase
+      .from('project')
+      .update({ status: 'broll_generation', updated_at: new Date().toISOString() })
+      .eq('id', projectId);
+
+    await logToGenerationLog(supabase, {
+      project_id: projectId, correlation_id: correlationId,
+      event_type: 'stage_start', agent_name: 'BRollAgent', stage,
+    });
+
+    const agent = new BRollAgent(supabase);
+    agent.setCorrelationId(correlationId);
+    await agent.generate(projectId);
+
+    await supabase
+      .from('project')
+      .update({ status: 'asset_review', updated_at: new Date().toISOString() })
+      .eq('id', projectId);
+
+    const durationMs = Date.now() - stageStart;
+    await logToGenerationLog(supabase, {
+      project_id: projectId, correlation_id: correlationId,
+      event_type: 'stage_complete', agent_name: 'BRollAgent', stage,
+      detail: { durationMs },
+    });
+    jobLog.info({ durationMs }, 'B-roll generation complete');
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const durationMs = Date.now() - stageStart;
+    jobLog.error({ err: error, durationMs }, 'B-roll generation failed');
+
+    await logToGenerationLog(supabase, {
+      project_id: projectId, correlation_id: correlationId,
+      event_type: 'stage_error', agent_name: 'BRollAgent', stage,
+      detail: { error: errorMessage, durationMs },
+    });
+
+    await supabase
+      .from('project')
+      .update({
+        status: 'failed',
+        failed_at_status: 'broll_generation',
         error_message: errorMessage,
         updated_at: new Date().toISOString(),
       })

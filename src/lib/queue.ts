@@ -3,7 +3,7 @@ import { Queue } from 'bullmq';
 export type PipelineJobData = {
   projectId?: string;
   productId?: string;
-  step: 'product_analysis' | 'scripting' | 'casting' | 'directing' | 'voiceover' | 'editing' | 'regenerate_asset';
+  step: 'product_analysis' | 'scripting' | 'broll_planning' | 'broll_generation' | 'casting' | 'directing' | 'voiceover' | 'editing' | 'regenerate_asset';
   assetId?: string;
 };
 

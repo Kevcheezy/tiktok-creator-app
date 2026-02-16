@@ -221,24 +221,31 @@ These are blocking items. Nothing else matters until a user can go from product 
 #### R1.7 - B-Roll Agent
 **Priority:** P0 - Critical
 **Effort:** Medium-Large
+**Status:** Backend complete (2026-02-15). Frontend storyboard view remaining.
 **Depends on:** R1.1 (pipeline must handle casting/directing/voiceover before B-roll generation phase runs)
 **Spec:** `docs/plans/2026-02-15-r1.7-broll-agent-design.md`
 **Why:** High-performing TikTok Shop content uses B-roll inserts (cutaway images) to maintain viewer attention and validate claims. Without B-roll, videos are a single visual layer — flat and monotonous. B-roll is a visual argument that reinforces the script's persuasion structure. The agent operates in two phases: planning (at script review) and generation (after directing).
 
 **ScriptingAgent integration:**
-- [ ] Add `broll_cues` field to scene table — timestamps, duration, intent, spoken text for each B-roll insert
-- [ ] ScriptingAgent generates cues alongside shot_scripts and audio_sync
-- [ ] Cues timed for ~2-3 second visual refresh intervals (short-form virality best practice)
+- [x] Add `broll_cues` field to scene table — timestamps, duration, intent, spoken text for each B-roll insert
+- [x] ScriptingAgent generates cues alongside shot_scripts and audio_sync
+- [x] Cues timed for ~2-3 second visual refresh intervals (short-form virality best practice)
 
 **B-Roll planning (Phase 1 — after script approval, before influencer selection):**
-- [ ] B-RollAgent.plan() reads approved script + broll_cues + product category
-- [ ] Selects `BROLL_PRESETS` for product category (10 category-aware presets: transformation, research, lifestyle, social_proof, unboxing, comparison, etc.)
-- [ ] Shot count per segment: `ceil(syllable_count / 20)`, min 2, max 6
-- [ ] LLM generates categorized prompts with narrative roles for each shot
-- [ ] New `broll_shot` table stores planned shots (prompt, category, timing, duration, status)
-- [ ] New pipeline statuses: `broll_planning`, `broll_review`
+- [x] B-RollAgent.plan() reads approved script + broll_cues + product category
+- [x] Selects `BROLL_PRESETS` for product category (10 category-aware presets: transformation, research, lifestyle, social_proof, unboxing, comparison, etc.)
+- [x] Shot count per segment: `ceil(syllable_count / 20)`, min 2, max 6
+- [x] LLM generates categorized prompts with narrative roles for each shot
+- [x] New `broll_shot` table stores planned shots (prompt, category, timing, duration, status)
+- [x] New pipeline statuses: `broll_planning`, `broll_review`
 
-**Storyboard view (user reviews B-roll plan):** 🔧 IN PROGRESS (UI shell with mock data)
+**B-Roll API endpoints (backend):**
+- [x] `GET/POST /api/projects/[id]/broll` — list + add shots
+- [x] `PATCH/DELETE /api/projects/[id]/broll/[shotId]` — edit + remove shot
+- [x] `POST /api/projects/[id]/broll/approve` — approve shot list → influencer_selection
+- [x] `POST /api/projects/[id]/broll/[shotId]/upload` — upload user image to replace AI shot
+
+**Storyboard view (user reviews B-roll plan):**
 - [ ] Vertical 60-second timeline showing script text + B-roll cards per shot_script
 - [ ] Edit prompt, change category, adjust timing/duration, remove, add, reorder
 - [ ] Upload own image to replace any AI-generated shot
@@ -246,15 +253,15 @@ These are blocking items. Nothing else matters until a user can go from product 
 - [ ] Approve → proceeds to influencer_selection
 
 **B-Roll generation (Phase 2 — after directing + voiceover):**
-- [ ] B-RollAgent.generate() creates still images via Nano Banana Pro ($0.07/image)
-- [ ] Skips user-uploaded shots (already have image_url)
-- [ ] New pipeline status: `broll_generation`
-- [ ] Assets stored as type `broll` with timing metadata for EditorAgent
+- [x] B-RollAgent.generate() creates still images via Nano Banana Pro ($0.07/image)
+- [x] Skips user-uploaded shots (already have image_url)
+- [x] New pipeline status: `broll_generation`
+- [x] Assets stored as type `broll` with timing metadata for EditorAgent
 
 **EditorAgent integration:**
-- [ ] EditorAgent reads broll_cues (timestamps) + broll_shot records (images)
-- [ ] Composites B-roll as cutaway overlays at exact offset_seconds with duration_seconds
-- [ ] Applies Ken Burns effect (zoom/pan) for motion on still images
+- [x] EditorAgent reads broll_cues (timestamps) + broll_shot records (images)
+- [x] Composites B-roll as cutaway overlays at exact offset_seconds with duration_seconds
+- [ ] Applies Ken Burns effect (zoom/pan) for motion on still images (requires Creatomate template update)
 
 **Cost:** ~$0.85-1.13 per video (planning LLM: $0.01 + 12-16 images: $0.84-1.12). Total per video: ~$6.43-6.71.
 

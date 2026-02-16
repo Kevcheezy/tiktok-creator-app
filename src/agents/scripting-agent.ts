@@ -29,6 +29,14 @@ interface EnergyPattern {
   end: string;
 }
 
+interface BrollCue {
+  shot_script_index: number;
+  offset_seconds: number;
+  duration_seconds: number;
+  intent: string;
+  spoken_text_during: string;
+}
+
 interface Segment {
   id: number;
   section: string;
@@ -39,6 +47,7 @@ interface Segment {
   audio_sync: AudioSync;
   text_overlay: string;
   key_moment: string;
+  broll_cues?: BrollCue[];
 }
 
 interface HookScore {
@@ -103,6 +112,16 @@ RULES:
    - Emotional trigger word? (0-2)
    - Specific number/claim? (0-2)
 
+7. B-ROLL TIMING CUES (REQUIRED for each segment):
+   Identify 2-5 moments where a B-roll cutaway image would strengthen the argument.
+   Each cue marks when a supplementary image should appear on screen:
+   - shot_script_index: which 5s shot block (0, 1, or 2)
+   - offset_seconds: offset within the 15s segment (e.g., 1.5, 6.0, 11.5)
+   - duration_seconds: how long the B-roll stays on screen (2-3s)
+   - intent: what the B-roll should communicate (e.g., "show clinical evidence", "negative contrast")
+   - spoken_text_during: the exact script text being spoken while B-roll is on screen
+   Target: visual refresh every ~2-3 seconds. Place cues on claims, proof points, product mentions, emotional beats.
+
 OUTPUT FORMAT (valid JSON only, no markdown, no code fences):
 {
   "segments": [
@@ -122,6 +141,10 @@ OUTPUT FORMAT (valid JSON only, no markdown, no code fences):
         "shot_2_peak": { "word": "keyword at ~8s", "time": "~8s", "action": "hand on chest" },
         "shot_3_peak": { "word": "keyword at ~13s", "time": "~13s", "action": "lean + curious" }
       },
+      "broll_cues": [
+        { "shot_script_index": 0, "offset_seconds": 1.0, "duration_seconds": 2.5, "intent": "negative contrast — show cheap generic alternatives", "spoken_text_during": "the exact words being spoken" },
+        { "shot_script_index": 1, "offset_seconds": 5.5, "duration_seconds": 2.0, "intent": "transformation proof — subtle before/after", "spoken_text_during": "the exact words being spoken" }
+      ],
       "text_overlay": "short caption for screen",
       "key_moment": "description of peak moment"
     }
@@ -247,6 +270,7 @@ export class ScriptingAgent extends BaseAgent {
       audio_sync: seg.audio_sync,
       text_overlay: seg.text_overlay,
       product_visibility: PRODUCT_PLACEMENT_ARC[idx]?.visibility ?? 'none',
+      broll_cues: seg.broll_cues || [],
     }));
 
     const { error: sceneError } = await this.supabase
@@ -338,6 +362,15 @@ RULES:
    - Emotional trigger word? (0-2)
    - Specific number/claim? (0-2)
 
+7. B-ROLL TIMING CUES (REQUIRED for each segment):
+   Identify 2-5 moments where a B-roll cutaway image would strengthen the argument.
+   Each cue marks when a supplementary image should appear on screen:
+   - shot_script_index: which 5s shot block (0, 1, or 2)
+   - offset_seconds: offset within the 15s segment (e.g., 1.5, 6.0, 11.5)
+   - duration_seconds: how long the B-roll stays on screen (2-3s)
+   - intent: what the B-roll should communicate
+   - spoken_text_during: the exact script text being spoken while B-roll is on screen
+
 OUTPUT FORMAT (valid JSON only, no markdown, no code fences):
 {
   "segments": [
@@ -357,6 +390,9 @@ OUTPUT FORMAT (valid JSON only, no markdown, no code fences):
         "shot_2_peak": { "word": "keyword at ~8s", "time": "~8s", "action": "hand on chest" },
         "shot_3_peak": { "word": "keyword at ~13s", "time": "~13s", "action": "lean + curious" }
       },
+      "broll_cues": [
+        { "shot_script_index": 0, "offset_seconds": 1.0, "duration_seconds": 2.5, "intent": "negative contrast", "spoken_text_during": "exact words" }
+      ],
       "text_overlay": "short caption for screen",
       "key_moment": "description of peak moment"
     }
@@ -448,6 +484,7 @@ Split this script into 4 segments following the output format.`;
       audio_sync: seg.audio_sync,
       text_overlay: seg.text_overlay,
       product_visibility: PRODUCT_PLACEMENT_ARC[idx]?.visibility ?? 'none',
+      broll_cues: seg.broll_cues || [],
     }));
 
     const { error: sceneError } = await this.supabase

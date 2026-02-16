@@ -38,17 +38,32 @@ export async function POST(
       );
     }
 
-    // script_review -> influencer_selection (user picks influencer before casting)
+    // script_review -> broll_planning (B-roll planning runs before influencer selection)
     if (proj.status === 'script_review') {
+      await getPipelineQueue().add('broll_planning', {
+        projectId: id,
+        step: 'broll_planning',
+      });
+
+      return NextResponse.json({
+        message: 'Script approved. B-roll planning started.',
+        projectId: id,
+        previousStatus: 'script_review',
+        nextStep: 'broll_planning',
+      });
+    }
+
+    // broll_review -> influencer_selection (user picks influencer after B-roll review)
+    if (proj.status === 'broll_review') {
       await supabase
         .from('project')
         .update({ status: 'influencer_selection', updated_at: new Date().toISOString() })
         .eq('id', id);
 
       return NextResponse.json({
-        message: 'Script approved. Please select an influencer before casting.',
+        message: 'B-roll plan approved. Please select an influencer before casting.',
         projectId: id,
-        previousStatus: 'script_review',
+        previousStatus: 'broll_review',
         nextStep: 'influencer_selection',
       });
     }

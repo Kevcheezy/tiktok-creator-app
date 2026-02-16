@@ -125,11 +125,14 @@ export const PROJECT_STATUSES = [
   'analysis_review',
   'scripting',
   'script_review',
+  'broll_planning',
+  'broll_review',
   'influencer_selection',
   'casting',
   'casting_review',
   'directing',
   'voiceover',
+  'broll_generation',
   'asset_review',
   'editing',
   'completed',
@@ -144,22 +147,26 @@ export const VALID_STATUS_TRANSITIONS: Record<string, string[]> = {
   analyzing: ['analysis_review', 'failed'],
   analysis_review: ['scripting'],
   scripting: ['script_review', 'failed'],
-  script_review: ['influencer_selection'],
+  script_review: ['broll_planning'],
+  broll_planning: ['broll_review', 'failed'],
+  broll_review: ['influencer_selection'],
   influencer_selection: ['casting'],
   casting: ['casting_review', 'failed'],
   casting_review: ['directing'],
   directing: ['voiceover', 'failed'],
-  voiceover: ['asset_review', 'failed'],
+  voiceover: ['broll_generation', 'failed'],
+  broll_generation: ['asset_review', 'failed'],
   asset_review: ['editing'],
   editing: ['completed', 'failed'],
   completed: [],
-  failed: ['analyzing', 'scripting', 'casting', 'directing', 'voiceover', 'editing'], // retry from failed stage
+  failed: ['analyzing', 'scripting', 'broll_planning', 'casting', 'directing', 'voiceover', 'broll_generation', 'editing'],
 };
 
 // Statuses where the user can edit project settings (tone, character, influencer)
 export const REVIEW_GATE_STATUSES: ProjectStatus[] = [
   'analysis_review',
   'script_review',
+  'broll_review',
   'influencer_selection',
   'casting_review',
   'asset_review',
@@ -172,9 +179,11 @@ export const EDITABLE_PROJECT_FIELDS = ['tone', 'character_id', 'influencer_id',
 export const RESTART_STAGE_MAP: Record<string, { targetStatus: ProjectStatus; queueStep: string }> = {
   analysis: { targetStatus: 'created', queueStep: 'product_analysis' },
   scripting: { targetStatus: 'analysis_review', queueStep: 'scripting' },
-  casting: { targetStatus: 'script_review', queueStep: 'casting' },
+  broll_planning: { targetStatus: 'script_review', queueStep: 'broll_planning' },
+  casting: { targetStatus: 'broll_review', queueStep: 'casting' },
   directing: { targetStatus: 'casting_review', queueStep: 'directing' },
   voiceover: { targetStatus: 'casting_review', queueStep: 'voiceover' },
+  broll_generation: { targetStatus: 'asset_review', queueStep: 'broll_generation' },
   editing: { targetStatus: 'asset_review', queueStep: 'editing' },
 };
 
@@ -405,4 +414,329 @@ export const API_COSTS = {
   elevenLabsTts: 0.05,
   creatomateRender: 0.50,
   geminiVideoAnalysis: 0.02,
+  brollPlanning: 0.01, // 1 LLM call for B-roll shot list
 } as const;
+
+// ─── B-Roll Presets ─────────────────────────────────────────────────────────
+
+/**
+ * Calculate B-roll shot count per segment based on syllable density.
+ * Target: 1 insert every ~20 syllables (~3.5s of speech). Min 2, max 6.
+ */
+export function calculateBrollCount(syllableCount: number): number {
+  return Math.min(6, Math.max(2, Math.ceil(syllableCount / 20)));
+}
+
+/** B-roll category preset for a single product category */
+export interface BrollCategoryPreset {
+  description: string;
+  shotTemplate: string;
+  details: string[];
+  narrativeRole: string;
+}
+
+export interface BrollPreset {
+  categories: string[];
+  presets: Record<string, BrollCategoryPreset>;
+}
+
+/** Narrative arc: which B-roll categories map to which script sections */
+export const BROLL_NARRATIVE_ARC: Record<string, string[]> = {
+  Hook: ['social_proof', 'contrast', 'reaction'],
+  Problem: ['research', 'data', 'evidence', 'ingredients'],
+  'Solution + Product': ['transformation', 'results', 'before_after', 'action'],
+  CTA: ['lifestyle', 'product_hero', 'plating', 'setup'],
+};
+
+export const BROLL_PRESETS: Record<string, BrollPreset> = {
+  supplements: {
+    categories: ['transformation', 'research', 'lifestyle', 'social_proof'],
+    presets: {
+      transformation: {
+        description: 'Before/after comparisons showing subtle, believable improvements',
+        shotTemplate: 'Split-screen before/after comparison showing {detail}, natural indoor lighting, neutral background, no makeup or filter differences, photorealistic, 9:16 vertical',
+        details: ['face clarity', 'hair thickness', 'nail strength', 'skin tone evenness', 'under-eye brightness', 'hand smoothness'],
+        narrativeRole: 'Cumulative visual proof stacked throughout',
+      },
+      research: {
+        description: 'Academic papers and clinical studies on wooden desks',
+        shotTemplate: 'Photograph of printed academic paper on wooden desk, visible annotations, {detail}, reading glasses nearby, warm ambient lighting, photorealistic, 9:16 vertical',
+        details: ['highlighted paragraphs with yellow marker', 'pen circles around key data', 'sticky tabs on page edges', 'handwritten margin notes'],
+        narrativeRole: 'Validates problem/solution claims with scientific authority',
+      },
+      lifestyle: {
+        description: 'Product usage moments with casual home aesthetic',
+        shotTemplate: '{detail}, natural ring light, casual home kitchen/bathroom aesthetic, clean countertop, photorealistic, 9:16 vertical',
+        details: ['close-up of powder scoop being lifted from container', 'coffee pour with supplement being mixed in', 'hero product shot with morning light'],
+        narrativeRole: 'Anchors product in relatable daily routine',
+      },
+      social_proof: {
+        description: 'Negative contrast with cheap alternatives',
+        shotTemplate: '{detail}, harsh fluorescent lighting, photorealistic, 9:16 vertical',
+        details: ['generic supplement bottles crowded on pharmacy shelf', 'cluttered Amazon listing screenshots'],
+        narrativeRole: 'Creates negative contrast to elevate the featured product',
+      },
+    },
+  },
+  skincare: {
+    categories: ['transformation', 'texture', 'routine', 'ingredients'],
+    presets: {
+      transformation: {
+        description: 'Subtle skin improvement close-ups',
+        shotTemplate: 'Close-up of {detail}, soft natural lighting, clean background, photorealistic, 9:16 vertical',
+        details: ['clear smooth skin texture', 'dewy hydrated complexion', 'even skin tone', 'reduced pore visibility'],
+        narrativeRole: 'Visual proof of product efficacy',
+      },
+      texture: {
+        description: 'Product texture and consistency shots',
+        shotTemplate: '{detail}, macro photography, soft bokeh background, photorealistic, 9:16 vertical',
+        details: ['cream being squeezed onto fingertip', 'serum droplet on glass surface', 'product swatch on back of hand'],
+        narrativeRole: 'Sensory appeal — viewer imagines the texture',
+      },
+      routine: {
+        description: 'Skincare application moments',
+        shotTemplate: '{detail}, bathroom mirror, soft warm lighting, photorealistic, 9:16 vertical',
+        details: ['applying product to cheek with fingertips', 'gentle patting motion on forehead', 'product bottle on marble countertop'],
+        narrativeRole: 'Anchors product in daily self-care ritual',
+      },
+      ingredients: {
+        description: 'Hero ingredient visuals',
+        shotTemplate: '{detail}, clean white background, studio lighting, photorealistic, 9:16 vertical',
+        details: ['hyaluronic acid molecular structure graphic', 'vitamin C oranges and serum bottle', 'aloe vera plant with extract'],
+        narrativeRole: 'Scientific credibility through ingredient visualization',
+      },
+    },
+  },
+  fitness: {
+    categories: ['transformation', 'action', 'setup', 'results'],
+    presets: {
+      transformation: {
+        description: 'Fitness progress visuals',
+        shotTemplate: '{detail}, gym lighting, motivational atmosphere, photorealistic, 9:16 vertical',
+        details: ['before/after physique comparison', 'progress photos on phone screen', 'measurement tape showing results'],
+        narrativeRole: 'Visual proof of transformation',
+      },
+      action: {
+        description: 'Dynamic workout moments',
+        shotTemplate: '{detail}, gym environment, energetic lighting, photorealistic, 9:16 vertical',
+        details: ['mid-rep exercise with perfect form', 'sweat on equipment surface', 'hand gripping barbell'],
+        narrativeRole: 'Energy and effort visualization',
+      },
+      setup: {
+        description: 'Product prep and usage',
+        shotTemplate: '{detail}, kitchen or gym counter, clean aesthetic, photorealistic, 9:16 vertical',
+        details: ['protein shake being mixed in blender', 'pre-workout scoop with water bottle', 'supplement laid out next to gym bag'],
+        narrativeRole: 'Shows product in fitness context',
+      },
+      results: {
+        description: 'Achievement and data visuals',
+        shotTemplate: '{detail}, clean background, motivational feel, photorealistic, 9:16 vertical',
+        details: ['fitness app showing PR stats', 'stopwatch displaying time improvement', 'scale showing target weight'],
+        narrativeRole: 'Data-backed proof of results',
+      },
+    },
+  },
+  tech: {
+    categories: ['unboxing', 'comparison', 'setup', 'specs'],
+    presets: {
+      unboxing: {
+        description: 'Premium unboxing experience',
+        shotTemplate: '{detail}, clean desk, soft LED backlighting, photorealistic, 9:16 vertical',
+        details: ['product box being opened from top', 'lifting device from packaging', 'accessories laid out neatly'],
+        narrativeRole: 'Premium experience and build quality',
+      },
+      comparison: {
+        description: 'Side-by-side with competitors',
+        shotTemplate: '{detail}, neutral surface, even lighting, photorealistic, 9:16 vertical',
+        details: ['two devices side by side', 'screen quality comparison close-up', 'size comparison in hand'],
+        narrativeRole: 'Objective comparison validates superiority',
+      },
+      setup: {
+        description: 'Quick setup and first use',
+        shotTemplate: '{detail}, modern desk setup, ambient LED lighting, photorealistic, 9:16 vertical',
+        details: ['plugging in cable', 'first power on screen', 'app pairing on phone'],
+        narrativeRole: 'Shows ease of use',
+      },
+      specs: {
+        description: 'Technical specification highlights',
+        shotTemplate: '{detail}, dark background, spotlight on product, photorealistic, 9:16 vertical',
+        details: ['close-up of port array', 'chip or processor detail', 'material texture macro shot'],
+        narrativeRole: 'Technical credibility through detail',
+      },
+    },
+  },
+  kitchen: {
+    categories: ['cooking', 'before_after', 'ingredients', 'plating'],
+    presets: {
+      cooking: {
+        description: 'Cooking action shots',
+        shotTemplate: '{detail}, kitchen counter, warm cooking lighting, steam visible, photorealistic, 9:16 vertical',
+        details: ['sizzling in pan with product', 'stirring ingredients in bowl', 'product being used mid-recipe'],
+        narrativeRole: 'Product in action during cooking',
+      },
+      before_after: {
+        description: 'Kitchen transformation',
+        shotTemplate: '{detail}, kitchen environment, clear lighting, photorealistic, 9:16 vertical',
+        details: ['messy counter vs clean counter', 'raw ingredients vs finished dish', 'old method vs new method'],
+        narrativeRole: 'Visual proof of improvement',
+      },
+      ingredients: {
+        description: 'Fresh ingredient displays',
+        shotTemplate: '{detail}, wooden cutting board, overhead shot, natural light, photorealistic, 9:16 vertical',
+        details: ['fresh vegetables arranged neatly', 'spices in small bowls', 'raw ingredients ready for prep'],
+        narrativeRole: 'Freshness and quality association',
+      },
+      plating: {
+        description: 'Beautiful finished dishes',
+        shotTemplate: '{detail}, restaurant-quality plating, soft directional light, photorealistic, 9:16 vertical',
+        details: ['finished dish with garnish', 'overhead flat lay of complete meal', 'close-up of texture and color'],
+        narrativeRole: 'Aspirational result — what you could make',
+      },
+    },
+  },
+  fashion: {
+    categories: ['styling', 'detail', 'lifestyle', 'comparison'],
+    presets: {
+      styling: {
+        description: 'Outfit styling shots',
+        shotTemplate: '{detail}, boutique or bedroom mirror, natural light, photorealistic, 9:16 vertical',
+        details: ['full outfit mirror selfie', 'accessory pairing options', 'outfit transition before/after'],
+        narrativeRole: 'Shows versatility and style',
+      },
+      detail: {
+        description: 'Fabric and construction details',
+        shotTemplate: '{detail}, neutral background, macro photography, photorealistic, 9:16 vertical',
+        details: ['fabric texture close-up', 'stitching quality detail', 'hardware or zipper detail'],
+        narrativeRole: 'Quality proof through details',
+      },
+      lifestyle: {
+        description: 'Wearing in real life',
+        shotTemplate: '{detail}, urban or casual setting, golden hour lighting, photorealistic, 9:16 vertical',
+        details: ['walking down street in outfit', 'seated at cafe in outfit', 'casual pose in outfit'],
+        narrativeRole: 'Product in aspirational lifestyle context',
+      },
+      comparison: {
+        description: 'Price/quality comparison',
+        shotTemplate: '{detail}, side by side on neutral surface, even lighting, photorealistic, 9:16 vertical',
+        details: ['designer vs dupe side by side', 'tag showing price comparison', 'quality details compared'],
+        narrativeRole: 'Value proposition visualization',
+      },
+    },
+  },
+  home: {
+    categories: ['transformation', 'detail', 'lifestyle', 'space'],
+    presets: {
+      transformation: {
+        description: 'Room/space before and after',
+        shotTemplate: '{detail}, interior photography, natural light, photorealistic, 9:16 vertical',
+        details: ['room corner before vs after', 'shelf organization transformation', 'lighting change comparison'],
+        narrativeRole: 'Visual proof of home improvement',
+      },
+      detail: {
+        description: 'Product craftsmanship and features',
+        shotTemplate: '{detail}, styled vignette, soft lighting, photorealistic, 9:16 vertical',
+        details: ['material texture close-up', 'mechanism or feature in use', 'color and finish detail'],
+        narrativeRole: 'Quality and design appreciation',
+      },
+      lifestyle: {
+        description: 'Product in lived-in home',
+        shotTemplate: '{detail}, cozy home interior, warm ambient lighting, photorealistic, 9:16 vertical',
+        details: ['product on coffee table with book and mug', 'product in use during daily routine', 'product as room accent'],
+        narrativeRole: 'Aspirational home aesthetic',
+      },
+      space: {
+        description: 'Full room context shots',
+        shotTemplate: '{detail}, wide angle interior, natural window light, photorealistic, 9:16 vertical',
+        details: ['product in full room context', 'before empty space vs styled space', 'room overview with product as focal point'],
+        narrativeRole: 'Shows product impact on full space',
+      },
+    },
+  },
+  baby: {
+    categories: ['safety', 'usage', 'comparison', 'lifestyle'],
+    presets: {
+      safety: {
+        description: 'Safety feature highlights',
+        shotTemplate: '{detail}, nursery setting, soft warm lighting, photorealistic, 9:16 vertical',
+        details: ['safety certification close-up', 'locking mechanism demonstration', 'non-toxic material label'],
+        narrativeRole: 'Trust through safety verification',
+      },
+      usage: {
+        description: 'Product in use with baby',
+        shotTemplate: '{detail}, nursery or living room, warm gentle lighting, photorealistic, 9:16 vertical',
+        details: ['product being used comfortably', 'easy one-hand operation', 'quick setup demonstration'],
+        narrativeRole: 'Ease of use for busy parents',
+      },
+      comparison: {
+        description: 'Competitor comparison',
+        shotTemplate: '{detail}, neutral surface, even lighting, photorealistic, 9:16 vertical',
+        details: ['side by side with older version', 'feature comparison layout', 'size and portability comparison'],
+        narrativeRole: 'Objective improvement over alternatives',
+      },
+      lifestyle: {
+        description: 'Happy family moments',
+        shotTemplate: '{detail}, home setting, warm natural light, photorealistic, 9:16 vertical',
+        details: ['peaceful nursery scene', 'parent using product confidently', 'organized baby station'],
+        narrativeRole: 'Emotional aspiration — peaceful parenthood',
+      },
+    },
+  },
+  pet: {
+    categories: ['reaction', 'before_after', 'ingredients', 'lifestyle'],
+    presets: {
+      reaction: {
+        description: 'Pet positive reactions',
+        shotTemplate: '{detail}, home environment, natural lighting, photorealistic, 9:16 vertical',
+        details: ['excited pet approaching product', 'happy pet using product', 'pet relaxed after using product'],
+        narrativeRole: 'Authentic pet approval as social proof',
+      },
+      before_after: {
+        description: 'Pet health improvements',
+        shotTemplate: '{detail}, consistent background, even lighting, photorealistic, 9:16 vertical',
+        details: ['coat condition improvement', 'energy level comparison', 'dental health before/after'],
+        narrativeRole: 'Visible health improvement proof',
+      },
+      ingredients: {
+        description: 'Quality ingredient highlights',
+        shotTemplate: '{detail}, clean surface, studio lighting, photorealistic, 9:16 vertical',
+        details: ['premium ingredient close-up', 'nutrition label highlight', 'fresh natural ingredients'],
+        narrativeRole: 'Quality and safety assurance',
+      },
+      lifestyle: {
+        description: 'Pet and owner together',
+        shotTemplate: '{detail}, park or home, golden hour lighting, photorealistic, 9:16 vertical',
+        details: ['walk in park with product', 'feeding time with product', 'play session after using product'],
+        narrativeRole: 'Happy pet-owner bond aspiration',
+      },
+    },
+  },
+  finance: {
+    categories: ['data', 'comparison', 'lifestyle', 'results'],
+    presets: {
+      data: {
+        description: 'Financial data and charts',
+        shotTemplate: '{detail}, modern desk, screen or paper, professional lighting, photorealistic, 9:16 vertical',
+        details: ['growth chart on screen', 'spreadsheet with highlighted gains', 'financial dashboard overview'],
+        narrativeRole: 'Data-driven credibility',
+      },
+      comparison: {
+        description: 'Old way vs new way',
+        shotTemplate: '{detail}, split composition, clean background, photorealistic, 9:16 vertical',
+        details: ['traditional bank vs app interface', 'paper statements vs digital dashboard', 'fee comparison table'],
+        narrativeRole: 'Clear advantage over status quo',
+      },
+      lifestyle: {
+        description: 'Financial freedom moments',
+        shotTemplate: '{detail}, aspirational setting, warm lighting, photorealistic, 9:16 vertical',
+        details: ['relaxed person checking phone', 'coffee shop with laptop showing gains', 'travel scene funded by returns'],
+        narrativeRole: 'Aspirational outcome visualization',
+      },
+      results: {
+        description: 'Achievement screenshots',
+        shotTemplate: '{detail}, phone or laptop screen, clean background, photorealistic, 9:16 vertical',
+        details: ['portfolio growth notification', 'savings milestone reached', 'positive balance statement'],
+        narrativeRole: 'Proof of financial results',
+      },
+    },
+  },
+};

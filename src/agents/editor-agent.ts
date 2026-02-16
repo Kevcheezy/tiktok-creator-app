@@ -27,6 +27,16 @@ export class EditorAgent extends BaseAgent {
     if (error) throw new Error(`Failed to fetch assets: ${error.message}`);
     if (!assets || assets.length === 0) throw new Error('No completed assets found');
 
+    // 1b. Fetch completed B-roll shots with timing metadata
+    const { data: brollShots } = await this.supabase
+      .from('broll_shot')
+      .select('*')
+      .eq('project_id', projectId)
+      .eq('status', 'completed')
+      .not('image_url', 'is', null)
+      .order('segment_index')
+      .order('shot_index');
+
     // 2. Build modifications map for Creatomate template
     const modifications: Record<string, string> = {};
     const textOverlays = new Map<number, string>();
@@ -53,6 +63,16 @@ export class EditorAgent extends BaseAgent {
     // Add text overlay modifications for each segment
     for (const [segIdx, text] of textOverlays) {
       modifications[`Text-${segIdx + 1}`] = text;
+    }
+
+    // Add B-roll image modifications (Broll-{segment}-{shot} slots)
+    if (brollShots && brollShots.length > 0) {
+      for (const shot of brollShots) {
+        if (shot.image_url) {
+          modifications[`Broll-${shot.segment_index + 1}-${shot.shot_index + 1}`] = shot.image_url;
+        }
+      }
+      this.log(`Added ${brollShots.length} B-roll images to template modifications`);
     }
 
     this.log(`Template modifications: ${JSON.stringify(Object.keys(modifications))}`);
