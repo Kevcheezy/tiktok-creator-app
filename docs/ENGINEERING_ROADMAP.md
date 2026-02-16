@@ -221,10 +221,10 @@ These are blocking items. Nothing else matters until a user can go from product 
 - [x] "Edited" badge on overridden fields, "Reset to original" per-field action via OverrideBadge component
 - [x] Create project form: product selector dropdown (shows analyzed products, skips analysis) + new URL input (hidden when product selected)
 
-#### R1.7 - B-Roll Agent
+#### ~~R1.7 - B-Roll Agent~~ DONE
 **Priority:** P0 - Critical
 **Effort:** Medium-Large
-**Status:** Backend complete, frontend storyboard wired (2026-02-15). Ken Burns effect remaining.
+**Status:** ~~DONE~~ (2026-02-15). All phases complete: planning, generation, storyboard UI, EditorAgent compositing with Ken Burns.
 **Depends on:** R1.1 (pipeline must handle casting/directing/voiceover before B-roll generation phase runs)
 **Spec:** `docs/plans/2026-02-15-r1.7-broll-agent-design.md`
 **Why:** High-performing TikTok Shop content uses B-roll inserts (cutaway images) to maintain viewer attention and validate claims. Without B-roll, videos are a single visual layer — flat and monotonous. B-roll is a visual argument that reinforces the script's persuasion structure. The agent operates in two phases: planning (at script review) and generation (after directing).
@@ -264,7 +264,7 @@ These are blocking items. Nothing else matters until a user can go from product 
 **EditorAgent integration:**
 - [x] EditorAgent reads broll_cues (timestamps) + broll_shot records (images)
 - [x] Composites B-roll as cutaway overlays at exact offset_seconds with duration_seconds
-- [ ] Applies Ken Burns effect (zoom/pan) for motion on still images (requires Creatomate template update)
+- [x] Applies Ken Burns effect (zoom/pan) for motion on still images — EditorAgent builds Creatomate keyframe animations (x_scale, y_scale, x, y) from KEN_BURNS_PRESETS, cycling zoom_in/zoom_out/pan_left/pan_right per shot
 
 **Cost:** ~$0.85-1.13 per video (planning LLM: $0.01 + 12-16 images: $0.84-1.12). Total per video: ~$6.43-6.71.
 
@@ -598,7 +598,7 @@ DONE       Tier 0: Critical Bugs (B0.1-B0.11)
 DONE       Tier 1: Core Pipeline (R1.1, R1.2, R1.4, R1.5, R1.6)
            ▲ Full end-to-end pipeline functional: URL → analysis → script → casting → directing → voiceover → editing → finished video
 
-NOW        R1.7 B-Roll Agent
+DONE       R1.7 B-Roll Agent
            ScriptingAgent cues → B-Roll planning → Storyboard review → B-Roll generation → EditorAgent compositing
            (timestamps in script)  (LLM shot list)  (user edits/approves)  (Nano Banana Pro)   (Ken Burns overlay)
            ▲ Two-phase: plan at script review, generate after directing. ~$0.85-1.13 added cost per video.

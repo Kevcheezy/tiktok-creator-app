@@ -865,3 +865,51 @@ export const DOWNSTREAM_IMPACT_MAP: Record<string, Record<string, {
     text_overlay: { type: 'safe', affectedStages: [], description: 'Applied at render time' },
   },
 };
+
+/**
+ * Ken Burns effect presets for B-roll still images.
+ * Each preset defines start/end values for x_scale, y_scale, x, y
+ * that animate over the shot's duration to create motion.
+ */
+export type KenBurnsDirection = 'zoom_in' | 'zoom_out' | 'pan_left' | 'pan_right';
+
+export interface KenBurnsPreset {
+  x_scale: { start: string; end: string };
+  y_scale: { start: string; end: string };
+  x: { start: string; end: string };
+  y: { start: string; end: string };
+}
+
+export const KEN_BURNS_PRESETS: Record<KenBurnsDirection, KenBurnsPreset> = {
+  zoom_in: {
+    x_scale: { start: '100%', end: '118%' },
+    y_scale: { start: '100%', end: '118%' },
+    x: { start: '50%', end: '50%' },
+    y: { start: '50%', end: '48%' },
+  },
+  zoom_out: {
+    x_scale: { start: '118%', end: '100%' },
+    y_scale: { start: '118%', end: '100%' },
+    x: { start: '50%', end: '50%' },
+    y: { start: '48%', end: '50%' },
+  },
+  pan_left: {
+    x_scale: { start: '115%', end: '115%' },
+    y_scale: { start: '115%', end: '115%' },
+    x: { start: '55%', end: '45%' },
+    y: { start: '50%', end: '50%' },
+  },
+  pan_right: {
+    x_scale: { start: '115%', end: '115%' },
+    y_scale: { start: '115%', end: '115%' },
+    x: { start: '45%', end: '55%' },
+    y: { start: '50%', end: '50%' },
+  },
+};
+
+const KEN_BURNS_DIRECTIONS: KenBurnsDirection[] = ['zoom_in', 'zoom_out', 'pan_left', 'pan_right'];
+
+/** Pick a Ken Burns direction for a B-roll shot, cycling through directions to avoid repetition. */
+export function pickKenBurnsDirection(shotIndex: number): KenBurnsDirection {
+  return KEN_BURNS_DIRECTIONS[shotIndex % KEN_BURNS_DIRECTIONS.length];
+}

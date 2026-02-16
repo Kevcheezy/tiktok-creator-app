@@ -1,7 +1,15 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { BaseAgent } from './base-agent';
 import { CreatomateClient } from '@/lib/api-clients/creatomate';
-import { CREATOMATE_TEMPLATE_ID, API_COSTS, RESOLUTION } from '@/lib/constants';
+import {
+  CREATOMATE_TEMPLATE_ID,
+  API_COSTS,
+  RESOLUTION,
+  KEN_BURNS_PRESETS,
+  pickKenBurnsDirection,
+  type KenBurnsDirection,
+} from '@/lib/constants';
+import type { ModificationValue } from '@/lib/api-clients/creatomate';
 
 export class EditorAgent extends BaseAgent {
   private creatomate: CreatomateClient;
@@ -38,7 +46,7 @@ export class EditorAgent extends BaseAgent {
       .order('shot_index');
 
     // 2. Build modifications map for Creatomate template
-    const modifications: Record<string, string> = {};
+    const modifications: Record<string, ModificationValue> = {};
     const textOverlays = new Map<number, string>();
 
     for (const asset of assets) {
@@ -65,14 +73,36 @@ export class EditorAgent extends BaseAgent {
       modifications[`Text-${segIdx + 1}`] = text;
     }
 
-    // Add B-roll image modifications (Broll-{segment}-{shot} slots)
+    // Add B-roll image modifications with Ken Burns zoom/pan effect
     if (brollShots && brollShots.length > 0) {
       for (const shot of brollShots) {
         if (shot.image_url) {
-          modifications[`Broll-${shot.segment_index + 1}-${shot.shot_index + 1}`] = shot.image_url;
+          const slotKey = `Broll-${shot.segment_index + 1}-${shot.shot_index + 1}`;
+          const direction = pickKenBurnsDirection(shot.shot_index);
+          const preset = KEN_BURNS_PRESETS[direction];
+
+          modifications[slotKey] = {
+            source: shot.image_url,
+            x_scale: [
+              { value: preset.x_scale.start, time: 0 },
+              { value: preset.x_scale.end, time: 'end' },
+            ],
+            y_scale: [
+              { value: preset.y_scale.start, time: 0 },
+              { value: preset.y_scale.end, time: 'end' },
+            ],
+            x: [
+              { value: preset.x.start, time: 0 },
+              { value: preset.x.end, time: 'end' },
+            ],
+            y: [
+              { value: preset.y.start, time: 0 },
+              { value: preset.y.end, time: 'end' },
+            ],
+          };
         }
       }
-      this.log(`Added ${brollShots.length} B-roll images to template modifications`);
+      this.log(`Added ${brollShots.length} B-roll images with Ken Burns effect to template modifications`);
     }
 
     this.log(`Template modifications: ${JSON.stringify(Object.keys(modifications))}`);

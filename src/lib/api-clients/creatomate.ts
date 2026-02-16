@@ -3,9 +3,11 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 const logger = createLogger({ agentName: 'CreatomateClient' });
 
+export type ModificationValue = string | Record<string, unknown>;
+
 export interface RenderOptions {
   templateId: string;
-  modifications: Record<string, string>;
+  modifications: Record<string, ModificationValue>;
   maxWidth?: number;
   maxHeight?: number;
 }

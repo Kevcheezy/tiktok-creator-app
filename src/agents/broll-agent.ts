@@ -6,6 +6,7 @@ import {
   BROLL_PRESETS,
   BROLL_NARRATIVE_ARC,
   calculateBrollCount,
+  pickKenBurnsDirection,
   type BrollPreset,
 } from '@/lib/constants';
 
@@ -249,6 +250,7 @@ export class BRollAgent extends BaseAgent {
               category: shot.category,
               timing_seconds: shot.timing_seconds,
               duration_seconds: shot.duration_seconds,
+              ken_burns_direction: pickKenBurnsDirection(shot.shot_index),
             },
           })
           .select()
