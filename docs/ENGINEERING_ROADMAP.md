@@ -289,7 +289,7 @@ Influencer `<select>` options displayed the entire `persona` field (full appeara
 - [x] Add 30s timeout to individual `pollResult()` fetch calls (retries on timeout instead of hanging)
 
 #### B0.26 - EditorAgent Has No Retry Logic (Single Failure Kills $5+ of Work)
-**Severity:** Medium (transient Creatomate errors waste all prior API spend)
+**Severity:** High (elevated from Medium — final stage failure wastes $5-7 of prior API spend)
 **Scope:** Backend
 **Why:** DirectorAgent retries each segment 2x with 10s delay. VoiceoverAgent has per-segment try/catch. EditorAgent has zero retry logic — if the Creatomate render API returns an error or times out (5min), the entire editing stage fails immediately. This is the final stage where all previous investment ($5+ in API calls) is at stake. A transient Creatomate error wastes all that work and forces the user to manually retry from the UI.
 
@@ -297,6 +297,40 @@ Influencer `<select>` options displayed the entire `persona` field (full appeara
 - [ ] Add retry loop in EditorAgent: 2 retries with 15s exponential backoff before failing
 - [ ] Log each retry attempt to `generation_log` (event_type: `render_retry`, detail: `{ attempt, error, delayMs }`)
 - [ ] On final failure, include retry count in error message so debugger knows retries were exhausted
+
+#### B0.27 - DirectorAgent Double-Charges Cost on Retry ($2.40/segment waste)
+**Severity:** Critical (direct money waste — each retried segment charges 2-3x)
+**Scope:** Backend
+**Discovered:** 2026-02-16 (bug bash)
+**Why:** `director-agent.ts` calls `trackCost(projectId, vm.cost_per_segment)` inside the retry loop. When a segment fails and retries, cost is tracked again on success — so a segment that took 2 attempts charges $2.40 instead of $1.20. With 4 segments and retries, a single video can overcharge by $4.80+. The cost should only be tracked once per successful asset, not per attempt.
+
+**Fix checklist:**
+- [ ] Move `trackCost()` call outside the retry loop — only track on the final successful generation
+- [ ] Add guard: check if cost was already tracked for this segment before calling `trackCost()`
+- [ ] Audit BRollAgent for the same pattern (confirmed: LLM cost tracked even on parse failure, then re-tracked on retry success)
+- [ ] BRollAgent: move LLM cost tracking to after successful JSON parse, not before
+
+#### B0.28 - B-Roll Stages Missing from Rollback Map (Recovery Blocked)
+**Severity:** High (users stuck on failed B-roll with no rollback path)
+**Scope:** Backend
+**Discovered:** 2026-02-16 (bug bash)
+**Why:** `src/app/api/projects/[id]/rollback/route.ts` has a `rollbackMap` that maps each stage to its previous review gate. `broll_planning` and `broll_generation` are both missing from this map. If either B-roll stage fails, the "Roll Back" button in the UI calls the rollback endpoint, which returns an error because it can't find the stage in the map. The user is stuck with no recovery path except manual DB intervention.
+
+**Fix checklist:**
+- [ ] Add `broll_planning: 'script_review'` to `rollbackMap` (rolls back to script review)
+- [ ] Add `broll_generation: 'broll_review'` to `rollbackMap` (rolls back to B-roll storyboard review)
+- [ ] Verify retry endpoint already has both stages in `stepToJob` (confirmed: it does)
+
+#### B0.29 - Select-Influencer Race Condition Enqueues Duplicate Casting Jobs
+**Severity:** Medium (wastes $0.56+ per duplicate — CastingAgent cleans up assets but API budget is spent)
+**Scope:** Backend
+**Discovered:** 2026-02-16 (bug bash)
+**Why:** `POST /api/projects/[id]/select-influencer` has no idempotency guard. B0.15 fixed the status update so it always sets `status: 'casting'` on first click, but there's still a window: if two requests arrive before the first DB update completes, both pass the status check, both update the project, and both enqueue casting jobs. CastingAgent does delete old keyframe assets before generating (B0.15 fix), so the second job's cleanup + regeneration isn't catastrophic — but it wastes $0.56 in WaveSpeed API calls and confuses the progress UI.
+
+**Fix checklist:**
+- [ ] Add optimistic locking: `select-influencer` route should include `status` in the UPDATE's WHERE clause (e.g., `WHERE id = ? AND status = 'influencer_selection'`) — second request fails because status already changed to `casting`
+- [ ] Return 409 Conflict if the conditional update matches 0 rows
+- [ ] Frontend: disable the button after first click (defense in depth — backend guard is primary)
 
 ---
 
@@ -814,6 +848,28 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 
 **Cost:** ~$0.01 per voice design (one-time per influencer). TTS cost unchanged ($0.20/video).
 
+#### R1.5.24 - ElevenLabs Voice ID Reference (Replace Voice Design API)
+**Priority:** P0 - Critical
+**Effort:** Small
+**Depends on:** R1.5.20 ✅ (replaces its Voice Design API integration)
+**Why:** The ElevenLabs Voice Design API is failing in production ("Voice design failed. Please try again."). Rather than debugging a complex 3-step flow (preset → design → approve) that rebuilds what ElevenLabs already provides, simplify to: user designs voice in ElevenLabs' own dashboard (better iteration, previewing, fine-tuning), then pastes the Voice ID into our app. Eliminates the `voice_preset` table, 3 voice API routes, and the 590-line VoiceSection component.
+
+**Backend:**
+- [ ] `POST /api/influencers/[id]/voice/link` — accepts `{ voiceId: string }`, calls ElevenLabs `GET /v1/voices/{voiceId}` to validate + fetch metadata (name, description, preview_url, labels), saves `voice_id`, `voice_description`, `voice_preview_url` to influencer record
+- [ ] `DELETE /api/influencers/[id]/voice` — keep existing (clears voice fields)
+- [ ] Remove dead routes: `POST /api/influencers/[id]/voice/design`, `POST /api/influencers/[id]/voice/approve`
+- [ ] Remove dead routes: `GET /api/voice-presets`, `POST /api/voice-presets`, `DELETE /api/voice-presets/[id]`
+- [ ] Drop `voice_preset` table + remove `voice_preset_id` FK from `influencer` (migration)
+- [ ] VoiceoverAgent: no changes needed (already reads `influencer.voice_id` directly)
+
+**Frontend:**
+- [ ] Replace VoiceSection in `influencer-detail.tsx`: remove preset grid + Design Voice flow. New UI: Voice ID text input + "Link Voice" button. On success, show voice name, description, and audio preview (fetched from ElevenLabs metadata)
+- [ ] Influencer detail: approved state shows voice name, description text, and audio preview player (kept from current State C)
+- [ ] Influencer list cards: keep existing voice badge + play preview (no changes needed)
+- [ ] Influencer selection gate: keep existing `hasVoice=true` filter (no changes needed)
+
+**Cost:** $0 (no Voice Design API calls). TTS cost unchanged ($0.20/video).
+
 #### R1.5.21 - Parallel Directing + Voiceover Pipeline
 **Priority:** P1 - Medium
 **Effort:** Small-Medium
@@ -878,6 +934,25 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [ ] Old assets marked 'superseded' (not deleted) during cascade
 
 **Cost savings:** Editing 1 of 4 segments: ~$1.60 instead of ~$6.20 (74% savings).
+
+#### R1.5.25 - Asset Download for All Generated Media
+**Priority:** P0 - Critical
+**Effort:** Small
+**Depends on:** None (all assets already stored in Supabase Storage with public URLs)
+**Why:** Users can only download the final composed video. Individual assets — keyframe images, per-segment video clips, voiceover audio, B-roll images — have no download option. Creators need these raw assets for repurposing: thumbnails from keyframes, audio clips for other platforms, B-roll for manual editing, individual video segments for testing. Every generated asset should have a visible download button.
+
+**Frontend:**
+- [ ] Download icon button on each keyframe image in casting review (start + end per segment)
+- [ ] Download icon button on each video segment in directing review
+- [ ] Download icon button on each voiceover audio clip in voiceover review
+- [ ] Download icon button on each B-roll image in storyboard view
+- [ ] Download icon button on final composed video (already exists — verify working)
+- [ ] "Download All" button per stage: downloads all assets for that stage as individual files
+- [ ] Descriptive filenames: `PROJECT-{N}_keyframe-seg{X}-start.png`, `PROJECT-{N}_video-seg{X}.mp4`, `PROJECT-{N}_voice-seg{X}.mp3`, `PROJECT-{N}_broll-seg{X}-shot{Y}.png`
+
+**Backend:**
+- [ ] No API changes needed — assets already have public URLs via Supabase Storage
+- [ ] If any assets use signed/expiring URLs, add `GET /api/projects/[id]/assets/[assetId]/download` for fresh download URL
 
 ---
 
@@ -1113,10 +1188,12 @@ POLISH     Tier 1.5: UX Hardening
            R1.5.15 Project sequential numbering (PROJECT-N)
            R1.5.16 Video Model Selection & Pipeline Abstraction (backend done, frontend selector + 2 agents remaining)
            R1.5.19 Structured Prompt Schema ✅ DONE (depends on R1.5.16 — uses model-specific negative prompts)
-           R1.5.20 Influencer Voice Design System (no deps — voice as first-class influencer attribute, mute Kling audio)
+           R1.5.20 Influencer Voice Design System ✅ DONE (voice as first-class influencer attribute, mute Kling audio)
+           R1.5.24 ElevenLabs Voice ID Reference (replaces R1.5.20 Voice Design API — paste Voice ID instead of in-app design)
            R1.5.21 Parallel Directing + Voiceover (~5 min savings per run, no deps)
            R1.5.22 B-Roll Timing in EditorAgent (depends on Creatomate template work)
            R1.5.23 Smart Cascade Editing — per-segment regeneration after script edits (depends on R1.5.8 ✅)
+           R1.5.25 Asset Download for All Generated Media (no deps, frontend-only)
 
 NEXT       Tier 2: Quality & Conversion
            R2.0 Performance Tracking ✅ DONE (backend) ──→ R2.4 Product Images ✅ DONE (backend) ──→ R2.3 Avatar Consistency ──→ R2.1 Hook Testing ──→ R2.2 Trends
