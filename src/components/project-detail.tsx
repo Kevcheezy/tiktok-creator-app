@@ -12,6 +12,9 @@ import { ConfirmDialog } from './confirm-dialog';
 import { StageProgress } from './stage-progress';
 import { ToneSelector } from './tone-selector';
 import { SCRIPT_TONES } from '@/lib/constants';
+import { BattleHUD } from './battle-hud';
+import { CommandMenu } from './command-menu';
+import { GilDisplay } from './gil-display';
 
 interface ProjectData {
   id: string;
@@ -191,6 +194,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   const data = project.product_data;
 
   return (
+    <BattleHUD status={project.status} costUsd={project.cost_usd} failedAtStatus={project.failed_at_status}>
     <div className="animate-fade-in-up space-y-8">
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
@@ -315,28 +319,17 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
               </p>
             )}
             <div className="ml-auto">
-              <button
-                type="button"
-                onClick={handleApproveAnalysis}
-                disabled={approving || (!project.product_image_url && !data.product_image_url)}
-                className="inline-flex items-center gap-2 rounded-lg bg-lime px-6 py-3 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:shadow-[0_0_32px_rgba(184,255,0,0.25)] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {approving ? (
-                  <>
-                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="60" strokeDashoffset="15" strokeLinecap="round" />
-                    </svg>
-                    Approving...
-                  </>
-                ) : (
-                  <>
-                    <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="3.5 8 6.5 11 12.5 5" />
-                    </svg>
-                    Approve &amp; Generate Script
-                  </>
-                )}
-              </button>
+              <CommandMenu
+                actions={[
+                  {
+                    label: 'Fight — Generate Script',
+                    onClick: handleApproveAnalysis,
+                    disabled: !project.product_image_url && !data.product_image_url,
+                    loading: approving,
+                    variant: 'primary',
+                  },
+                ]}
+              />
             </div>
           </div>
         </>
@@ -404,8 +397,8 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       {/* Completed - Final Review */}
       {project.status === 'completed' && (
         <div className="space-y-6">
-          <h2 className="font-[family-name:var(--font-display)] text-xl font-bold text-text-primary">
-            Final Video
+          <h2 className="animate-victory-fanfare font-[family-name:var(--font-display)] text-2xl font-bold text-lime">
+            VICTORY
           </h2>
 
           {finalVideoUrl ? (
@@ -549,8 +542,8 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
                 <dd className="text-text-primary">{project.product_category || '\u2014'}</dd>
               </div>
               <div>
-                <dt className="text-text-muted">Total Cost</dt>
-                <dd className="text-electric font-medium">${parseFloat(project.cost_usd || '0').toFixed(2)}</dd>
+                <dt className="text-text-muted">Total Gil</dt>
+                <dd className="font-medium"><GilDisplay amount={project.cost_usd} /></dd>
               </div>
             </dl>
           </div>
@@ -566,6 +559,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
         loading={deleting}
       />
     </div>
+    </BattleHUD>
   );
 }
 
@@ -1452,70 +1446,38 @@ function FailedRecovery({ projectId, errorMessage, failedAtStatus, onRecovered }
   return (
     <div className="rounded-xl border border-magenta/30 bg-magenta/5 p-5">
       <div className="flex items-start gap-3">
-        <svg
-          viewBox="0 0 20 20"
-          className="mt-0.5 h-5 w-5 flex-shrink-0 text-magenta"
-          fill="currentColor"
-        >
-          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+        <svg viewBox="0 0 12 12" className="mt-0.5 h-5 w-5 flex-shrink-0 text-magenta" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+          <line x1="3" y1="3" x2="9" y2="9" />
+          <line x1="9" y1="3" x2="3" y2="9" />
         </svg>
         <div className="flex-1">
           <h3 className="font-[family-name:var(--font-display)] text-sm font-semibold text-magenta">
-            Pipeline Failed{failedAtStatus ? ` at ${stageLabel}` : ''}
+            KO{failedAtStatus ? ` at ${stageLabel}` : ''}
           </h3>
           {errorMessage && (
             <p className="mt-1 text-sm text-text-secondary">{errorMessage}</p>
           )}
 
           {failedAtStatus && (
-            <div className="mt-4 flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={handleRetry}
-                disabled={retrying || rollingBack}
-                className="inline-flex items-center gap-2 rounded-lg bg-electric px-4 py-2 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:shadow-[0_0_24px_rgba(0,240,255,0.3)] disabled:opacity-50"
-              >
-                {retrying ? (
-                  <>
-                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="60" strokeDashoffset="15" strokeLinecap="round" />
-                    </svg>
-                    Retrying...
-                  </>
-                ) : (
-                  <>
-                    <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M1 2v5h5" />
-                      <path d="M3.5 10a5 5 0 109-2.3" />
-                    </svg>
-                    Retry {stageLabel}
-                  </>
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={handleRollback}
-                disabled={retrying || rollingBack}
-                className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 font-[family-name:var(--font-display)] text-sm font-medium text-text-secondary transition-colors hover:border-electric/30 hover:text-electric disabled:opacity-50"
-              >
-                {rollingBack ? (
-                  <>
-                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="60" strokeDashoffset="15" strokeLinecap="round" />
-                    </svg>
-                    Rolling back...
-                  </>
-                ) : (
-                  <>
-                    <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M15 2v5h-5" />
-                      <path d="M12.5 10a5 5 0 11-9-2.3" />
-                    </svg>
-                    Back to {rollbackLabel}
-                  </>
-                )}
-              </button>
+            <div className="mt-4">
+              <CommandMenu
+                actions={[
+                  {
+                    label: `Retry ${stageLabel}`,
+                    onClick: handleRetry,
+                    disabled: retrying || rollingBack,
+                    loading: retrying,
+                    variant: 'primary',
+                  },
+                  {
+                    label: `Back to ${rollbackLabel}`,
+                    onClick: handleRollback,
+                    disabled: retrying || rollingBack,
+                    loading: rollingBack,
+                    variant: 'secondary',
+                  },
+                ]}
+              />
             </div>
           )}
         </div>
