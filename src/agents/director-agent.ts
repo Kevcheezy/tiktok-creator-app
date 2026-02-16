@@ -1,6 +1,8 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { BaseAgent } from './base-agent';
 import { API_COSTS } from '@/lib/constants';
+import { StructuredPrompt, STRUCTURED_PROMPT_SCHEMA_DESCRIPTION, isStructuredPrompt, resolveNegativePrompt } from '@/lib/prompt-schema';
+import { serializeForVideo } from '@/lib/prompt-serializer';
 
 export class DirectorAgent extends BaseAgent {
   constructor(supabaseClient?: SupabaseClient) {
@@ -40,6 +42,15 @@ export class DirectorAgent extends BaseAgent {
       }
     }
 
+    // 2b. Fetch project for negative prompt override
+    const { data: project } = await this.supabase
+      .from('project')
+      .select('negative_prompt_override')
+      .eq('id', projectId)
+      .single();
+
+    const negativePrompt = resolveNegativePrompt(project, 'directing');
+
     // 3. For each segment, generate video from start+end keyframes
     for (let segIdx = 0; segIdx < vm.segment_count; segIdx++) {
       const scene = latestScenes.get(segIdx);
@@ -72,22 +83,60 @@ export class DirectorAgent extends BaseAgent {
         continue;
       }
 
-      // Build multi_prompt from shot_scripts
-      const shotScripts = scene.shot_scripts as { index: number; text: string; energy: string }[] | null;
+      // Check if scene has structured visual_prompt (from CastingAgent R1.5.19)
+      const visualPrompt = scene.visual_prompt as { start: unknown; end: unknown } | null;
+      const hasStructuredPrompt = visualPrompt && isStructuredPrompt(visualPrompt.start);
+
+      let mainPrompt: string;
+      let multiPrompt: Array<{ prompt: string; duration: string }>;
+      let effectiveNegativePrompt: string;
       const shotDuration = String(vm.shot_duration);
-      const multiPrompt = (shotScripts || []).map((shot: { index: number; text: string; energy: string }) => ({
-        prompt: `${shot.text}. Energy: ${shot.energy}. Camera follows subject naturally.`,
-        duration: shotDuration,
-      }));
 
-      // Build main prompt from scene context
-      const mainPrompt = [
-        scene.script_text ? `Scene: ${scene.script_text.substring(0, 200)}` : '',
-        scene.section ? `Section: ${scene.section}` : '',
-        `Natural movement, professional lighting, TikTok style video, ${vm.aspect_ratio} portrait`,
-      ].filter(Boolean).join('. ');
+      if (hasStructuredPrompt) {
+        // R1.5.19: Use LLM to generate a StructuredPrompt for video, then serialize
+        this.log(`Segment ${segIdx}: generating video StructuredPrompt via LLM`);
+        try {
+          const videoPrompt = await this.generateVideoPrompt(scene, segIdx, negativePrompt);
+          await this.trackCost(projectId, API_COSTS.wavespeedChat);
 
-      const negativePrompt = 'watermark, text overlay, blurry, distorted, flickering, low quality, static, frozen';
+          if (isStructuredPrompt(videoPrompt)) {
+            const serialized = serializeForVideo(videoPrompt, shotDuration);
+            mainPrompt = serialized.prompt;
+            multiPrompt = vm.supports_multi_prompt ? serialized.multiPrompt : [];
+            effectiveNegativePrompt = serialized.negativePrompt;
+          } else {
+            // LLM returned something unexpected — fall through to legacy
+            throw new Error('LLM did not return valid StructuredPrompt');
+          }
+        } catch (llmError) {
+          this.log(`Video StructuredPrompt LLM failed, falling back to legacy: ${llmError instanceof Error ? llmError.message : String(llmError)}`);
+          // Fallback to legacy string concatenation
+          const shotScripts = scene.shot_scripts as { index: number; text: string; energy: string }[] | null;
+          multiPrompt = (shotScripts || []).map((shot: { index: number; text: string; energy: string }) => ({
+            prompt: `${shot.text}. Energy: ${shot.energy}. Camera follows subject naturally.`,
+            duration: shotDuration,
+          }));
+          mainPrompt = [
+            scene.script_text ? `Scene: ${scene.script_text.substring(0, 200)}` : '',
+            scene.section ? `Section: ${scene.section}` : '',
+            `Natural movement, professional lighting, TikTok style video, ${vm.aspect_ratio} portrait`,
+          ].filter(Boolean).join('. ');
+          effectiveNegativePrompt = negativePrompt;
+        }
+      } else {
+        // Legacy path: no structured prompt available
+        const shotScripts = scene.shot_scripts as { index: number; text: string; energy: string }[] | null;
+        multiPrompt = (shotScripts || []).map((shot: { index: number; text: string; energy: string }) => ({
+          prompt: `${shot.text}. Energy: ${shot.energy}. Camera follows subject naturally.`,
+          duration: shotDuration,
+        }));
+        mainPrompt = [
+          scene.script_text ? `Scene: ${scene.script_text.substring(0, 200)}` : '',
+          scene.section ? `Section: ${scene.section}` : '',
+          `Natural movement, professional lighting, TikTok style video, ${vm.aspect_ratio} portrait`,
+        ].filter(Boolean).join('. ');
+        effectiveNegativePrompt = negativePrompt;
+      }
 
       // Generate video with retry logic
       const maxRetries = 2;
@@ -106,7 +155,7 @@ export class DirectorAgent extends BaseAgent {
             image: startKeyframe.url,
             tailImage: vm.supports_tail_image ? endKeyframe?.url : undefined,
             prompt: mainPrompt,
-            negativePrompt,
+            negativePrompt: effectiveNegativePrompt,
             multiPrompt: vm.supports_multi_prompt ? multiPrompt : [],
             duration: vm.segment_duration,
             cfgScale: 0.5,
@@ -157,5 +206,52 @@ export class DirectorAgent extends BaseAgent {
     const durationMs = Date.now() - stageStart;
     await this.logEvent(projectId, 'stage_complete', 'directing', { durationMs });
     this.log(`Directing complete for project ${projectId}`);
+  }
+
+  /**
+   * Uses LLM to generate a StructuredPrompt for video generation.
+   * Replaces generic string concatenation with scene-aware, energy-arc-driven prompts.
+   */
+  private async generateVideoPrompt(
+    scene: any,
+    segIdx: number,
+    negativePrompt: string,
+  ): Promise<StructuredPrompt> {
+    const vm = this.videoModel;
+    const energyArc = vm.energy_arc[segIdx];
+    const shotScripts = scene.shot_scripts as { index: number; text: string; energy: string }[] | null;
+    const cameraSpecs = scene.camera_specs as { angle?: string; movement?: string; lighting?: string } | null;
+
+    const systemPrompt = `You are a video prompt engineer for Kling 3.0 Pro video generation.
+Generate a StructuredPrompt JSON for a ${vm.segment_duration}-second TikTok video segment.
+The video will be generated from start/end keyframe images — focus on motion, energy, and timing.
+
+${STRUCTURED_PROMPT_SCHEMA_DESCRIPTION}
+
+Use the negative_prompt: "${negativePrompt}"
+
+Output ONLY valid JSON matching the StructuredPrompt schema.`;
+
+    const shotList = (shotScripts || []).map((s: any) => `  Shot ${s.index} (${vm.shot_duration}s): "${s.text}" [energy: ${s.energy}]`).join('\n');
+
+    const userPrompt = `Segment ${segIdx} (${scene.section || 'unknown'}):
+Script: ${scene.script_text || 'N/A'}
+Energy arc: ${energyArc?.pattern?.start || 'LOW'} → ${energyArc?.pattern?.middle || 'PEAK'} → ${energyArc?.pattern?.end || 'LOW'}
+${energyArc?.description || ''}
+
+Shot scripts:
+${shotList || '  No shot scripts available'}
+
+Camera: ${cameraSpecs?.angle || 'medium'} shot, ${cameraSpecs?.movement || 'static'}, ${cameraSpecs?.lighting || 'natural'} lighting
+Aspect ratio: ${vm.aspect_ratio}
+Duration: ${vm.segment_duration}s (${vm.shots_per_segment} shots x ${vm.shot_duration}s each)
+
+Generate action.sequence with ${vm.shots_per_segment} entries matching the shot scripts.
+Focus on natural movement, energy transitions, and product interaction timing.`;
+
+    const response = await this.wavespeed.chatCompletion(systemPrompt, userPrompt);
+
+    const cleaned = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    return JSON.parse(cleaned) as StructuredPrompt;
   }
 }

@@ -729,7 +729,7 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] Create `energy-arc-graph.tsx` — inline SVG sparkline component, takes energy arc array, renders as a connected line graph with colored dots per energy level, segment dividers, gradient fill, and section labels
 - [x] Integrate into `script-review.tsx` between full script text and view toggle
 
-#### R1.5.19 - Structured Prompt Schema for Asset Generation 🔧 IN PROGRESS
+#### R1.5.19 - Structured Prompt Schema for Asset Generation ~~DONE~~
 **Priority:** P0 - Critical
 **Effort:** Medium
 **Spec:** `docs/plans/2026-02-16-structured-prompt-schema-design.md`
@@ -737,25 +737,25 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 **Why:** Asset generation prompts are inconsistent across agents — CastingAgent uses LLM free-text, DirectorAgent uses generic string concatenation, B-RollAgent uses single-string JSON. Negative prompts are 3 different hardcoded strings, none comprehensive. A unified `StructuredPrompt` JSON schema optimized for Kling 3.0 standardizes all prompts with fields for subject, product, dialogue, action sequence, camera specs, environment, lighting, style, and negative prompt. LLM outputs structured JSON, a shared serializer converts to API-ready strings per target.
 
 **New files:**
-- [ ] `src/lib/prompt-schema.ts` — StructuredPrompt interface + KLING_NEGATIVE_PROMPT constant
-- [ ] `src/lib/prompt-serializer.ts` — serializeForImage(), serializeForVideo(), serializeForBroll()
+- [x] `src/lib/prompt-schema.ts` — StructuredPrompt interface + KLING_NEGATIVE_PROMPT + IMAGE_NEGATIVE_PROMPT + resolveNegativePrompt() + isStructuredPrompt()
+- [x] `src/lib/prompt-serializer.ts` — serializeForImage(), serializeForVideo(), serializeForBroll()
 
 **Agent refactor:**
-- [ ] CastingAgent: LLM outputs `{start: StructuredPrompt, end: StructuredPrompt}` instead of `{start: string, end: string}`
-- [ ] DirectorAgent: add LLM step, replace string concatenation with structured prompt + serializer (+$0.04/video)
-- [ ] B-RollAgent: planning LLM outputs StructuredPrompt fields per shot
-- [ ] Pipeline worker: regeneration handlers use stored structured JSON + serializer
-- [ ] Remove all scattered NEGATIVE_PROMPT strings, replace with centralized constant
+- [x] CastingAgent: LLM outputs `{start: StructuredPrompt, end: StructuredPrompt}` instead of `{start: string, end: string}`
+- [x] DirectorAgent: add LLM step, replace string concatenation with structured prompt + serializer (+$0.04/video)
+- [x] B-RollAgent: planning LLM outputs StructuredPrompt fields per shot, stored in metadata
+- [x] Pipeline worker: regenerateKeyframe() + regenerateVideo() use structured JSON + serializer
+- [x] Remove all scattered NEGATIVE_PROMPT strings, replace with centralized constants
 
-**Negative prompt UI:**
-- [ ] `negative_prompt_override` JSONB column on `project` table
-- [ ] Info icon at generation gates (casting, directing, B-roll) shows current negative prompt
-- [ ] Override toggle: editable text field pre-filled with default, "Reset to default" button
-- [ ] Agents read project override before falling back to model default
+**Negative prompt backend:**
+- [x] `negative_prompt_override` JSONB column on `project` table (migration applied)
+- [x] PATCH /api/projects/[id] accepts `negative_prompt_override` in always-allowed fields
+- [x] Agents read project override before falling back to model default via resolveNegativePrompt()
+- [ ] Frontend UI: Info icon at generation gates, override toggle (flagged for frontend agent)
 
 **Backward compat:**
-- [ ] Serializer detects old string format vs new StructuredPrompt in `scene.visual_prompt`
-- [ ] Existing projects continue working without migration
+- [x] isStructuredPrompt() type guard detects old string format vs new StructuredPrompt in `scene.visual_prompt`
+- [x] Existing projects continue working without migration — legacy strings pass through
 
 #### R1.5.20 - Influencer Voice Design System
 **Priority:** P0 - Critical
@@ -1021,7 +1021,7 @@ POLISH     Tier 1.5: UX Hardening
            R1.5.13 Influencer 4K Upscale ✅ DONE (inline at upload time)
            R1.5.15 Project sequential numbering (PROJECT-N)
            R1.5.16 Video Model Selection & Pipeline Abstraction (backend done, frontend selector + 2 agents remaining)
-           R1.5.19 Structured Prompt Schema (depends on R1.5.16 — uses model-specific negative prompts)
+           R1.5.19 Structured Prompt Schema ✅ DONE (depends on R1.5.16 — uses model-specific negative prompts)
            R1.5.20 Influencer Voice Design System (no deps — voice as first-class influencer attribute, mute Kling audio)
 
 NEXT       Tier 2: Quality & Conversion

@@ -15,6 +15,8 @@ import { VideoAnalysisAgent } from '../agents/video-analysis-agent';
 import { WaveSpeedClient } from '../lib/api-clients/wavespeed';
 import { ElevenLabsClient } from '../lib/api-clients/elevenlabs';
 import { FALLBACK_VOICES, API_COSTS, VideoModelConfig, getFallbackVideoModel, PRODUCT_PLACEMENT_ARC, VISIBILITY_ANGLE_MAP, RESOLUTION } from '../lib/constants';
+import { isStructuredPrompt, resolveNegativePrompt } from '../lib/prompt-schema';
+import { serializeForImage, serializeForVideo } from '../lib/prompt-serializer';
 import { getPipelineQueue } from '../lib/queue';
 import { APP_VERSION, GIT_COMMIT } from '../lib/version';
 import { createLogger, logToGenerationLog } from '../lib/logger';
@@ -844,12 +846,15 @@ async function regenerateKeyframe(
   previousFrameUrl?: string | null,
 ): Promise<string> {
   const scene = Array.isArray(asset.scene) ? asset.scene[0] : asset.scene;
-  const visualPrompt = scene?.visual_prompt as { start: string; end: string } | null;
-  const promptText = asset.type === 'keyframe_start'
+  const visualPrompt = scene?.visual_prompt as { start: unknown; end: unknown } | null;
+  const rawPrompt = asset.type === 'keyframe_start'
     ? visualPrompt?.start
     : visualPrompt?.end;
 
-  if (!promptText) throw new Error('No visual prompt found on scene for regeneration');
+  if (!rawPrompt) throw new Error('No visual prompt found on scene for regeneration');
+
+  // Serialize structured prompts; pass through legacy strings
+  const promptText = isStructuredPrompt(rawPrompt) ? serializeForImage(rawPrompt) : String(rawPrompt);
 
   // Fetch project with influencer + product for reference images
   const { data: project } = await supabase
@@ -1141,24 +1146,50 @@ async function regenerateVideo(
 
   if (!startKf?.url) throw new Error('Start keyframe required for video regeneration');
 
-  const shotScripts = scene.shot_scripts as { index: number; text: string; energy: string }[] | null;
-  const multiPrompt = (shotScripts || []).map((shot: any) => ({
-    prompt: `${shot.text}. Energy: ${shot.energy}. Camera follows subject naturally.`,
-    duration: '5',
-  }));
+  // Fetch project for negative prompt override
+  const { data: project } = await supabase
+    .from('project')
+    .select('negative_prompt_override')
+    .eq('id', projectId)
+    .single();
 
-  const mainPrompt = [
-    scene.script_text ? `Scene: ${scene.script_text.substring(0, 200)}` : '',
-    scene.section ? `Section: ${scene.section}` : '',
-    'Natural movement, professional lighting, TikTok style video, 9:16 portrait',
-  ].filter(Boolean).join('. ');
+  const negativePrompt = resolveNegativePrompt(project, 'directing');
+
+  // Check for structured visual_prompt on scene
+  const visualPrompt = scene.visual_prompt as { start: unknown; end: unknown } | null;
+  const hasStructured = visualPrompt && isStructuredPrompt(visualPrompt.start);
+
+  let mainPrompt: string;
+  let multiPrompt: Array<{ prompt: string; duration: string }>;
+  let effectiveNegativePrompt: string;
+
+  if (hasStructured) {
+    // Use serializer for structured prompts
+    const serialized = serializeForVideo(visualPrompt.start as import('../lib/prompt-schema').StructuredPrompt, '5');
+    mainPrompt = serialized.prompt;
+    multiPrompt = serialized.multiPrompt;
+    effectiveNegativePrompt = serialized.negativePrompt;
+  } else {
+    // Legacy fallback: string concatenation
+    const shotScripts = scene.shot_scripts as { index: number; text: string; energy: string }[] | null;
+    multiPrompt = (shotScripts || []).map((shot: any) => ({
+      prompt: `${shot.text}. Energy: ${shot.energy}. Camera follows subject naturally.`,
+      duration: '5',
+    }));
+    mainPrompt = [
+      scene.script_text ? `Scene: ${scene.script_text.substring(0, 200)}` : '',
+      scene.section ? `Section: ${scene.section}` : '',
+      'Natural movement, professional lighting, TikTok style video, 9:16 portrait',
+    ].filter(Boolean).join('. ');
+    effectiveNegativePrompt = negativePrompt;
+  }
 
   const wavespeed = new WaveSpeedClient();
   const result = await wavespeed.generateVideo({
     image: startKf.url,
     tailImage: endKf?.url,
     prompt: mainPrompt,
-    negativePrompt: 'watermark, text overlay, blurry, distorted, flickering, low quality, static, frozen',
+    negativePrompt: effectiveNegativePrompt,
     multiPrompt,
     duration: 15,
     cfgScale: 0.5,

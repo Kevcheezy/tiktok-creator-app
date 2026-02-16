@@ -9,6 +9,8 @@ import {
   pickKenBurnsDirection,
   type BrollPreset,
 } from '@/lib/constants';
+import { IMAGE_NEGATIVE_PROMPT, resolveNegativePrompt, isStructuredPrompt } from '@/lib/prompt-schema';
+import { serializeForBroll } from '@/lib/prompt-serializer';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -25,6 +27,7 @@ interface BrollShotFromLLM {
   shot_index: number;
   category: string;
   prompt: string;
+  structured_prompt?: Record<string, unknown>;
   narrative_role: string;
   timing_seconds: number;
   duration_seconds: number;
@@ -53,7 +56,7 @@ export class BRollAgent extends BaseAgent {
     // 1. Fetch project with product data
     const { data: proj, error: projError } = await this.supabase
       .from('project')
-      .select('*, product:product(*)')
+      .select('*, product:product(*), negative_prompt_override')
       .eq('id', projectId)
       .single();
 
@@ -208,6 +211,7 @@ export class BRollAgent extends BaseAgent {
       duration_seconds: shot.duration_seconds || 2.5,
       source: 'ai_generated',
       status: 'planned',
+      metadata: shot.structured_prompt ? { structured_prompt: shot.structured_prompt } : {},
     }));
 
     const { error: insertError } = await this.supabase
@@ -267,12 +271,19 @@ export class BRollAgent extends BaseAgent {
           .eq('id', shot.id);
 
         // Generate image via Nano Banana Pro
+        // Use structured prompt from metadata if available, otherwise use text prompt
+        const shotMeta = (shot.metadata || {}) as Record<string, unknown>;
+        const structuredPromptData = shotMeta.structured_prompt;
+        const effectivePrompt = isStructuredPrompt(structuredPromptData)
+          ? serializeForBroll(structuredPromptData)
+          : shot.prompt;
+
         const imgOpts = {
           aspectRatio: RESOLUTION.aspectRatio,
           width: RESOLUTION.width,
           height: RESOLUTION.height,
         };
-        const { taskId } = await this.wavespeed.generateImage(shot.prompt, imgOpts);
+        const { taskId } = await this.wavespeed.generateImage(effectivePrompt, imgOpts);
 
         this.log(`Shot ${shot.segment_index}:${shot.shot_index} — polling task ${taskId}`);
         const result = await this.wavespeed.pollResult(taskId, {
@@ -491,11 +502,19 @@ OUTPUT: JSON array of B-roll shots (no wrapping object, just the array):
     "shot_index": 0,
     "category": "social_proof",
     "prompt": "detailed photorealistic image generation prompt, 9:16 vertical",
+    "structured_prompt": {
+      "environment": { "setting": "location", "elements": ["detail1"], "product_visible": false },
+      "lighting": { "type": "natural", "quality": "soft warm glow" },
+      "style": { "aesthetic": "authentic product review", "quality": "1080p" },
+      "product": { "emphasis": "product description if visible" }
+    },
     "narrative_role": "why this shot strengthens the argument",
     "timing_seconds": 1.0,
     "duration_seconds": 2.5
   }
-]`;
+]
+
+The "prompt" field is a flat text prompt (backward compatible). The "structured_prompt" field breaks it into environment/lighting/style/product components. Both are required.`;
   }
 
   private buildPlanningUserPrompt(

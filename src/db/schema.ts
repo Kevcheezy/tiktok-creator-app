@@ -151,6 +151,7 @@ export const project = pgTable('project', {
   errorMessage: text('error_message'),
   failedAtStatus: text('failed_at_status'),
   productPlacement: jsonb('product_placement'),
+  negativePromptOverride: jsonb('negative_prompt_override'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
