@@ -1,3 +1,5 @@
+import { CHARACTER_MAP, getCharacterForStatus } from './ff7-theme';
+
 const STAGES = [
   { key: 'analyzing', label: 'Analyze' },
   { key: 'analysis_review', label: 'Review' },
@@ -26,7 +28,6 @@ function getStageIndex(status: string): number {
 
 export function PipelineProgress({ status, failedAtStatus }: { status: string; failedAtStatus?: string | null }) {
   const isFailed = status === 'failed';
-  // When failed, show progress up to the failed stage
   const effectiveStatus = isFailed && failedAtStatus ? failedAtStatus : status;
   const currentIndex = getStageIndex(effectiveStatus);
   const failedIndex = isFailed && failedAtStatus ? getStageIndex(failedAtStatus) : -1;
@@ -40,66 +41,77 @@ export function PipelineProgress({ status, failedAtStatus }: { status: string; f
           const isFailedStage = failedIndex === i && isFailed;
           const isFuture = !isCompleted && !isCurrent;
 
-          let dotColor = 'bg-surface-overlay border-border';
+          // Get character color for this stage
+          const char = getCharacterForStatus(stage.key);
+          const charColor = char?.color || CHARACTER_MAP.analyzing.color;
+
+          // ATB bar fill + text styles
+          let barFill = 'transparent';
+          let barWidth = '0%';
           let textColor = 'text-text-muted';
-          let lineColor = 'bg-border';
+          let barClass = '';
 
           if (isFailedStage) {
-            dotColor = 'bg-magenta/20 border-magenta';
+            barFill = '#ff2d55';
+            barWidth = '100%';
             textColor = 'text-magenta';
           } else if (isCompleted) {
-            dotColor = 'bg-lime/20 border-lime';
+            barFill = '#7aff6e';
+            barWidth = '100%';
             textColor = 'text-lime';
-            lineColor = 'bg-lime/40';
           } else if (isCurrent && !isFailed) {
-            dotColor = 'bg-electric/20 border-electric';
+            barFill = charColor;
+            barWidth = '70%';
             textColor = 'text-electric';
+            barClass = 'animate-atb-fill';
           }
 
           return (
             <div key={stage.key} className="flex items-center">
-              {/* Stage node */}
-              <div className="flex flex-col items-center">
+              {/* ATB stage segment */}
+              <div className="flex flex-col items-center" style={{ minWidth: 44 }}>
+                {/* Mini ATB bar */}
                 <div
-                  className={`relative flex h-7 w-7 items-center justify-center rounded-full border-2 transition-all duration-300 ${dotColor}`}
+                  className={`relative h-2 w-10 overflow-hidden rounded-sm border ${
+                    isFailedStage
+                      ? 'border-magenta/40'
+                      : isCompleted
+                        ? 'border-lime/30'
+                        : isCurrent && !isFailed
+                          ? 'border-electric/40'
+                          : 'border-border'
+                  } bg-surface-overlay`}
                 >
-                  {isFailedStage ? (
-                    <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5 text-magenta" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round">
-                      <line x1="5" y1="5" x2="11" y2="11" />
-                      <line x1="11" y1="5" x2="5" y2="11" />
-                    </svg>
-                  ) : isCompleted ? (
-                    <svg
-                      viewBox="0 0 16 16"
-                      fill="none"
-                      className="h-3.5 w-3.5 text-lime"
-                      stroke="currentColor"
-                      strokeWidth={2.5}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <polyline points="3.5 8 6.5 11 12.5 5" />
-                    </svg>
-                  ) : isCurrent && !isFailed ? (
-                    <span className="relative flex h-2 w-2">
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-electric opacity-75" />
-                      <span className="relative inline-flex h-2 w-2 rounded-full bg-electric" />
-                    </span>
-                  ) : (
-                    <span className="h-1.5 w-1.5 rounded-full bg-text-muted/40" />
+                  <div
+                    className={`h-full rounded-sm transition-all duration-500 ${barClass}`}
+                    style={{
+                      width: barWidth,
+                      backgroundColor: barFill,
+                      boxShadow: isCurrent && !isFailed ? `0 0 6px ${charColor}60` : undefined,
+                    }}
+                  />
+                  {/* Pulsing indicator for current stage */}
+                  {isCurrent && !isFailed && (
+                    <div
+                      className="absolute inset-0 animate-materia-pulse rounded-sm"
+                      style={{ backgroundColor: charColor, opacity: 0.15 }}
+                    />
                   )}
                 </div>
+                {/* Stage label */}
                 <span
-                  className={`mt-1.5 font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider ${textColor} ${isFuture ? 'opacity-50' : ''}`}
+                  className={`mt-1 font-[family-name:var(--font-display)] text-[9px] font-semibold uppercase tracking-wider ${textColor} ${isFuture ? 'opacity-40' : ''}`}
                 >
                   {stage.label}
                 </span>
               </div>
 
-              {/* Connector line */}
+              {/* Connector */}
               {i < STAGES.length - 1 && (
                 <div
-                  className={`mx-1 h-0.5 w-8 rounded-full transition-all duration-300 ${lineColor}`}
+                  className={`mx-0.5 h-0.5 w-3 rounded-full transition-all duration-300 ${
+                    isCompleted ? 'bg-lime/40' : 'bg-border'
+                  }`}
                 />
               )}
             </div>

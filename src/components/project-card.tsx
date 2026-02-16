@@ -2,6 +2,9 @@
 
 import Link from 'next/link';
 import { StatusBadge } from './status-badge';
+import { GilDisplay } from './gil-display';
+import { FF7Sprite } from './ff7-sprite';
+import { getCharacterForStatus } from './ff7-theme';
 
 interface ProjectCardProps {
   project: {
@@ -46,10 +49,17 @@ function truncateUrl(url: string): string {
 const STATUS_ACCENT: Record<string, string> = {
   analyzing: 'group-hover:border-electric/40',
   analysis_review: 'group-hover:border-amber-hot/40',
-  scripting: 'group-hover:border-electric/40',
+  scripting: 'group-hover:border-amber-hot/40',
   script_review: 'group-hover:border-amber-hot/40',
-  casting: 'group-hover:border-magenta/40',
+  broll_planning: 'group-hover:border-lime/40',
+  broll_review: 'group-hover:border-amber-hot/40',
+  broll_generation: 'group-hover:border-lime/40',
+  influencer_selection: 'group-hover:border-amber-hot/40',
+  casting: 'group-hover:border-phoenix/40',
+  casting_review: 'group-hover:border-amber-hot/40',
   directing: 'group-hover:border-magenta/40',
+  voiceover: 'group-hover:border-summon/40',
+  asset_review: 'group-hover:border-amber-hot/40',
   editing: 'group-hover:border-electric/40',
   completed: 'group-hover:border-lime/40',
   failed: 'group-hover:border-magenta/40',
@@ -58,6 +68,8 @@ const STATUS_ACCENT: Record<string, string> = {
 export function ProjectCard({ project, onDelete }: ProjectCardProps) {
   const displayName = project.product_name || project.name || truncateUrl(project.product_url);
   const accent = STATUS_ACCENT[project.status] || 'group-hover:border-border-bright';
+  const character = getCharacterForStatus(project.status);
+  const spriteState = project.status === 'completed' ? 'attack' : project.status === 'failed' ? 'ko' : 'idle';
 
   return (
     <Link href={`/projects/${project.id}`} className="group block">
@@ -69,9 +81,14 @@ export function ProjectCard({ project, onDelete }: ProjectCardProps) {
 
         {/* Header */}
         <div className="flex items-start justify-between gap-3">
-          <h3 className="font-[family-name:var(--font-display)] text-sm font-semibold leading-tight text-text-primary line-clamp-2">
-            {displayName}
-          </h3>
+          <div className="flex items-center gap-2 min-w-0">
+            {character && (
+              <FF7Sprite character={project.status} state={spriteState} size="sm" />
+            )}
+            <h3 className="font-[family-name:var(--font-display)] text-sm font-semibold leading-tight text-text-primary line-clamp-2">
+              {displayName}
+            </h3>
+          </div>
           <div className="flex-shrink-0">
             <StatusBadge status={project.status} />
           </div>
@@ -84,11 +101,7 @@ export function ProjectCard({ project, onDelete }: ProjectCardProps) {
               {project.product_category}
             </span>
           )}
-          {project.cost_usd && parseFloat(project.cost_usd) > 0 && (
-            <span className="font-[family-name:var(--font-mono)] text-[11px] text-text-muted">
-              ${parseFloat(project.cost_usd).toFixed(2)}
-            </span>
-          )}
+          <GilDisplay amount={project.cost_usd} />
         </div>
 
         {/* Error message for failed projects */}

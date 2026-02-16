@@ -12,19 +12,20 @@ export async function Nav() {
         <div className="flex h-16 items-center justify-between">
           {/* Brand */}
           <Link href="/" className="group flex items-center gap-3">
-            {/* Logo mark */}
+            {/* Buster Sword logo */}
             <div className="relative flex h-9 w-9 items-center justify-center">
-              <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-electric to-magenta opacity-80 transition-opacity group-hover:opacity-100" />
+              <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-electric to-lime opacity-80 transition-opacity group-hover:opacity-100" />
               <svg
                 viewBox="0 0 24 24"
                 fill="none"
                 className="relative z-10 h-5 w-5"
-                stroke="currentColor"
-                strokeWidth={2.5}
-                strokeLinecap="round"
-                strokeLinejoin="round"
               >
-                <polygon points="5 3 19 12 5 21 5 3" fill="currentColor" stroke="none" />
+                {/* Blade */}
+                <rect x="10.5" y="2" width="3" height="14" rx="0.5" fill="currentColor" opacity="0.9" />
+                {/* Guard */}
+                <rect x="6" y="16" width="12" height="2.5" rx="0.5" fill="currentColor" />
+                {/* Grip */}
+                <rect x="10.5" y="18.5" width="3" height="4" rx="0.5" fill="currentColor" opacity="0.6" />
               </svg>
             </div>
             <span className="font-[family-name:var(--font-display)] text-lg font-bold tracking-tight text-text-primary">
@@ -40,38 +41,36 @@ export async function Nav() {
 
           {/* Right side */}
           <div className="flex items-center gap-6">
+            {/* Nav links with Materia dots */}
             <Link
               href="/"
-              className="font-[family-name:var(--font-display)] text-sm font-medium text-text-secondary transition-colors hover:text-electric"
+              className="group flex items-center gap-2 font-[family-name:var(--font-display)] text-sm font-medium text-text-secondary transition-colors hover:text-electric"
             >
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-electric opacity-60 transition-opacity group-hover:opacity-100 animate-materia-pulse" />
               Dashboard
             </Link>
             <Link
               href="/products"
-              className="font-[family-name:var(--font-display)] text-sm font-medium text-text-secondary transition-colors hover:text-electric"
+              className="group flex items-center gap-2 font-[family-name:var(--font-display)] text-sm font-medium text-text-secondary transition-colors hover:text-electric"
             >
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-summon opacity-60 transition-opacity group-hover:opacity-100 animate-materia-pulse" style={{ animationDelay: '0.3s' }} />
               Products
             </Link>
             <Link
               href="/influencers"
-              className="font-[family-name:var(--font-display)] text-sm font-medium text-text-secondary transition-colors hover:text-electric"
+              className="group flex items-center gap-2 font-[family-name:var(--font-display)] text-sm font-medium text-text-secondary transition-colors hover:text-electric"
             >
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-phoenix opacity-60 transition-opacity group-hover:opacity-100 animate-materia-pulse" style={{ animationDelay: '0.6s' }} />
               Influencers
             </Link>
+
+            {/* Command-style New Project button */}
             <Link
               href="/projects/new"
-              className="group relative inline-flex items-center gap-2 overflow-hidden rounded-lg bg-electric px-4 py-2 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:bg-electric/90 hover:shadow-[0_0_24px_rgba(0,240,255,0.3)]"
+              className="group relative inline-flex items-center gap-2 overflow-hidden rounded border-2 border-electric bg-transparent px-4 py-2 font-[family-name:var(--font-display)] text-sm font-semibold uppercase tracking-wider text-electric transition-all hover:bg-electric/10 hover:shadow-[0_0_24px_rgba(0,229,160,0.2)]"
             >
-              <svg
-                viewBox="0 0 16 16"
-                fill="none"
-                className="h-4 w-4"
-                stroke="currentColor"
-                strokeWidth={2}
-                strokeLinecap="round"
-              >
-                <line x1="8" y1="3" x2="8" y2="13" />
-                <line x1="3" y1="8" x2="13" y2="8" />
+              <svg viewBox="0 0 8 10" fill="currentColor" className="h-2.5 w-2.5 opacity-0 group-hover:opacity-100 transition-opacity animate-command-cursor">
+                <polygon points="0,0 8,5 0,10" />
               </svg>
               New Project
             </Link>
