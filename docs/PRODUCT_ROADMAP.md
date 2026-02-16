@@ -307,6 +307,16 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] Network failure recovery: exponential backoff on polling (3s → 30s cap), connection warning after 5 failures in StageProgress and ProjectDetail
 - [x] Failed pipeline recovery: surface `error_message` on project card (truncated single line in magenta)
 
+#### R1.5.5 - Direct-to-Storage Image Uploads
+**Priority:** P2 - Medium (backlog)
+**Effort:** Small
+**Why:** Influencer reference photos are currently routed through the Next.js API, which is constrained by Vercel's 4.5 MB body limit. Images are compressed client-side to fit, but the pipeline needs full-resolution photos for high-quality keyframe generation via CastingAgent. Uploading directly to Supabase Storage from the frontend bypasses the API route size limit entirely.
+
+- [ ] Frontend uploads images directly to Supabase Storage (signed upload URL or anon key with Storage RLS)
+- [ ] API route receives the storage path/URL instead of the file blob
+- [ ] Apply same pattern to product image upload (`/api/products/[id]/image`) and project product image (`/api/projects/[id]/product-image`)
+- [ ] Remove client-side compression workaround once direct uploads are in place
+
 ---
 
 ### Tier 2: Make It Actually Convert (Quality & conversion optimization)
