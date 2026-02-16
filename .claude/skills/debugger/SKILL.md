@@ -1,173 +1,212 @@
 ---
-name: debugger
-description: Use when investigating pipeline failures, unexpected behavior, or production errors. Queries generation_log, project data, and structured logs to diagnose root cause and propose a fix. Read-only — never modifies code or data.
+name: backend-debugger
+description: Use when investigating bugs, failures, errors, or unexpected behavior in the backend — API routes, pipeline agents, workers, database queries, or external API calls. Use before proposing any fix.
 ---
 
-# Debugger Agent
+# Backend Debugger
 
-You are the debugging investigator for the MONEY PRINTER 3000. When a pipeline fails or behaves unexpectedly, you diagnose the root cause and propose a fix. **You never modify code or data — investigation and diagnosis only.**
+**REQUIRED BACKGROUND:** Use `superpowers:systematic-debugging`
+
+You inherit the Iron Law: **NO FIXES WITHOUT ROOT CAUSE INVESTIGATION FIRST.** This skill adds app-specific tools and knowledge on top of that process.
+
+## When to Use
+
+- Pipeline failed or stuck at a stage
+- API route returning errors
+- External API call failing (WaveSpeed, ElevenLabs, Creatomate)
+- Assets not generating or generating incorrectly
+- Cost anomalies
+- Worker not processing jobs
+- Any "what went wrong?" investigation
 
 ## Workflow
 
 ```dot
 digraph debug_workflow {
-    "Failure reported" [shape=doublecircle];
-    "1. GATHER" [shape=box];
-    "2. CORRELATE" [shape=box];
-    "3. NARROW" [shape=box];
-    "4. DIAGNOSE" [shape=box];
-    "5. PROPOSE" [shape=box];
+    "Bug reported" [shape=doublecircle];
+    "Phase 0: Triage" [shape=box];
+    "Category identified" [shape=diamond];
+    "Phase 1-3: systematic-debugging" [shape=box];
+    "Root cause confirmed?" [shape=diamond];
+    "Phase 4: Fix" [shape=box];
+    "Improve observability" [shape=box];
     "Done" [shape=doublecircle];
 
-    "Failure reported" -> "1. GATHER";
-    "1. GATHER" -> "2. CORRELATE";
-    "2. CORRELATE" -> "3. NARROW";
-    "3. NARROW" -> "4. DIAGNOSE";
-    "4. DIAGNOSE" -> "5. PROPOSE";
-    "5. PROPOSE" -> "Done";
+    "Bug reported" -> "Phase 0: Triage";
+    "Phase 0: Triage" -> "Category identified";
+    "Category identified" -> "Phase 1-3: systematic-debugging";
+    "Phase 1-3: systematic-debugging" -> "Root cause confirmed?";
+    "Root cause confirmed?" -> "Phase 1-3: systematic-debugging" [label="no — new hypothesis"];
+    "Root cause confirmed?" -> "Phase 4: Fix" [label="yes"];
+    "Phase 4: Fix" -> "Improve observability";
+    "Improve observability" -> "Done";
 }
 ```
 
-1. **GATHER** — Collect all available evidence: project status, error_message, failed_at_status, generation_log events, asset statuses, structured logs.
-2. **CORRELATE** — Use the `correlation_id` to find all events for the failed pipeline run. Build a timeline of what happened.
-3. **NARROW** — Identify the exact failure point: which agent, which API call, which stage, which segment.
-4. **DIAGNOSE** — Determine root cause: bad input data? External API error? Code bug? Timeout? Invalid parameters?
-5. **PROPOSE** — Write a diagnosis report with root cause, evidence, and a proposed fix. Hand off to the appropriate agent role (backend/frontend) for implementation.
+## Phase 0: Triage
 
-## Investigation Tools
+Run these three queries immediately to classify the issue before deep investigation:
 
-### Database Queries (Read-Only)
-
-Use the Supabase MCP `execute_sql` tool for **SELECT queries only**. Never INSERT, UPDATE, or DELETE.
-
-**Key queries:**
+**1. Check project status:**
 
 ```sql
--- Get project state and error info
-SELECT id, name, status, error_message, failed_at_status, cost_usd, created_at, updated_at
+SELECT id, name, status, failed_at_status, error_message, cost_usd, updated_at
 FROM project WHERE id = '<project_id>';
+```
 
--- Get full timeline of events for a pipeline run
-SELECT event_type, agent_name, stage, detail, app_version, created_at
-FROM generation_log
-WHERE project_id = '<project_id>'
-ORDER BY created_at;
+**2. Check recent generation_log events:**
 
--- Get events by correlation ID (single pipeline execution)
+```sql
 SELECT event_type, agent_name, stage, detail, created_at
-FROM generation_log
-WHERE correlation_id = '<correlation_id>'
+FROM generation_log WHERE project_id = '<project_id>'
+ORDER BY created_at DESC LIMIT 20;
+```
+
+**3. Check queue state:**
+
+Use the `/api/queue/status?projectId=<id>` endpoint or query directly.
+
+**Classify into one of:**
+
+| Category | Signals |
+|----------|---------|
+| **Pipeline failure** | `status` stuck, `stage_error` events, `failed_at_status` populated |
+| **External API failure** | `api_call` events with error details, high latency, 4xx/5xx status |
+| **Database issue** | Error message contains "violates", "constraint", "duplicate key" |
+| **Queue/Worker issue** | No events after job creation, queue shows `waiting`/`delayed` |
+| **API route error** | User reports HTTP error, no pipeline events |
+
+Then proceed to `superpowers:systematic-debugging` Phase 1 with this category as your starting point.
+
+## Observability Toolkit
+
+| Tool | What It Does | When to Use |
+|------|-------------|-------------|
+| `execute_sql` (Supabase MCP) | SELECT on `generation_log`, `project`, `asset`, `script`, `scene` | Primary investigation — structured event data |
+| `get_logs` (Supabase MCP) | Last 24h runtime logs by service (`postgres`, `api`, `auth`, etc.) | Raw platform logs, not app-level events |
+| `list_tables` (Supabase MCP) | Current DB schema | Schema-related issues |
+| `Grep` / `Read` tools | Search and read source code | Trace code paths after identifying failing component |
+| `/api/queue/status` | BullMQ job state | Pipeline appears stuck or failed |
+| `/api/projects/[id]/progress` | Detailed pipeline progress | Partial pipeline failures, asset-level status |
+| `/api/version` | Deployed version and commit | Environment-specific issues |
+
+**Key tables:**
+
+| Table | What It Tells You |
+|-------|------------------|
+| `generation_log` | Structured event trail — **primary debugging data source** |
+| `project` | Current status, error messages, cost, timestamps |
+| `asset` | Individual asset status, provider, cost, metadata |
+| `script` | Script content, hook scores, grades |
+| `scene` | Segment details, visual prompts, shot scripts |
+
+## Query Cookbook
+
+### Pipeline Investigation
+
+```sql
+-- Full event timeline for a project
+SELECT event_type, agent_name, stage, detail, created_at
+FROM generation_log WHERE project_id = '<uuid>'
 ORDER BY created_at;
 
--- Find API call failures
-SELECT detail->>'provider' as provider, detail->>'endpoint' as endpoint,
-       detail->>'statusCode' as status, detail->>'latencyMs' as latency,
+-- Errors only
+SELECT event_type, agent_name, stage, detail, created_at
+FROM generation_log WHERE project_id = '<uuid>' AND event_type LIKE '%error%'
+ORDER BY created_at;
+
+-- Trace a single pipeline run by correlation_id
+SELECT event_type, agent_name, stage, detail, created_at
+FROM generation_log WHERE correlation_id = '<uuid>'
+ORDER BY created_at;
+```
+
+### External API Failures
+
+```sql
+-- All API calls with status codes and latency
+SELECT agent_name, detail->>'provider' as provider, detail->>'endpoint' as endpoint,
+       detail->>'statusCode' as status, detail->>'latencyMs' as latency_ms,
        detail->>'error' as error, created_at
+FROM generation_log WHERE event_type = 'api_call' AND project_id = '<uuid>'
+ORDER BY created_at;
+```
+
+### Asset Status
+
+```sql
+-- All assets for a project with generation status
+SELECT id, type, status, provider, cost_usd, error_message, created_at
+FROM asset WHERE project_id = '<uuid>'
+ORDER BY created_at;
+```
+
+### Project Health
+
+```sql
+-- Project current state and error info
+SELECT id, name, status, failed_at_status, error_message, cost_usd, updated_at
+FROM project WHERE id = '<uuid>';
+```
+
+### Stage Duration Analysis
+
+```sql
+-- How long each stage took (completed stages only)
+SELECT stage, detail->>'durationMs' as duration_ms, created_at
 FROM generation_log
-WHERE project_id = '<project_id>' AND event_type = 'api_call'
+WHERE project_id = '<uuid>' AND event_type = 'stage_complete'
 ORDER BY created_at;
-
--- Check asset generation status
-SELECT id, scene_id, type, status, provider, cost_usd, metadata, created_at
-FROM asset WHERE project_id = '<project_id>'
-ORDER BY created_at;
-
--- Check script and scene state
-SELECT s.id, s.version, s.hook_score, s.grade,
-       sc.segment_index, sc.section, sc.visual_prompt
-FROM script s
-JOIN scene sc ON sc.script_id = s.id
-WHERE s.project_id = '<project_id>'
-ORDER BY s.version, sc.segment_index;
 ```
-
-### Source Code Reading
-
-Read the relevant source files to understand the code path that failed:
-
-```
-src/agents/base-agent.ts           — Base class, logging, error handling
-src/agents/<agent-name>.ts         — Specific agent logic
-src/workers/pipeline.worker.ts     — Job processing flow
-src/lib/api-clients/<provider>.ts  — External API call implementation
-src/app/api/**/*.ts                — API route handlers
-```
-
-### Structured Log Analysis
-
-When structured logging is active (Pino), filter by:
-- `correlationId` — all logs for one pipeline run
-- `agentName` — logs from a specific agent
-- `level: "error"` — all errors
-- `provider` — all calls to a specific external API
-
-## Diagnosis Report Format
-
-Always produce a structured report:
-
-```markdown
-## Pipeline Failure Diagnosis
-
-**Project:** <name> (<id>)
-**Status:** <status> (failed at: <stage>)
-**Error:** <error_message>
-**Correlation ID:** <id>
-**App Version:** <version>
-
-### Timeline
-1. [timestamp] Stage started: <stage>
-2. [timestamp] API call: <provider> <endpoint> → <status> (<latency>ms)
-3. [timestamp] Error: <details>
-
-### Root Cause
-<Clear explanation of what went wrong and why>
-
-### Evidence
-- <Query results, log entries, code references>
-
-### Proposed Fix
-- **Agent role:** backend / frontend
-- **Files to modify:** <list>
-- **What to change:** <specific description>
-- **Risk:** low / medium / high
-```
-
-## Scope — What You Can Do
-
-- Query `generation_log`, `project`, `asset`, `script`, `scene` tables (SELECT only)
-- Read any source code file in the project
-- Analyze structured log output
-- Read deployment logs via Supabase MCP `get_logs`
-- Produce diagnosis reports with proposed fixes
-
-## What You Must NEVER Do
-
-- Modify any source code file
-- Run INSERT, UPDATE, or DELETE queries
-- Run build, test, or deployment commands
-- Make git commits
-- Dispatch other agents (flag to the user or PM agent instead)
 
 ## Common Failure Patterns
 
-| Pattern | Where to Look | Likely Cause |
-|---------|--------------|--------------|
-| `WaveSpeed API error (400)` | generation_log api_call events | Bad request params (check agent code) |
-| `WaveSpeed API error (429)` | generation_log api_call events | Rate limit hit (check retry logic) |
-| `ElevenLabs API error (422)` | generation_log api_call events | Invalid voice config or text |
-| Pipeline stuck at status | project.status + generation_log | Worker crashed or job lost (check worker logs) |
-| Missing assets after casting | asset table + generation_log | Image generation failed silently |
-| Cost unexpectedly high | generation_log cost events | Excessive retries or regenerations |
-| `num_images` error | casting-agent.ts, wavespeed.ts | API param validation changed |
-| Timeout / no response | generation_log latency values | External API slow or down |
+| Pattern | Symptoms | Investigation Path |
+|---------|----------|-------------------|
+| Pipeline stuck at stage | `status` stuck, no `stage_complete` or error events | Check worker logs via `get_logs`, check if worker is running, check BullMQ job state |
+| External API timeout | `api_call` event with high `latencyMs` or missing `statusCode` | Check provider status, review rate limits, check request payload |
+| External API rate limit | `api_call` event with `statusCode: 429` | Check call frequency, review retry/backoff config in API client |
+| Asset generation failed | `asset.status = 'failed'`, `asset_regenerate_error` events | Trace the specific agent, check API call details in `generation_log` |
+| Cost accumulation anomaly | `project.cost_usd` higher than expected | Query all `api_call` events, sum costs, compare to `project.cost_usd` |
+| Worker crash/restart | Jobs in `waiting` state, no `stage_start` events after job creation | Check Railway logs for OOM, uncaught exceptions, SIGTERM |
+| Database constraint violation | Error message contains "violates" or "constraint" | Read the failing query in source code, verify data integrity with SELECT |
+| Retry exhaustion | Job `failed` after 3 attempts, `failedReason` populated | Check all 3 attempt errors — often different root causes per attempt |
+| `num_images` error | 400 from WaveSpeed image API | Check `casting-agent.ts` and `wavespeed.ts` — API param validation |
 
 ## Pipeline Stage Reference
 
 ```
-analyzing  → ProductAnalyzerAgent  → WaveSpeed LLM
-scripting  → ScriptingAgent        → WaveSpeed LLM
+analyzing  → ProductAnalyzerAgent  → WaveSpeed LLM (Gemini)
+scripting  → ScriptingAgent        → WaveSpeed LLM (Gemini)
 casting    → CastingAgent          → WaveSpeed Image (Nano Banana Pro)
 directing  → DirectorAgent         → WaveSpeed Video (Kling 3.0 Pro)
 voiceover  → VoiceoverAgent        → ElevenLabs TTS
 editing    → EditorAgent           → Creatomate Render
 ```
+
+## Key Source Files
+
+```
+src/lib/logger.ts                  — Pino logger factory, logToGenerationLog() helper
+src/lib/queue.ts                   — BullMQ queue setup, Redis config, job options
+src/agents/base-agent.ts           — Base class with logging, logEvent(), trackCost()
+src/agents/<agent-name>.ts         — Specific agent logic
+src/workers/pipeline.worker.ts     — Job processing, event handlers, correlation IDs
+src/lib/api-clients/wavespeed.ts   — WaveSpeed API wrapper
+src/app/api/**/*.ts                — API route handlers
+```
+
+## Fix Implementation
+
+**Allowed scope:** `src/app/api/`, `src/agents/`, `src/workers/`, `src/lib/`, DB migrations, middleware.
+
+**Cannot touch:** `.tsx` files, components, pages, styling — flag for frontend agent.
+
+**After root cause is confirmed (systematic-debugging Phases 1-3):**
+
+1. Read the relevant source code to understand the failing code path
+2. Implement the fix — address root cause, not symptoms
+3. If the failure wasn't visible enough in logs, **add observability**: more `logToGenerationLog()` events, more descriptive error messages, additional context fields in Pino log calls
+4. Verify via `superpowers:verification-before-completion`
+
+**Observability improvement rule:** If the investigation was hard because logs were insufficient, the fix MUST include improved logging. Every debugging session should leave the codebase more observable than before.
