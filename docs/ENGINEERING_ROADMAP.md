@@ -386,9 +386,10 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] Legacy FormData upload path preserved for backward compatibility
 - [x] Frontend uses signed upload URL flow (frontend agent task — remove client-side compression)
 
-#### R1.5.8 - Navigable Pipeline Stages
+#### ~~R1.5.8 - Navigable Pipeline Stages~~ DONE
 **Priority:** P1 - Medium
 **Effort:** Medium
+**Status:** Complete (2026-02-15)
 **Spec:** `docs/plans/2026-02-15-navigable-pipeline-stages-design.md`
 **Why:** Users can't review or edit past stages without restarting the pipeline. Clicking completed stages lets them navigate back, view previous work, and make minor edits with downstream impact warnings.
 
@@ -428,15 +429,15 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] Defaults pre-selected (Bedroom Ring Light + Hold & Show)
 - [x] Custom presets saved to DB for reuse across projects
 
-#### R1.5.10 - Visual Script Breakdown ~~DONE~~ (frontend)
+#### R1.5.10 - Visual Script Breakdown ~~DONE~~
 **Priority:** P2 - Medium (backlog)
 **Effort:** Medium
 **Why:** The ScriptingAgent already outputs structured data per segment (shot_scripts, audio_sync, text_overlay, broll_cues), but the user sees these as scattered metadata — never as a unified "breakdown." A visual breakdown view at script review would show the full 60-second plan at a glance: script text with highlighted product mentions, tagged elements (props, wardrobe, interaction type, scene setting), B-roll cue markers on a timeline, camera/shot specs, and energy arc visualization. Inspired by Studiovity's auto-tagging script breakdown. Lets creators see their whole video plan before committing to expensive generation steps.
 
-- [ ] Auto-tag script segments with: props needed, interaction type (requires backend tagging)
+- [x] Auto-tag script segments with: props needed, interaction type (requires backend tagging)
 - [x] Visual breakdown view at script review: full 60-second timeline with energy arc overlay, B-roll markers, product visibility, text overlays, shot scripts, audio sync peaks
 - [x] Highlighted product mentions in script text (clickable to see product placement details for that segment)
-- [ ] Camera/shot specs surfaced as editable fields: angle (close-up/medium/wide), movement (static/pan/zoom), lighting direction
+- [x] Camera/shot specs surfaced as editable fields: angle (close-up/medium/wide), movement (static/pan/zoom), lighting direction
 - [x] Beat board view option: 4-segment visual arc (Hook → Problem → Solution → CTA) with energy levels, B-roll placements, scene previews
 - [x] Cards / Timeline / Beats toggle in script-review.tsx
 - [x] `broll_cues` typed in Scene interface across components
@@ -459,7 +460,7 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 
 These features separate "generates a video" from "generates a video that sells."
 
-#### R2.0 - Performance Tracking & KPI Dashboard
+#### R2.0 - Performance Tracking & KPI Dashboard 🔧 IN PROGRESS
 **Priority:** P1 - High (first in Tier 2 - data foundation for everything below)
 **Effort:** Medium
 **Why:** Without closing the feedback loop, every optimization is guesswork. This connects generated videos to actual TikTok performance and revenue, turning the app from a production tool into a learning system. Also the data foundation that R2.1 (Hook Testing) and R2.2 (Trends) depend on.
@@ -646,15 +647,13 @@ MVP ──→    Validate: Run real product URLs through full pipeline with B-ro
 
 POLISH     Tier 1.5: UX Hardening
            R1.5.1 Influencer edit ──→ R1.5.2 Project settings ──→ R1.5.3 Navigation ──→ R1.5.4 Error handling (ALL DONE)
-           R1.5.5 Engineering Roadmap Kanban Dashboard (can run in parallel — no pipeline dependency)
-           (markdown parser + FF7 workers + live Kanban board)
-           R1.5.6 FF7 Visual Theme (can run in parallel — purely frontend + static assets)
-           (ATB pipeline + battle HUD + character sprites + Mako palette + command menus)
+           R1.5.5 Engineering Roadmap Kanban Dashboard ✅ DONE
+           R1.5.6 FF7 Visual Theme ✅ DONE
            R1.5.7 Direct-to-Storage Uploads ✅ DONE
-           (bypass Vercel 4.5MB limit — fully complete)
-           R1.5.9 Scene & Interaction Presets for Casting
-           (7 scene presets + 10 interaction presets → CastingAgent consistency rule)
-           ▲ Locks one scene across all 4 keyframes. Describes product interaction choreography.
+           R1.5.8 Navigable Pipeline Stages ✅ DONE
+           R1.5.9 Scene & Interaction Presets ✅ DONE
+           R1.5.10 Visual Script Breakdown 🔧 IN PROGRESS (frontend done, backend tagging remaining)
+           R1.5.11 Keyframe Consistency Validation (backlog — depends on R1.5.9 ✅)
 
 NEXT       Tier 2: Quality & Conversion
            R2.0 Performance Tracking ──→ R2.4 Product Images ──→ R2.5 Reference Video Intel ──→ R2.3 Avatar Consistency ──→ R2.1 Hook Testing ──→ R2.2 Trends

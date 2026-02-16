@@ -48,6 +48,13 @@ interface Segment {
   text_overlay: string;
   key_moment: string;
   broll_cues?: BrollCue[];
+  props_needed?: string[];
+  interaction_type?: string;
+  camera_specs?: {
+    angle: string;
+    movement: string;
+    lighting: string;
+  };
 }
 
 interface HookScore {
@@ -122,6 +129,21 @@ RULES:
    - spoken_text_during: the exact script text being spoken while B-roll is on screen
    Target: visual refresh every ~2-3 seconds. Place cues on claims, proof points, product mentions, emotional beats.
 
+8. SEGMENT TAGGING (REQUIRED for each segment):
+   Tag each segment with production metadata:
+   - props_needed: array of physical props visible in this segment (e.g., ["product bottle", "cotton pad", "mirror"])
+   - interaction_type: how the creator interacts with the product. One of: hold_and_show, apply_to_skin, stir_mix, demonstrate, pour_drink, unbox, compare, try_on, set_down_point, none
+   - camera_specs: shot composition details:
+     - angle: one of close-up, medium, wide, over-shoulder
+     - movement: one of static, slow_zoom_in, slow_zoom_out, pan_left, pan_right, tracking
+     - lighting: one of ring_light_front, natural_window, warm_ambient, dramatic_side, soft_diffused
+
+9. SEGMENT TAGGING RULES:
+   - Segment 1 (Hook): interaction_type MUST be "none" (no product visible)
+   - Segment 3 (Solution): interaction_type MUST NOT be "none" (product is the hero)
+   - Props should include the product name when product_visibility is not "none"
+   - Camera should progress: medium/wide for hook → close-up for product hero → medium for CTA
+
 OUTPUT FORMAT (valid JSON only, no markdown, no code fences):
 {
   "segments": [
@@ -145,6 +167,9 @@ OUTPUT FORMAT (valid JSON only, no markdown, no code fences):
         { "shot_script_index": 0, "offset_seconds": 1.0, "duration_seconds": 2.5, "intent": "negative contrast — show cheap generic alternatives", "spoken_text_during": "the exact words being spoken" },
         { "shot_script_index": 1, "offset_seconds": 5.5, "duration_seconds": 2.0, "intent": "transformation proof — subtle before/after", "spoken_text_during": "the exact words being spoken" }
       ],
+      "props_needed": ["product bottle", "cotton pad"],
+      "interaction_type": "none",
+      "camera_specs": { "angle": "medium", "movement": "static", "lighting": "ring_light_front" },
       "text_overlay": "short caption for screen",
       "key_moment": "description of peak moment"
     }
@@ -271,6 +296,9 @@ export class ScriptingAgent extends BaseAgent {
       text_overlay: seg.text_overlay,
       product_visibility: PRODUCT_PLACEMENT_ARC[idx]?.visibility ?? 'none',
       broll_cues: seg.broll_cues || [],
+      props_needed: seg.props_needed || [],
+      interaction_type: seg.interaction_type || null,
+      camera_specs: seg.camera_specs || null,
     }));
 
     const { error: sceneError } = await this.supabase
@@ -371,6 +399,21 @@ RULES:
    - intent: what the B-roll should communicate
    - spoken_text_during: the exact script text being spoken while B-roll is on screen
 
+8. SEGMENT TAGGING (REQUIRED for each segment):
+   Tag each segment with production metadata:
+   - props_needed: array of physical props visible in this segment (e.g., ["product bottle", "cotton pad", "mirror"])
+   - interaction_type: how the creator interacts with the product. One of: hold_and_show, apply_to_skin, stir_mix, demonstrate, pour_drink, unbox, compare, try_on, set_down_point, none
+   - camera_specs: shot composition details:
+     - angle: one of close-up, medium, wide, over-shoulder
+     - movement: one of static, slow_zoom_in, slow_zoom_out, pan_left, pan_right, tracking
+     - lighting: one of ring_light_front, natural_window, warm_ambient, dramatic_side, soft_diffused
+
+9. SEGMENT TAGGING RULES:
+   - Segment 1 (Hook): interaction_type MUST be "none" (no product visible)
+   - Segment 3 (Solution): interaction_type MUST NOT be "none" (product is the hero)
+   - Props should include the product name when product_visibility is not "none"
+   - Camera should progress: medium/wide for hook → close-up for product hero → medium for CTA
+
 OUTPUT FORMAT (valid JSON only, no markdown, no code fences):
 {
   "segments": [
@@ -393,6 +436,9 @@ OUTPUT FORMAT (valid JSON only, no markdown, no code fences):
       "broll_cues": [
         { "shot_script_index": 0, "offset_seconds": 1.0, "duration_seconds": 2.5, "intent": "negative contrast", "spoken_text_during": "exact words" }
       ],
+      "props_needed": ["product bottle", "cotton pad"],
+      "interaction_type": "none",
+      "camera_specs": { "angle": "medium", "movement": "static", "lighting": "ring_light_front" },
       "text_overlay": "short caption for screen",
       "key_moment": "description of peak moment"
     }
@@ -485,6 +531,9 @@ Split this script into 4 segments following the output format.`;
       text_overlay: seg.text_overlay,
       product_visibility: PRODUCT_PLACEMENT_ARC[idx]?.visibility ?? 'none',
       broll_cues: seg.broll_cues || [],
+      props_needed: seg.props_needed || [],
+      interaction_type: seg.interaction_type || null,
+      camera_specs: seg.camera_specs || null,
     }));
 
     const { error: sceneError } = await this.supabase
@@ -654,6 +703,9 @@ OUTPUT: Return ONLY a single segment object (not wrapped in segments array):
     "shot_2_peak": { "word": "...", "time": "~8s", "action": "..." },
     "shot_3_peak": { "word": "...", "time": "~13s", "action": "..." }
   },
+  "props_needed": ["..."],
+  "interaction_type": "...",
+  "camera_specs": { "angle": "...", "movement": "...", "lighting": "..." },
   "text_overlay": "...",
   "key_moment": "..."
 }
@@ -693,6 +745,9 @@ ${segmentIndex === 0 ? 'Also include a "hook_score" object with curiosity_loop, 
       audio_sync: parsed.audio_sync,
       text_overlay: parsed.text_overlay,
       key_moment: parsed.key_moment,
+      props_needed: parsed.props_needed,
+      interaction_type: parsed.interaction_type,
+      camera_specs: parsed.camera_specs,
     };
 
     // 11. Validate the segment: override syllable_count, check shot_scripts
@@ -725,6 +780,9 @@ ${segmentIndex === 0 ? 'Also include a "hook_score" object with curiosity_loop, 
         audio_sync: segment.audio_sync,
         text_overlay: segment.text_overlay,
         product_visibility: targetScene.product_visibility,
+        props_needed: segment.props_needed || [],
+        interaction_type: segment.interaction_type || null,
+        camera_specs: segment.camera_specs || null,
         tone: resolvedTone,
         version: nextVersion,
       })

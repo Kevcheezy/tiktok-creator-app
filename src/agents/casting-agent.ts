@@ -259,6 +259,12 @@ Output ONLY valid JSON: { "start": "...", "end": "..." }`;
       ? `Product interaction: ${interactionDescription}`
       : `Product interaction: ${placement.description}`;
 
+    // Camera specs from scene tagging (R1.5.10)
+    const cameraSpecs = scene.camera_specs as { angle?: string; movement?: string; lighting?: string } | null;
+    const cameraLine = cameraSpecs
+      ? `Camera: ${cameraSpecs.angle || 'medium'} shot, ${cameraSpecs.movement || 'static'}, ${cameraSpecs.lighting || 'natural_window'} lighting`
+      : null;
+
     const productRefLine = hasProductImage
       ? `\nIMPORTANT: The real product image is provided as a reference. Preserve the EXACT product appearance — packaging, shape, colors, label, and branding. Do not invent or alter the product's look.`
       : '';
@@ -267,7 +273,7 @@ Output ONLY valid JSON: { "start": "...", "end": "..." }`;
       ? `Transform the reference images into the following scene context:
 Wardrobe: ${wardrobe}
 Scene: ${sceneDescription}
-${interactionLine}
+${interactionLine}${cameraLine ? `\n${cameraLine}` : ''}
 Segment: ${placement.section} (${placement.description})
 Product: ${productName}
 Product visibility: ${placement.visibility}
@@ -284,7 +290,7 @@ Negative: ${NEGATIVE_PROMPT}`
       : `Character: ${appearance}
 Wardrobe: ${wardrobe}
 Scene: ${sceneDescription}
-${interactionLine}
+${interactionLine}${cameraLine ? `\n${cameraLine}` : ''}
 Segment: ${placement.section} (${placement.description})
 Product: ${productName}
 Product visibility: ${placement.visibility}
@@ -321,7 +327,10 @@ Match this reference video's visual style: use similar lighting, camera angle, a
     } catch {
       // Fallback: use template-based prompts
       this.log('LLM prompt generation failed, using template fallback');
-      const base = `${appearance}, ${wardrobe}, ${sceneDescription}, 9:16 portrait, photorealistic, cinematic lighting`;
+      const cameraStr = cameraSpecs
+        ? `${cameraSpecs.angle || 'medium'} shot, ${cameraSpecs.movement || 'static'}, ${cameraSpecs.lighting || 'natural_window'} lighting`
+        : 'medium shot, static, cinematic lighting';
+      const base = `${appearance}, ${wardrobe}, ${sceneDescription}, ${cameraStr}, 9:16 portrait, photorealistic`;
       return {
         start: `${base}, ${energyArc.pattern.start.toLowerCase()} energy, opening pose, ${placement.visibility} product visibility`,
         end: `${base}, ${energyArc.pattern.end.toLowerCase()} energy, closing pose, ${placement.visibility} product visibility`,

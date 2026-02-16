@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/db';
 import { countTextSyllables } from '@/lib/syllables';
+import { INTERACTION_TYPES, CAMERA_ANGLES, CAMERA_MOVEMENTS, LIGHTING_DIRECTIONS } from '@/lib/constants';
 import { logger } from '@/lib/logger';
 
 // PATCH /api/projects/[id]/scripts/[scriptId]/segments/[segmentIndex]
-// Body: { script_text?: string, text_overlay?: string }
+// Body: { script_text?, text_overlay?, props_needed?, interaction_type?, camera_specs? }
 // Creates a new versioned scene row (per-segment history)
 export async function PATCH(
   request: NextRequest,
@@ -26,12 +27,52 @@ export async function PATCH(
     // Validate at least one field to update
     const hasScriptText = 'script_text' in body && typeof body.script_text === 'string';
     const hasTextOverlay = 'text_overlay' in body && typeof body.text_overlay === 'string';
+    const hasPropsNeeded = 'props_needed' in body && Array.isArray(body.props_needed);
+    const hasInteractionType = 'interaction_type' in body && typeof body.interaction_type === 'string';
+    const hasCameraSpecs = 'camera_specs' in body && typeof body.camera_specs === 'object' && body.camera_specs !== null;
 
-    if (!hasScriptText && !hasTextOverlay) {
+    if (!hasScriptText && !hasTextOverlay && !hasPropsNeeded && !hasInteractionType && !hasCameraSpecs) {
       return NextResponse.json(
-        { error: 'No valid fields to update. Allowed: script_text, text_overlay' },
+        { error: 'No valid fields to update. Allowed: script_text, text_overlay, props_needed, interaction_type, camera_specs' },
         { status: 400 }
       );
+    }
+
+    // Validate enum values
+    if (hasInteractionType) {
+      const validTypes: readonly string[] = INTERACTION_TYPES;
+      if (!validTypes.includes(body.interaction_type)) {
+        return NextResponse.json(
+          { error: `Invalid interaction_type. Must be one of: ${INTERACTION_TYPES.join(', ')}` },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (hasCameraSpecs) {
+      const { angle, movement, lighting } = body.camera_specs;
+      const validAngles: readonly string[] = CAMERA_ANGLES;
+      const validMovements: readonly string[] = CAMERA_MOVEMENTS;
+      const validLighting: readonly string[] = LIGHTING_DIRECTIONS;
+
+      if (angle && !validAngles.includes(angle)) {
+        return NextResponse.json(
+          { error: `Invalid camera angle. Must be one of: ${CAMERA_ANGLES.join(', ')}` },
+          { status: 400 }
+        );
+      }
+      if (movement && !validMovements.includes(movement)) {
+        return NextResponse.json(
+          { error: `Invalid camera movement. Must be one of: ${CAMERA_MOVEMENTS.join(', ')}` },
+          { status: 400 }
+        );
+      }
+      if (lighting && !validLighting.includes(lighting)) {
+        return NextResponse.json(
+          { error: `Invalid lighting direction. Must be one of: ${LIGHTING_DIRECTIONS.join(', ')}` },
+          { status: 400 }
+        );
+      }
     }
 
     // Verify script belongs to project
@@ -68,6 +109,13 @@ export async function PATCH(
 
     // INSERT new versioned row with edits applied
     const newVersion = (currentScene.version ?? 1) + 1;
+
+    // Merge camera_specs: allow partial updates (e.g., just angle) without losing movement/lighting
+    let mergedCameraSpecs = currentScene.camera_specs;
+    if (hasCameraSpecs) {
+      mergedCameraSpecs = { ...(currentScene.camera_specs || {}), ...body.camera_specs };
+    }
+
     const { data: newScene, error: insertError } = await supabase
       .from('scene')
       .insert({
@@ -81,6 +129,9 @@ export async function PATCH(
         audio_sync: currentScene.audio_sync,
         text_overlay: hasTextOverlay ? body.text_overlay : currentScene.text_overlay,
         product_visibility: currentScene.product_visibility,
+        props_needed: hasPropsNeeded ? body.props_needed : currentScene.props_needed,
+        interaction_type: hasInteractionType ? body.interaction_type : currentScene.interaction_type,
+        camera_specs: mergedCameraSpecs,
         tone: currentScene.tone,
         version: newVersion,
       })

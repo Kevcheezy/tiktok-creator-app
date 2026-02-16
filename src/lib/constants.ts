@@ -118,6 +118,22 @@ export const ENERGY_ARC = [
   { segment: 4, section: 'CTA', pattern: { start: 'LOW', middle: 'PEAK', end: 'LOW' }, description: 'Casual -> peaks on value -> confident close' },
 ] as const;
 
+// Segment tagging enums (R1.5.10)
+export const INTERACTION_TYPES = [
+  'hold_and_show', 'apply_to_skin', 'stir_mix', 'demonstrate',
+  'pour_drink', 'unbox', 'compare', 'try_on', 'set_down_point', 'none',
+] as const;
+export type InteractionType = typeof INTERACTION_TYPES[number];
+
+export const CAMERA_ANGLES = ['close-up', 'medium', 'wide', 'over-shoulder'] as const;
+export type CameraAngle = typeof CAMERA_ANGLES[number];
+
+export const CAMERA_MOVEMENTS = ['static', 'slow_zoom_in', 'slow_zoom_out', 'pan_left', 'pan_right', 'tracking'] as const;
+export type CameraMovement = typeof CAMERA_MOVEMENTS[number];
+
+export const LIGHTING_DIRECTIONS = ['ring_light_front', 'natural_window', 'warm_ambient', 'dramatic_side', 'soft_diffused'] as const;
+export type LightingDirection = typeof LIGHTING_DIRECTIONS[number];
+
 // Project status lifecycle
 export const PROJECT_STATUSES = [
   'created',
