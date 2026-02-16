@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import { Nav } from '@/components/nav';
 import { ProjectList } from '@/components/project-list';
 import { supabase } from '@/db';
 
@@ -12,9 +11,7 @@ export default async function DashboardPage() {
     .order('created_at', { ascending: false });
 
   return (
-    <div className="min-h-screen">
-      <Nav />
-      <main className="mx-auto max-w-7xl px-6 py-10 lg:px-8">
+    <main className="mx-auto max-w-7xl px-6 py-10 lg:px-8">
         {/* Page header */}
         <div className="animate-fade-in-up flex items-end justify-between gap-4">
           <div>
@@ -50,7 +47,6 @@ export default async function DashboardPage() {
         <div className="mt-8">
           <ProjectList projects={projects || []} />
         </div>
-      </main>
-    </div>
+    </main>
   );
 }

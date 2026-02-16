@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import { Nav } from '@/components/nav';
 import { ProjectDetail } from '@/components/project-detail';
 
 export default async function ProjectDetailPage({
@@ -10,9 +9,7 @@ export default async function ProjectDetailPage({
   const { id } = await params;
 
   return (
-    <div className="min-h-screen">
-      <Nav />
-      <main className="mx-auto max-w-5xl px-6 py-10 lg:px-8">
+    <main className="mx-auto max-w-5xl px-6 py-10 lg:px-8">
         {/* Back link */}
         <Link
           href="/"
@@ -34,7 +31,6 @@ export default async function ProjectDetailPage({
         </Link>
 
         <ProjectDetail projectId={id} />
-      </main>
-    </div>
+    </main>
   );
 }

@@ -1,12 +1,9 @@
 import Link from 'next/link';
-import { Nav } from '@/components/nav';
 import { CreateProjectForm } from '@/components/create-project-form';
 
 export default function NewProjectPage() {
   return (
-    <div className="min-h-screen">
-      <Nav />
-      <main className="mx-auto max-w-lg px-6 py-10 lg:px-8">
+    <main className="mx-auto max-w-lg px-6 py-10 lg:px-8">
         <div className="animate-fade-in-up">
           <Link
             href="/"
@@ -29,7 +26,6 @@ export default function NewProjectPage() {
         <div className="mt-8 animate-fade-in-up rounded-xl border border-border bg-surface p-6" style={{ animationDelay: '100ms' }}>
           <CreateProjectForm />
         </div>
-      </main>
-    </div>
+    </main>
   );
 }

@@ -1,14 +1,11 @@
 import Link from 'next/link';
-import { Nav } from '@/components/nav';
 import { ProductList } from '@/components/product-list';
 
 export const dynamic = 'force-dynamic';
 
 export default function ProductsPage() {
   return (
-    <div className="min-h-screen">
-      <Nav />
-      <main className="mx-auto max-w-7xl px-6 py-10 lg:px-8">
+    <main className="mx-auto max-w-7xl px-6 py-10 lg:px-8">
         {/* Page header */}
         <div className="animate-fade-in-up flex items-end justify-between gap-4">
           <div>
@@ -42,7 +39,6 @@ export default function ProductsPage() {
         <div className="mt-8">
           <ProductList />
         </div>
-      </main>
-    </div>
+    </main>
   );
 }

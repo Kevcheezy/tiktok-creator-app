@@ -1,13 +1,10 @@
-import { Nav } from '@/components/nav';
 import { ProductForm } from '@/components/product-form';
 
 export const dynamic = 'force-dynamic';
 
 export default function NewProductPage() {
   return (
-    <div className="min-h-screen">
-      <Nav />
-      <main className="mx-auto max-w-2xl px-6 py-10 lg:px-8">
+    <main className="mx-auto max-w-2xl px-6 py-10 lg:px-8">
         <div className="animate-fade-in-up">
           <h1 className="font-[family-name:var(--font-display)] text-3xl font-bold tracking-tight text-text-primary">
             Add Product
@@ -19,7 +16,6 @@ export default function NewProductPage() {
         <div className="mt-8">
           <ProductForm />
         </div>
-      </main>
-    </div>
+    </main>
   );
 }
