@@ -428,6 +428,29 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [ ] Defaults pre-selected (Bedroom Ring Light + Hold & Show)
 - [ ] Custom presets saved to DB for reuse across projects
 
+#### R1.5.10 - Visual Script Breakdown
+**Priority:** P2 - Medium (backlog)
+**Effort:** Medium
+**Why:** The ScriptingAgent already outputs structured data per segment (shot_scripts, audio_sync, text_overlay, broll_cues), but the user sees these as scattered metadata — never as a unified "breakdown." A visual breakdown view at script review would show the full 60-second plan at a glance: script text with highlighted product mentions, tagged elements (props, wardrobe, interaction type, scene setting), B-roll cue markers on a timeline, camera/shot specs, and energy arc visualization. Inspired by Studiovity's auto-tagging script breakdown. Lets creators see their whole video plan before committing to expensive generation steps.
+
+- [ ] Auto-tag script segments with: props needed, product visibility markers, interaction type, B-roll cue positions, text overlay suggestions
+- [ ] Visual breakdown view at script review: full 60-second timeline with tagged elements, energy arc overlay, B-roll markers
+- [ ] Highlighted product mentions in script text (clickable to see product placement details for that segment)
+- [ ] Camera/shot specs surfaced as editable fields: angle (close-up/medium/wide), movement (static/pan/zoom), lighting direction
+- [ ] Beat board view option: 4-segment visual arc (Hook → Problem → Solution → CTA) with energy levels, B-roll placements, scene previews
+
+#### R1.5.11 - Keyframe Consistency Validation
+**Priority:** P2 - Medium (backlog)
+**Effort:** Small
+**Depends on:** R1.5.9 (scene presets provide the consistency baseline)
+**Why:** Even with a locked scene preset, the CastingAgent generates 4 keyframe pairs independently — each LLM call can drift (different room appearance, lighting shift, face mismatch). Studiovity solves this with persistent character profiles. We should solve it with post-generation consistency validation. After CastingAgent generates all keyframes, run a consistency check and flag drift before the user reviews.
+
+- [ ] After CastingAgent generates all 8 keyframes (4 start + 4 end), run consistency scoring via LLM
+- [ ] Score dimensions: face similarity, room/background match, lighting consistency, wardrobe continuity, props placement
+- [ ] Flag segments with visual drift (e.g., "Segment 3 background differs from segments 1-2-4")
+- [ ] Surface drift warnings in casting review UI — user can approve anyway or regenerate flagged segments
+- [ ] Optional: auto-regenerate drifted segments with "match segment 1" reference in prompt
+
 ---
 
 ### Tier 2: Make It Actually Convert (Quality & conversion optimization)
@@ -506,6 +529,20 @@ These features separate "generates a video" from "generates a video that sells."
 #### ~~R2.5 - Reference Video Intelligence~~ DONE *(completed as R1.3)*
 **Status:** Complete (2026-02-15) — Implemented ahead of schedule as part of Tier 1 (R1.3).
 See R1.3 above for full implementation details.
+
+#### R2.6 - Campaign Dashboard
+**Priority:** P2 - Medium (backlog)
+**Effort:** Medium
+**Depends on:** R2.0 (performance tracking provides the data layer)
+**Why:** UGC creators run campaigns — multiple videos for the same product across different tones, hooks, and avatars. There's no way to group videos by product/campaign, track aggregate spend, or see which video in a campaign performs best. A campaign dashboard groups projects by product, shows aggregate cost/performance, and provides a calendar view for planning production schedules. Inspired by Studiovity's budgeting and scheduling tools, adapted for AI UGC creators.
+
+- [ ] Campaign entity: group multiple projects by product into a named campaign (e.g., "Summer Vitamin C Push")
+- [ ] Campaign list page: cards showing product, video count, total cost, status breakdown, top performer
+- [ ] Campaign detail page: all videos in the campaign with cost and performance metrics side-by-side
+- [ ] Campaign-level cost tracking: aggregate spend across all videos, cost-per-video trend chart
+- [ ] Campaign calendar: schedule planned video production dates and TikTok publish dates
+- [ ] Performance aggregation: total views, total revenue, best/worst video, ROI per campaign
+- [ ] "New Video for Campaign" button: pre-fills create project form with campaign product + suggested variation (different tone/hook)
 
 ---
 
