@@ -17,6 +17,7 @@ import { uploadToStorage } from './direct-upload';
 import { CommandMenu } from './command-menu';
 import { GilDisplay } from './gil-display';
 import { PresetSelector, type Preset } from './preset-selector';
+import { NegativePromptPanel } from './negative-prompt-panel';
 
 interface ProjectData {
   id: string;
@@ -58,6 +59,7 @@ interface ProjectData {
   product: { id: string; name: string | null; image_url: string | null } | null;
   video_model_id: string | null;
   video_model: { id: string; name: string; slug: string; resolution: string; total_duration: number; segment_count: number; provider: string } | null;
+  negative_prompt_override: unknown;
 }
 
 // Client-side rollback map (mirrors backend cancel endpoint)
@@ -652,17 +654,25 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
 
       {/* Casting Review */}
       {displayStage === 'casting_review' && (
-        <AssetReview
-          projectId={projectId}
-          onStatusChange={fetchProject}
-          confirmBeforeApprove={{
-            title: 'Generate Videos?',
-            description: 'This will generate video segments using Kling 3.0 Pro and voiceover audio using ElevenLabs. Video generation takes 2-5 minutes per segment.',
-            cost: '~$1.25',
-          }}
-          onRegenerateAll={handleRegenerateAllKeyframes}
-          readOnly={readOnlyMode}
-        />
+        <>
+          <NegativePromptPanel
+            projectId={projectId}
+            negativePromptOverride={project.negative_prompt_override}
+            onSaved={fetchProject}
+            readOnly={readOnlyMode}
+          />
+          <AssetReview
+            projectId={projectId}
+            onStatusChange={fetchProject}
+            confirmBeforeApprove={{
+              title: 'Generate Videos?',
+              description: 'This will generate video segments using Kling 3.0 Pro and voiceover audio using ElevenLabs. Video generation takes 2-5 minutes per segment.',
+              cost: '~$1.25',
+            }}
+            onRegenerateAll={handleRegenerateAllKeyframes}
+            readOnly={readOnlyMode}
+          />
+        </>
       )}
 
       {/* Asset Review */}

@@ -764,7 +764,7 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] `negative_prompt_override` JSONB column on `project` table (migration applied)
 - [x] PATCH /api/projects/[id] accepts `negative_prompt_override` in always-allowed fields
 - [x] Agents read project override before falling back to model default via resolveNegativePrompt()
-- [ ] Frontend UI: Info icon at generation gates, override toggle (flagged for frontend agent)
+- [x] Frontend UI: NegativePromptPanel at casting_review — collapsible panel with 3 stage tabs (casting/directing/broll), view/edit/reset per-stage overrides, auto-save via PATCH
 
 **Backward compat:**
 - [x] isStructuredPrompt() type guard detects old string format vs new StructuredPrompt in `scene.visual_prompt`
