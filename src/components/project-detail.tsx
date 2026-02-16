@@ -1550,14 +1550,13 @@ function InfluencerSelection({ projectId, currentInfluencerId, productCategory, 
   const [interactionOverride, setInteractionOverride] = useState('');
 
   useEffect(() => {
-    fetch('/api/influencers')
+    fetch('/api/influencers?hasImage=true')
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
         setInfluencers(data);
-        // Pre-select current if set, otherwise first with an image
+        // Pre-select current if set, otherwise first available
         if (!currentInfluencerId && data.length > 0) {
-          const withImage = data.find((i: InfluencerOption) => i.image_url);
-          if (withImage) setSelectedId(withImage.id);
+          setSelectedId(data[0].id);
         }
       })
       .catch(() => setInfluencers([]))

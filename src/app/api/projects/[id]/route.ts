@@ -11,7 +11,7 @@ export async function GET(
 
   const { data: proj, error } = await supabase
     .from('project')
-    .select('*, character:ai_character(*), script_template:script_template(*), influencer:influencer(*)')
+    .select('*, character:ai_character(*), script_template:script_template(*), influencer:influencer(*), product:product(*)')
     .eq('id', id)
     .single();
 
@@ -68,7 +68,7 @@ export async function PATCH(
     }
 
     // Always-allowed fields (internal updates from frontend — product_placement, etc.)
-    const ALWAYS_ALLOWED = ['product_placement', 'product_image_url'] as const;
+    const ALWAYS_ALLOWED = ['product_placement', 'product_image_url', 'product_data'] as const;
     for (const field of ALWAYS_ALLOWED) {
       if (field in body) {
         updates[field] = body[field];
