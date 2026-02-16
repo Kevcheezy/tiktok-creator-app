@@ -217,13 +217,53 @@ These are blocking items. Nothing else matters until a user can go from product 
 - [x] "Edited" badge on overridden fields, "Reset to original" per-field action via OverrideBadge component
 - [x] Create project form: product selector dropdown (shows analyzed products, skips analysis) + new URL input (hidden when product selected)
 
+#### R1.7 - B-Roll Agent
+**Priority:** P0 - Critical
+**Effort:** Medium-Large
+**Depends on:** R1.1 (pipeline must handle casting/directing/voiceover before B-roll generation phase runs)
+**Spec:** `docs/plans/2026-02-15-r1.7-broll-agent-design.md`
+**Why:** High-performing TikTok Shop content uses B-roll inserts (cutaway images) to maintain viewer attention and validate claims. Without B-roll, videos are a single visual layer — flat and monotonous. B-roll is a visual argument that reinforces the script's persuasion structure. The agent operates in two phases: planning (at script review) and generation (after directing).
+
+**ScriptingAgent integration:**
+- [ ] Add `broll_cues` field to scene table — timestamps, duration, intent, spoken text for each B-roll insert
+- [ ] ScriptingAgent generates cues alongside shot_scripts and audio_sync
+- [ ] Cues timed for ~2-3 second visual refresh intervals (short-form virality best practice)
+
+**B-Roll planning (Phase 1 — after script approval, before influencer selection):**
+- [ ] B-RollAgent.plan() reads approved script + broll_cues + product category
+- [ ] Selects `BROLL_PRESETS` for product category (10 category-aware presets: transformation, research, lifestyle, social_proof, unboxing, comparison, etc.)
+- [ ] Shot count per segment: `ceil(syllable_count / 20)`, min 2, max 6
+- [ ] LLM generates categorized prompts with narrative roles for each shot
+- [ ] New `broll_shot` table stores planned shots (prompt, category, timing, duration, status)
+- [ ] New pipeline statuses: `broll_planning`, `broll_review`
+
+**Storyboard view (user reviews B-roll plan):**
+- [ ] Vertical 60-second timeline showing script text + B-roll cards per shot_script
+- [ ] Edit prompt, change category, adjust timing/duration, remove, add, reorder
+- [ ] Upload own image to replace any AI-generated shot
+- [ ] Summary bar: total count, estimated cost, per-category breakdown
+- [ ] Approve → proceeds to influencer_selection
+
+**B-Roll generation (Phase 2 — after directing + voiceover):**
+- [ ] B-RollAgent.generate() creates still images via Nano Banana Pro ($0.07/image)
+- [ ] Skips user-uploaded shots (already have image_url)
+- [ ] New pipeline status: `broll_generation`
+- [ ] Assets stored as type `broll` with timing metadata for EditorAgent
+
+**EditorAgent integration:**
+- [ ] EditorAgent reads broll_cues (timestamps) + broll_shot records (images)
+- [ ] Composites B-roll as cutaway overlays at exact offset_seconds with duration_seconds
+- [ ] Applies Ken Burns effect (zoom/pan) for motion on still images
+
+**Cost:** ~$0.85-1.13 per video (planning LLM: $0.01 + 12-16 images: $0.84-1.12). Total per video: ~$6.43-6.71.
+
 ---
 
 ### Tier 1.5: UX Hardening (Polish before scaling)
 
 Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1). Before optimizing for conversions (Tier 2), harden the UX so the tool is pleasant to use repeatedly.
 
-#### R1.5.1 - Influencer Management Completion
+#### R1.5.1 - Influencer Management Completion 🔧 IN PROGRESS
 **Priority:** P0.5 - High (CRUD is incomplete)
 **Effort:** Small
 **Depends on:** B0.11 (image replacement must be fixed first)
@@ -448,7 +488,12 @@ DONE       Tier 0: Critical Bugs (B0.1-B0.11)
 DONE       Tier 1: Core Pipeline (R1.1, R1.2, R1.4, R1.5, R1.6)
            ▲ Full end-to-end pipeline functional: URL → analysis → script → casting → directing → voiceover → editing → finished video
 
-MVP ──→    Validate: Run real product URLs through full pipeline. Ship when videos are watchable.
+NOW        R1.7 B-Roll Agent
+           ScriptingAgent cues → B-Roll planning → Storyboard review → B-Roll generation → EditorAgent compositing
+           (timestamps in script)  (LLM shot list)  (user edits/approves)  (Nano Banana Pro)   (Ken Burns overlay)
+           ▲ Two-phase: plan at script review, generate after directing. ~$0.85-1.13 added cost per video.
+
+MVP ──→    Validate: Run real product URLs through full pipeline with B-roll. Ship when videos are watchable.
 
 POLISH     Tier 1.5: UX Hardening (backend done, frontend remaining)
            R1.5.1 Influencer edit UI ──→ R1.5.3 Navigation ──→ R1.5.4 Frontend error handling
