@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ProjectList } from '@/components/project-list';
+import { QuestBoard } from '@/components/quest-board';
 import { supabase } from '@/db';
 
 export const dynamic = 'force-dynamic';
@@ -11,7 +11,7 @@ export default async function DashboardPage() {
     .order('created_at', { ascending: false });
 
   return (
-    <main className="mx-auto max-w-7xl px-6 py-10 lg:px-8">
+    <main className="mx-auto max-w-[1600px] px-6 py-10 lg:px-8">
         {/* Page header */}
         <div className="animate-fade-in-up flex items-end justify-between gap-4">
           <div>
@@ -45,7 +45,7 @@ export default async function DashboardPage() {
 
         {/* Project grid */}
         <div className="mt-8">
-          <ProjectList projects={projects || []} />
+          <QuestBoard projects={projects || []} />
         </div>
     </main>
   );

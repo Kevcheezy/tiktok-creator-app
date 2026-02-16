@@ -586,26 +586,23 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] ~~Drift detection~~ → Prevented by continuity prompt + reference image chaining
 - [x] ~~Auto-regenerate drifted segments~~ → Not needed; segments inherit visual context from previous end frame
 
-#### R1.5.12 - Projects Quest Board (FF7 World Map Kanban)
+#### ~~R1.5.12 - Projects Quest Board (FF7 World Map Kanban)~~ ~~DONE~~
 **Priority:** P1 - High
 **Effort:** Medium
+**Status:** Complete (2026-02-16) — Replaced flat project grid with FF7 World Map Kanban. 6 location columns (Midgar → Kalm → Cosmo Canyon → Junon → Gold Saucer → Northern Crater). Cards in 4 visual states (processing/review/victory/KO). Stats bar with filter toggles. Failed projects placed via `failed_at_status`. Search + stat filter with AND logic. Pixel art location icons deferred to v2.
 **Spec:** `docs/plans/2026-02-15-projects-quest-board-design.md`
 **Depends on:** R1.5.6 (FF7 Visual Theme provides character sprites, Mako palette, battle animations)
-**Why:** The Projects tab is a flat grid of cards — functional but lifeless. It gives no spatial sense of where projects sit in the pipeline or which ones need attention. Replacing it with an FF7 World Map Kanban board turns the project list into a quest line: each pipeline phase is a location on the world map (Midgar → Kalm → Cosmo Canyon → Junon → Gold Saucer → Northern Crater), and projects are quest cards that travel through the map. Review gates pulse "YOUR TURN" to surface actionable items. Failed projects show KO state. Stats bar tracks In Battle / Awaiting Orders / Victories / KO / Gil totals.
 
 **New components:**
-- [ ] `quest-board.tsx` — Main board layout with 6 world-map columns + quest path SVG
-- [ ] `quest-card.tsx` — Rich interactive card (4 states: processing, review gate, victory, KO) with ATB bar, character sprite, quick actions
-- [ ] `quest-column.tsx` — Single location column with header icon, project count, capacity theming
-- [ ] `quest-path.tsx` — SVG connection path between columns (dotted trail with Mako glow)
-- [ ] `quest-stats.tsx` — Stats bar: In Battle / Awaiting Orders / Victories / KO / Gil total
+- [x] `quest-board.tsx` — Main board layout with 6 world-map columns + quest path
+- [x] `quest-card.tsx` — Rich interactive card (4 states: processing, review gate, victory, KO) with ATB bar, character sprite, quick actions
+- [x] `quest-column.tsx` — Single location column with header icon, project count, scrollable cards
+- [x] `quest-path.tsx` — Dot-line path between columns with Mako glow
+- [x] `quest-stats.tsx` — Stats bar: In Battle / Awaiting Orders / Victories / KO / Gil total
 
 **Modified components:**
-- [ ] `project-list.tsx` — Replace flat grid with QuestBoard component, preserve search/filter functionality
-- [ ] `page.tsx` (dashboard) — Wire QuestBoard with server-fetched project data
-
-**Assets:**
-- [ ] 6 pixel location icons via Nano Banana Pro (~$0.42): Midgar reactor, Kalm village, Cosmo Canyon observatory, Junon cannon, Gold Saucer dome, Northern Crater
+- [x] `page.tsx` (dashboard) — Swap ProjectList → QuestBoard, widen to `max-w-[1600px]`
+- [x] `globals.css` — Add `animate-awaiting-pulse` keyframe
 
 #### ~~R1.5.13 - Auto-Upscale Influencer Images to 4K~~ ~~DONE~~
 **Priority:** P1 - High
@@ -973,7 +970,7 @@ POLISH     Tier 1.5: UX Hardening
            R1.5.9 Scene & Interaction Presets ✅ DONE
            R1.5.10 Visual Script Breakdown ✅ DONE
            R1.5.11 Keyframe Consistency ✅ SUPERSEDED (chained keyframe generation prevents drift)
-           R1.5.12 Projects Quest Board (FF7 World Map Kanban — depends on R1.5.6 ✅)
+           R1.5.12 Projects Quest Board ✅ DONE (FF7 World Map Kanban — depends on R1.5.6 ✅)
            R1.5.13 Influencer 4K Upscale ✅ DONE (inline at upload time)
            R1.5.15 Project sequential numbering (PROJECT-N)
            R1.5.16 Video Model Selection & Pipeline Abstraction (backend done, frontend selector + 2 agents remaining)

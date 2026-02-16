@@ -267,6 +267,19 @@ body::after {
   animation: victory-bounce 0.6s ease-out;
 }
 
+@keyframes awaiting-pulse {
+  0%, 100% {
+    box-shadow: 0 0 4px rgba(255, 201, 51, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(255, 201, 51, 0.5);
+  }
+}
+
+.animate-awaiting-pulse {
+  animation: awaiting-pulse 2s ease-in-out infinite;
+}
+
 /* Stagger children */
 .stagger-children > * {
   animation: fade-in-up 0.4s ease-out both;
