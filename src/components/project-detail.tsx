@@ -10,6 +10,8 @@ import { AssetReview } from './asset-review';
 import { StoryboardView } from './storyboard-view';
 import { ConfirmDialog } from './confirm-dialog';
 import { StageProgress } from './stage-progress';
+import { ToneSelector } from './tone-selector';
+import { SCRIPT_TONES } from '@/lib/constants';
 
 interface ProjectData {
   id: string;
@@ -35,12 +37,14 @@ interface ProjectData {
     image_description_for_nano_banana_pro?: string;
     avatar_description?: string;
   } | null;
+  tone: string | null;
+  character_id: string | null;
   cost_usd: string | null;
   error_message: string | null;
   failed_at_status: string | null;
   created_at: string | null;
   updated_at: string | null;
-  character: { name: string; avatar_persona: string | null } | null;
+  character: { id: string; name: string; avatar_persona: string | null } | null;
   video_analysis: Record<string, unknown> | null;
   influencer_id: string | null;
   influencer: { id: string; name: string; persona: string | null; image_url: string | null } | null;
@@ -239,6 +243,9 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       <div className="rounded-xl border border-border bg-surface p-5">
         <PipelineProgress status={project.status} failedAtStatus={project.failed_at_status} />
       </div>
+
+      {/* Project Settings */}
+      <ProjectSettings project={project} onUpdated={fetchProject} />
 
       {/* Connection warning after consecutive polling failures */}
       {connectionWarning && (
@@ -1546,6 +1553,292 @@ function ScriptingProgress({ startedAt }: { startedAt: string | null }) {
             Crafting a 60-second TikTok script with hooks, shots, and energy arcs...
           </p>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ==============================
+   Project Settings (R1.5.2)
+   ============================== */
+
+const SETTINGS_REVIEW_GATES = [
+  'analysis_review',
+  'script_review',
+  'broll_review',
+  'influencer_selection',
+  'casting_review',
+  'asset_review',
+];
+
+interface SettingsCharacter {
+  id: string;
+  name: string;
+  avatar_persona: string | null;
+}
+
+interface SettingsInfluencer {
+  id: string;
+  name: string;
+  persona: string | null;
+  image_url: string | null;
+}
+
+function ProjectSettings({ project, onUpdated }: { project: ProjectData; onUpdated: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [tone, setTone] = useState(project.tone || 'reluctant-insider');
+  const [characterId, setCharacterId] = useState(project.character_id || '');
+  const [influencerId, setInfluencerId] = useState(project.influencer_id || '');
+  const [projectName, setProjectName] = useState(project.name || '');
+  const [characters, setCharacters] = useState<SettingsCharacter[]>([]);
+  const [influencers, setInfluencers] = useState<SettingsInfluencer[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  const isReviewGate = SETTINGS_REVIEW_GATES.includes(project.status);
+
+  // Sync state when project changes externally
+  useEffect(() => {
+    setTone(project.tone || 'reluctant-insider');
+    setCharacterId(project.character_id || '');
+    setInfluencerId(project.influencer_id || '');
+    setProjectName(project.name || '');
+  }, [project.tone, project.character_id, project.influencer_id, project.name]);
+
+  // Fetch options when entering edit mode
+  useEffect(() => {
+    if (!editing) return;
+    fetch('/api/characters')
+      .then((r) => (r.ok ? r.json() : []))
+      .then(setCharacters)
+      .catch(() => setCharacters([]));
+    fetch('/api/influencers')
+      .then((r) => (r.ok ? r.json() : []))
+      .then(setInfluencers)
+      .catch(() => setInfluencers([]));
+  }, [editing]);
+
+  function handleCancel() {
+    setTone(project.tone || 'reluctant-insider');
+    setCharacterId(project.character_id || '');
+    setInfluencerId(project.influencer_id || '');
+    setProjectName(project.name || '');
+    setError('');
+    setEditing(false);
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    setError('');
+
+    const updates: Record<string, unknown> = {};
+    if (tone !== (project.tone || 'reluctant-insider')) updates.tone = tone;
+    if (characterId !== (project.character_id || '')) updates.character_id = characterId || null;
+    if (influencerId !== (project.influencer_id || '')) updates.influencer_id = influencerId || null;
+    if (projectName !== (project.name || '')) updates.name = projectName || null;
+
+    if (Object.keys(updates).length === 0) {
+      setEditing(false);
+      setSaving(false);
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/projects/${project.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to save settings');
+      }
+      setEditing(false);
+      setSuccess('Settings saved');
+      setTimeout(() => setSuccess(''), 2000);
+      onUpdated();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const toneLabel = project.tone && SCRIPT_TONES[project.tone as keyof typeof SCRIPT_TONES]
+    ? SCRIPT_TONES[project.tone as keyof typeof SCRIPT_TONES].label
+    : 'Default';
+
+  if (editing) {
+    return (
+      <div className="rounded-xl border border-electric/20 bg-surface p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="font-[family-name:var(--font-display)] text-xs font-semibold uppercase tracking-wider text-electric">
+            Edit Settings
+          </h3>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleCancel}
+              disabled={saving}
+              className="rounded-lg border border-border px-3 py-1.5 font-[family-name:var(--font-display)] text-xs font-medium text-text-muted transition-colors hover:text-text-secondary disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-electric px-3 py-1.5 font-[family-name:var(--font-display)] text-xs font-semibold text-void transition-all hover:shadow-[0_0_16px_rgba(0,240,255,0.3)] disabled:opacity-50"
+            >
+              {saving ? (
+                <>
+                  <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="60" strokeDashoffset="15" strokeLinecap="round" />
+                  </svg>
+                  Saving...
+                </>
+              ) : (
+                'Save'
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Project Name */}
+        <div>
+          <label className="mb-1.5 block font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+            Project Name
+          </label>
+          <input
+            type="text"
+            value={projectName}
+            onChange={(e) => setProjectName(e.target.value)}
+            placeholder="Optional project name..."
+            className="block w-full rounded-lg border border-border bg-surface-raised px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/60 transition-all focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric"
+          />
+        </div>
+
+        {/* Tone */}
+        <div>
+          <label className="mb-1.5 block font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+            Script Tone
+          </label>
+          <ToneSelector value={tone} onChange={setTone} compact />
+        </div>
+
+        {/* Character */}
+        <div>
+          <label className="mb-1.5 block font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+            Character
+          </label>
+          <div className="relative">
+            <select
+              value={characterId}
+              onChange={(e) => setCharacterId(e.target.value)}
+              className="block w-full appearance-none rounded-lg border border-border bg-surface-raised px-3 py-2 pr-9 text-sm text-text-primary transition-all focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric"
+            >
+              <option value="">Auto-detect from product category</option>
+              {characters.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}{c.avatar_persona ? ` (${c.avatar_persona})` : ''}
+                </option>
+              ))}
+            </select>
+            <svg viewBox="0 0 16 16" fill="none" className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-muted" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="4 6 8 10 12 6" />
+            </svg>
+          </div>
+        </div>
+
+        {/* Influencer */}
+        <div>
+          <label className="mb-1.5 block font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+            Influencer
+          </label>
+          <div className="relative">
+            <select
+              value={influencerId}
+              onChange={(e) => setInfluencerId(e.target.value)}
+              className="block w-full appearance-none rounded-lg border border-border bg-surface-raised px-3 py-2 pr-9 text-sm text-text-primary transition-all focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric"
+            >
+              <option value="">No influencer selected</option>
+              {influencers.map((inf) => (
+                <option key={inf.id} value={inf.id}>
+                  {inf.name}{inf.persona ? ` (${inf.persona})` : ''}
+                </option>
+              ))}
+            </select>
+            <svg viewBox="0 0 16 16" fill="none" className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-muted" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="4 6 8 10 12 6" />
+            </svg>
+          </div>
+        </div>
+
+        {error && (
+          <div className="rounded-lg border border-magenta/30 bg-magenta/10 px-3 py-2">
+            <p className="text-xs text-magenta">{error}</p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Compact read-only view
+  return (
+    <div className="rounded-xl border border-border bg-surface px-5 py-3">
+      <div className="flex items-center gap-3 flex-wrap">
+        <span className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+          Settings
+        </span>
+
+        {/* Tone badge */}
+        <span className="inline-flex rounded-full border border-electric/20 bg-electric/5 px-2.5 py-0.5 font-[family-name:var(--font-display)] text-[11px] font-medium text-electric">
+          {toneLabel}
+        </span>
+
+        {/* Character badge */}
+        {project.character && (
+          <span className="inline-flex rounded-full border border-magenta/20 bg-magenta/5 px-2.5 py-0.5 font-[family-name:var(--font-display)] text-[11px] font-medium text-magenta">
+            {project.character.name}
+          </span>
+        )}
+
+        {/* Influencer badge */}
+        {project.influencer && (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-lime/20 bg-lime/5 px-2.5 py-0.5 font-[family-name:var(--font-display)] text-[11px] font-medium text-lime">
+            {project.influencer.image_url && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={project.influencer.image_url}
+                alt=""
+                className="h-3.5 w-3.5 rounded-full object-cover"
+              />
+            )}
+            {project.influencer.name}
+          </span>
+        )}
+
+        {/* Success feedback */}
+        {success && (
+          <span className="font-[family-name:var(--font-display)] text-[11px] font-medium text-lime animate-fade-in-up">
+            {success}
+          </span>
+        )}
+
+        {/* Edit button — only at review gates */}
+        {isReviewGate && (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 font-[family-name:var(--font-display)] text-[11px] font-medium text-text-muted transition-colors hover:border-electric/30 hover:text-electric"
+          >
+            <svg viewBox="0 0 16 16" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M11.5 1.5l3 3L5 14H2v-3L11.5 1.5z" />
+            </svg>
+            Edit
+          </button>
+        )}
       </div>
     </div>
   );

@@ -274,13 +274,15 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] Edit mode toggle on influencer detail page (inline editing for name, persona, with save/cancel) — edit/save/cancel buttons in header, name as input, persona as textarea
 - [x] Prevent deletion of influencers assigned to active projects (or show warning with project list) — DELETE returns 409 with project list for active (non-completed/failed) projects only; frontend displays magenta error banner with linked project list
 
-#### R1.5.2 - Project Settings Editing
+#### ~~R1.5.2 - Project Settings Editing~~ DONE
+**Status:** Complete (2026-02-15)
 **Priority:** P1 - Medium
 **Effort:** Small
 **Why:** Users can't change tone, character, or influencer after project creation. Must delete and recreate.
 
 - [x] Editable project settings on detail page (tone, character, influencer) — PATCH whitelists `EDITABLE_PROJECT_FIELDS`, gated behind `REVIEW_GATE_STATUSES`; validates tone against `TONE_IDS`
 - [x] "Restart pipeline" option: `POST /api/projects/[id]/retry` with `{ stage }` body restarts from review gate using `RESTART_STAGE_MAP`; also supports legacy failed retry via `failed_at_status`
+- [x] Frontend settings panel on project detail page — compact read-only view (tone/character/influencer badges) with "Edit" button at review gates; expands to inline editing with ToneSelector, character/influencer dropdowns, name input; saves via PATCH with success/error feedback
 
 #### ~~R1.5.3 - Navigation & State Consistency~~ DONE
 **Status:** Complete (2026-02-15)
@@ -520,12 +522,10 @@ NOW        R1.7 B-Roll Agent
 
 MVP ──→    Validate: Run real product URLs through full pipeline with B-roll. Ship when videos are watchable.
 
-POLISH     Tier 1.5: UX Hardening (backend done, frontend remaining)
-           R1.5.1 Influencer edit UI ──→ R1.5.3 Navigation ──→ R1.5.4 Frontend error handling
-           (inline editing)              (back links, search)   (error boundaries, offline indicator)
-           ▲ R1.5.2 backend complete (PATCH whitelist + retry restart). Frontend settings UI remaining.
-           R1.5.5 Engineering Roadmap Kanban Dashboard (can run in parallel — no pipeline dependency)
-           (markdown parser + FF7 workers + live Kanban board)
+POLISH     Tier 1.5: UX Hardening
+           R1.5.1 Influencer edit ──→ R1.5.2 Project settings ──→ R1.5.3 Navigation ──→ R1.5.4 Error handling (ALL DONE)
+           R1.5.5 Engineering Roadmap Kanban Dashboard + R1.5.6 Direct-to-Storage Uploads (remaining)
+           (markdown parser + FF7 workers + Kanban board)  (bypass Vercel 4.5MB limit)
 
 NEXT       Tier 2: Quality & Conversion
            R2.0 Performance Tracking ──→ R2.4 Product Images ──→ R2.5 Reference Video Intel ──→ R2.3 Avatar Consistency ──→ R2.1 Hook Testing ──→ R2.2 Trends
