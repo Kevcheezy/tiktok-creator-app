@@ -19,7 +19,7 @@ export class CastingAgent extends BaseAgent {
     // 1. Fetch project with character, scene preset, and interaction preset
     const { data: project, error: projError } = await this.supabase
       .from('project')
-      .select('*, character:ai_character(*), influencer:influencer(*), scene_preset:scene_preset(*), interaction_preset:interaction_preset(*)')
+      .select('*, character:ai_character(*), influencer:influencer(*), product:product(*), scene_preset:scene_preset(*), interaction_preset:interaction_preset(*)')
       .eq('id', projectId)
       .single();
 
@@ -51,9 +51,10 @@ export class CastingAgent extends BaseAgent {
       }
     }
 
-    // 3. Detect influencer-based generation
+    // 3. Detect influencer-based generation and product image
     const influencer = project.influencer;
     const useInfluencer = !!influencer?.image_url;
+    const productImageUrl: string | null = project.product_image_url || project.product?.image_url || null;
 
     // 4. Determine avatar info
     const character = project.character;
@@ -111,14 +112,16 @@ export class CastingAgent extends BaseAgent {
 
           // Use LLM to generate detailed prompts for start and end frames
           const sealSegment = project.video_analysis?.segments?.[segIdx] || null;
+          const hasProductRef = !!productImageUrl;
           const promptPair = await this.generateVisualPrompts(
             appearance, wardrobe, sceneDescription,
             scene, placement, energyArc,
             project.product_name || 'the product',
             projectId,
-            useInfluencer,
+            useInfluencer || hasProductRef,
             sealSegment,
             interactionDescription,
+            hasProductRef,
           );
 
           // Save visual prompts to scene
@@ -127,18 +130,27 @@ export class CastingAgent extends BaseAgent {
             .update({ visual_prompt: promptPair })
             .eq('id', scene.id);
 
-          if (useInfluencer) {
-            // Image-to-image: edit the influencer's reference photo
-            this.log(`Using influencer reference: ${influencer.name}`);
+          // Build reference images array: influencer + product image
+          const referenceImages: string[] = [];
+          if (useInfluencer) referenceImages.push(influencer.image_url);
+          if (productImageUrl) referenceImages.push(productImageUrl);
+
+          if (referenceImages.length > 0) {
+            // Image-to-image: edit with reference images (influencer and/or product)
+            const refLabels = [
+              useInfluencer ? `influencer: ${influencer.name}` : null,
+              productImageUrl ? 'product image' : null,
+            ].filter(Boolean).join(' + ');
+            this.log(`Using reference images: ${refLabels}`);
 
             const editOpts = { aspectRatio: RESOLUTION.aspectRatio, resolution: '1k' as const };
 
             this.log(`Generating start keyframe (edit) for segment ${segIdx} (attempt ${attempt + 1})`);
-            const startResult = await this.wavespeed.editImage([influencer.image_url], promptPair.start, editOpts);
+            const startResult = await this.wavespeed.editImage(referenceImages, promptPair.start, editOpts);
             await this.createAsset(projectId, scene.id, 'keyframe_start', startResult.taskId, 'nano-banana-pro-edit');
 
             this.log(`Generating end keyframe (edit) for segment ${segIdx}`);
-            const endResult = await this.wavespeed.editImage([influencer.image_url], promptPair.end, editOpts);
+            const endResult = await this.wavespeed.editImage(referenceImages, promptPair.end, editOpts);
             await this.createAsset(projectId, scene.id, 'keyframe_end', endResult.taskId, 'nano-banana-pro-edit');
 
             // Poll both tasks
@@ -153,7 +165,7 @@ export class CastingAgent extends BaseAgent {
             // Track cost: 2 edit images
             await this.trackCost(projectId, API_COSTS.nanoBananaProEdit * 2);
           } else {
-            // Text-to-image: existing flow
+            // Text-to-image: no reference images available
             const imgOpts = { aspectRatio: RESOLUTION.aspectRatio, width: RESOLUTION.width, height: RESOLUTION.height };
 
             this.log(`Generating start keyframe for segment ${segIdx} (attempt ${attempt + 1})`);
@@ -193,10 +205,11 @@ export class CastingAgent extends BaseAgent {
       }
 
       if (!segmentSuccess) {
+        const failedProvider = (useInfluencer || productImageUrl) ? 'nano-banana-pro-edit' : 'nano-banana-pro';
         this.log(`All retries exhausted for segment ${segIdx}, creating failed assets`);
         await this.supabase.from('asset').insert([
-          { project_id: projectId, scene_id: scene.id, type: 'keyframe_start', provider: useInfluencer ? 'nano-banana-pro-edit' : 'nano-banana-pro', status: 'failed', cost_usd: 0 },
-          { project_id: projectId, scene_id: scene.id, type: 'keyframe_end', provider: useInfluencer ? 'nano-banana-pro-edit' : 'nano-banana-pro', status: 'failed', cost_usd: 0 },
+          { project_id: projectId, scene_id: scene.id, type: 'keyframe_start', provider: failedProvider, status: 'failed', cost_usd: 0 },
+          { project_id: projectId, scene_id: scene.id, type: 'keyframe_end', provider: failedProvider, status: 'failed', cost_usd: 0 },
         ]);
       }
     }
@@ -222,14 +235,19 @@ export class CastingAgent extends BaseAgent {
     isEdit: boolean = false,
     sealData?: any | null,
     interactionDescription?: string | null,
+    hasProductImage: boolean = false,
   ): Promise<{ start: string; end: string }> {
     const consistencyRule = `CONSISTENCY RULE: All 4 segments MUST use the same room, lighting setup, and props. Only vary: character pose, energy level, product visibility, and camera micro-adjustments (slight angle shift, subtle lighting warmth change matching energy arc). The video must look like one continuous shoot in one location.`;
 
+    const productImageRule = hasProductImage
+      ? `\nPRODUCT IMAGE RULE: A reference image of the real product is provided. The product in the generated image MUST match this reference EXACTLY — same packaging, shape, colors, label, and branding. Do NOT imagine or invent a different product appearance. The real product image is the ground truth.`
+      : '';
+
     const systemPrompt = isEdit
       ? `You are a visual prompt engineer for Nano Banana Pro image EDITING.
-Generate two edit prompts that describe how to transform a reference photo of a person into specific scene contexts.
-Keep the person's likeness but change their pose, wardrobe, setting, and energy.
-${consistencyRule}
+Generate two edit prompts that describe how to transform reference images into specific scene contexts.
+${hasProductImage ? 'Reference images include the person AND the actual product. Preserve both likenesses.' : 'Keep the person\'s likeness but change their pose, wardrobe, setting, and energy.'}
+${consistencyRule}${productImageRule}
 Output ONLY valid JSON: { "start": "...", "end": "..." }`
       : `You are a visual prompt engineer for Nano Banana Pro image generation.
 Generate two detailed image prompts for a TikTok video keyframe: one for the START of the segment and one for the END.
@@ -241,8 +259,12 @@ Output ONLY valid JSON: { "start": "...", "end": "..." }`;
       ? `Product interaction: ${interactionDescription}`
       : `Product interaction: ${placement.description}`;
 
+    const productRefLine = hasProductImage
+      ? `\nIMPORTANT: The real product image is provided as a reference. Preserve the EXACT product appearance — packaging, shape, colors, label, and branding. Do not invent or alter the product's look.`
+      : '';
+
     const userPrompt = isEdit
-      ? `Transform this person into the following scene context:
+      ? `Transform the reference images into the following scene context:
 Wardrobe: ${wardrobe}
 Scene: ${sceneDescription}
 ${interactionLine}
@@ -251,10 +273,11 @@ Product: ${productName}
 Product visibility: ${placement.visibility}
 Energy arc: starts at ${energyArc.pattern.start}, peaks at ${energyArc.pattern.middle}, ends at ${energyArc.pattern.end}
 Script context: ${scene.script_text || 'N/A'}
-Text overlay: ${scene.text_overlay || 'N/A'}
+Text overlay: ${scene.text_overlay || 'N/A'}${productRefLine}
 
 Generate START frame edit prompt (energy: ${energyArc.pattern.start}) and END frame edit prompt (energy: ${energyArc.pattern.end}).
-Describe how to transform this person's pose, wardrobe, scene, and energy for each frame.
+Describe how to transform the person's pose, wardrobe, scene, and energy for each frame.
+The product must appear exactly as shown in the reference image when visible.
 Keep the scene LOCKED — same room, same lighting, same props across all segments.
 Aspect ratio: 9:16 portrait. Photorealistic. No text/watermarks in the image.
 Negative: ${NEGATIVE_PROMPT}`
