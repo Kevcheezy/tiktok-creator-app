@@ -261,9 +261,9 @@ export function StoryboardView({ projectId, onStatusChange }: StoryboardViewProp
     setShots((prev) => prev.map((s) => (s.id === removedUndo.id ? { ...s, status: 'planned' as const } : s)));
     setRemovedUndo(null);
 
-    // Note: undo re-creates the shot server-side isn't supported by DELETE (soft delete).
-    // The shot is already marked 'removed' in DB. A re-fetch would restore it since
-    // the GET endpoint returns all shots including removed ones.
+    // TODO(backend): PATCH /broll/[shotId] doesn't allow `status` field.
+    // Undo only works locally until page refresh. Backend needs to add
+    // 'status' to allowedFields whitelist for undo to persist.
   }, [removedUndo]);
 
   const handleReplace = useCallback((shotId: string) => {
@@ -328,7 +328,7 @@ export function StoryboardView({ projectId, onStatusChange }: StoryboardViewProp
           segment_index: segmentIndex,
           shot_index: shotScriptIndex,
           category: 'lifestyle',
-          prompt: '',
+          prompt: 'New B-roll shot',
           narrative_role: '',
           timing_seconds: lastTiming,
           duration_seconds: 2.5,
