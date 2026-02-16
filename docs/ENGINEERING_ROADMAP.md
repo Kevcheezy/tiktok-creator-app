@@ -56,10 +56,13 @@ MONEY PRINTER 3000 is an AI-powered pipeline that produces 60-second TikTok Shop
 |------|------|
 | Product Analysis (LLM) | $0.01 |
 | Script Generation (LLM) | $0.01 |
+| B-Roll Planning (LLM) | $0.01 |
 | Keyframe Images (8 images) | $0.56 |
 | Video Generation (4 segments) | $4.80 |
 | Voiceover (4 segments) | $0.20 |
-| **Total per video** | **~$5.58** |
+| B-Roll Images (~12-16 images) | $0.84-1.12 |
+| Final Video Render (Creatomate) | $0.50 |
+| **Total per video** | **~$6.93-7.21** |
 
 ---
 
@@ -272,6 +275,16 @@ Influencer `<select>` options displayed the entire `persona` field (full appeara
 - [ ] ~~Add `JSON5.parse` or equivalent lenient parser as secondary fallback~~ — skipped per assignment (no new dependencies; string-based repair covers trailing commas)
 - [x] Log the raw LLM response on parse failure (currently only logs a truncated snippet — need full response for debugging)
 - [ ] Consider chunking: if the shot list is large (>20 shots), generate in batches to reduce truncation risk (deferred — not in scope for this fix)
+
+#### B0.25 - EditorAgent Has No Retry Logic (Single Failure Kills $5+ of Work)
+**Severity:** Medium (transient Creatomate errors waste all prior API spend)
+**Scope:** Backend
+**Why:** DirectorAgent retries each segment 2x with 10s delay. VoiceoverAgent has per-segment try/catch. EditorAgent has zero retry logic — if the Creatomate render API returns an error or times out (5min), the entire editing stage fails immediately. This is the final stage where all previous investment ($5+ in API calls) is at stake. A transient Creatomate error wastes all that work and forces the user to manually retry from the UI.
+
+**Fix checklist:**
+- [ ] Add retry loop in EditorAgent: 2 retries with 15s exponential backoff before failing
+- [ ] Log each retry attempt to `generation_log` (event_type: `render_retry`, detail: `{ attempt, error, delayMs }`)
+- [ ] On final failure, include retry count in error message so debugger knows retries were exhausted
 
 ---
 
@@ -788,6 +801,39 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 
 **Cost:** ~$0.01 per voice design (one-time per influencer). TTS cost unchanged ($0.20/video).
 
+#### R1.5.21 - Parallel Directing + Voiceover Pipeline
+**Priority:** P1 - Medium
+**Effort:** Small-Medium
+**Depends on:** None
+**Why:** Directing and voiceover currently run sequentially (`directing → voiceover → broll_generation`), but VoiceoverAgent only needs `scene.script_text` (produced by ScriptingAgent) — it does NOT depend on video assets from DirectorAgent. Running them in parallel saves ~3-5 minutes per video run (voiceover completes during directing's 15-20 min video generation wait).
+
+**Backend:**
+- [ ] Worker: after casting_review approval, enqueue both `directing` and `voiceover` jobs simultaneously
+- [ ] Add completion tracking: `broll_generation` only enqueues when BOTH directing and voiceover are complete
+- [ ] New project sub-statuses or flags: `directing_complete`, `voiceover_complete` (or use asset presence checks)
+- [ ] Progress API: show both stages running simultaneously
+- [ ] Error handling: if one fails, the other continues (don't cancel). User retries the failed one only.
+
+**Frontend:**
+- [ ] Pipeline progress: show directing and voiceover as parallel branches (split → merge at broll_generation)
+- [ ] Progress polling handles both stages active simultaneously
+
+#### R1.5.22 - B-Roll Timing Integration in EditorAgent
+**Priority:** P2 - Medium
+**Effort:** Medium
+**Depends on:** Understanding Creatomate overlay timing API
+**Why:** B-RollAgent calculates `broll_shot.timing_seconds` and `duration_seconds` per shot — exactly when in the 15s segment a cutaway should appear and for how long. EditorAgent ignores this metadata entirely. Ken Burns animations are driven by fixed Creatomate template slots, not by the timing data. B-roll appears at template-defined positions rather than at the script-cued moments (e.g., when the narrator says "look at these results" should cut to transformation B-roll).
+
+**Backend:**
+- [ ] EditorAgent: read `broll_shot.timing_seconds` and `duration_seconds` for each shot
+- [ ] Pass timing as Creatomate keyframe `time` values so B-roll overlays match script cues
+- [ ] Validate timing doesn't exceed segment duration
+
+**Frontend:**
+- [ ] No changes needed (storyboard already shows timing)
+
+**Requires:** Creatomate template changes to support dynamic overlay timing (may need template redesign)
+
 ---
 
 ### Tier 2: Make It Actually Convert (Quality & conversion optimization)
@@ -1023,6 +1069,8 @@ POLISH     Tier 1.5: UX Hardening
            R1.5.16 Video Model Selection & Pipeline Abstraction (backend done, frontend selector + 2 agents remaining)
            R1.5.19 Structured Prompt Schema ✅ DONE (depends on R1.5.16 — uses model-specific negative prompts)
            R1.5.20 Influencer Voice Design System (no deps — voice as first-class influencer attribute, mute Kling audio)
+           R1.5.21 Parallel Directing + Voiceover (~5 min savings per run, no deps)
+           R1.5.22 B-Roll Timing in EditorAgent (depends on Creatomate template work)
 
 NEXT       Tier 2: Quality & Conversion
            R2.0 Performance Tracking ✅ DONE (backend) ──→ R2.4 Product Images ✅ DONE (backend) ──→ R2.3 Avatar Consistency ──→ R2.1 Hook Testing ──→ R2.2 Trends
