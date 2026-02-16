@@ -1,6 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { BaseAgent } from './base-agent';
-import { AVATAR_MAPPING, PRODUCT_PLACEMENT_ARC, ENERGY_ARC, API_COSTS } from '@/lib/constants';
+import { AVATAR_MAPPING, PRODUCT_PLACEMENT_ARC, ENERGY_ARC, API_COSTS, RESOLUTION } from '@/lib/constants';
 
 const NEGATIVE_PROMPT = 'watermark, text, logo, blurry, deformed, ugly, duplicate, extra limbs, poorly drawn';
 
@@ -119,12 +119,14 @@ export class CastingAgent extends BaseAgent {
             // Image-to-image: edit the influencer's reference photo
             this.log(`Using influencer reference: ${influencer.name}`);
 
+            const editOpts = { aspectRatio: RESOLUTION.aspectRatio, width: RESOLUTION.width, height: RESOLUTION.height };
+
             this.log(`Generating start keyframe (edit) for segment ${segIdx} (attempt ${attempt + 1})`);
-            const startResult = await this.wavespeed.editImage([influencer.image_url], promptPair.start, { aspectRatio: '9:16' });
+            const startResult = await this.wavespeed.editImage([influencer.image_url], promptPair.start, editOpts);
             await this.createAsset(projectId, scene.id, 'keyframe_start', startResult.taskId, 'nano-banana-pro-edit');
 
             this.log(`Generating end keyframe (edit) for segment ${segIdx}`);
-            const endResult = await this.wavespeed.editImage([influencer.image_url], promptPair.end, { aspectRatio: '9:16' });
+            const endResult = await this.wavespeed.editImage([influencer.image_url], promptPair.end, editOpts);
             await this.createAsset(projectId, scene.id, 'keyframe_end', endResult.taskId, 'nano-banana-pro-edit');
 
             // Poll both tasks
@@ -140,12 +142,14 @@ export class CastingAgent extends BaseAgent {
             await this.trackCost(projectId, API_COSTS.nanoBananaProEdit * 2);
           } else {
             // Text-to-image: existing flow
+            const imgOpts = { aspectRatio: RESOLUTION.aspectRatio, width: RESOLUTION.width, height: RESOLUTION.height };
+
             this.log(`Generating start keyframe for segment ${segIdx} (attempt ${attempt + 1})`);
-            const startResult = await this.wavespeed.generateImage(promptPair.start);
+            const startResult = await this.wavespeed.generateImage(promptPair.start, imgOpts);
             await this.createAsset(projectId, scene.id, 'keyframe_start', startResult.taskId);
 
             this.log(`Generating end keyframe for segment ${segIdx}`);
-            const endResult = await this.wavespeed.generateImage(promptPair.end);
+            const endResult = await this.wavespeed.generateImage(promptPair.end, imgOpts);
             await this.createAsset(projectId, scene.id, 'keyframe_end', endResult.taskId);
 
             // Poll both tasks

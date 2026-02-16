@@ -82,6 +82,14 @@ export const FALLBACK_VOICES = {
   female: { name: 'Rachel', voiceId: 'EXAVITQu4vr4xnSDxMaL' },
 } as const;
 
+// Output resolution (1080p vertical for TikTok 9:16)
+export const RESOLUTION = {
+  width: 1080,
+  height: 1920,
+  aspectRatio: '9:16',
+  label: '1080p',
+} as const;
+
 // Pipeline configuration
 export const PIPELINE_CONFIG = {
   segmentCount: 4,

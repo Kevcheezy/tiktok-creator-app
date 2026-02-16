@@ -12,6 +12,8 @@ export interface ChatCompletionOptions {
 export interface ImageOptions {
   aspectRatio?: string;
   resolution?: string;
+  width?: number;
+  height?: number;
 }
 
 export interface VideoParams {
@@ -131,17 +133,22 @@ export class WaveSpeedClient {
   }
 
   async generateImage(prompt: string, options?: ImageOptions, context?: ApiCallContext): Promise<{ taskId: string }> {
-    const { aspectRatio = '2:3' } = options || {};
+    const { aspectRatio = '9:16', width, height } = options || {};
+
+    const body: Record<string, unknown> = {
+      prompt,
+      aspect_ratio: aspectRatio,
+      num_images: 2,
+      output_format: 'png',
+      enable_sync_mode: false,
+    };
+
+    if (width) body.width = width;
+    if (height) body.height = height;
 
     const data = await this.request('/api/v3/google/nano-banana-pro/text-to-image-multi', {
       method: 'POST',
-      body: JSON.stringify({
-        prompt,
-        aspect_ratio: aspectRatio,
-        num_images: 2,
-        output_format: 'png',
-        enable_sync_mode: false,
-      }),
+      body: JSON.stringify(body),
     }, context);
 
     return { taskId: data.data?.id };
@@ -150,21 +157,26 @@ export class WaveSpeedClient {
   async editImage(
     images: string[],
     prompt: string,
-    options?: { aspectRatio?: string; resolution?: string },
+    options?: { aspectRatio?: string; resolution?: string; width?: number; height?: number },
     context?: ApiCallContext
   ): Promise<{ taskId: string }> {
-    const { aspectRatio = '9:16', resolution = '1k' } = options || {};
+    const { aspectRatio = '9:16', resolution = '1080p', width, height } = options || {};
+
+    const body: Record<string, unknown> = {
+      images,
+      prompt,
+      aspect_ratio: aspectRatio,
+      resolution,
+      output_format: 'png',
+      enable_sync_mode: false,
+    };
+
+    if (width) body.width = width;
+    if (height) body.height = height;
 
     const data = await this.request('/api/v3/google/nano-banana-pro/edit', {
       method: 'POST',
-      body: JSON.stringify({
-        images,
-        prompt,
-        aspect_ratio: aspectRatio,
-        resolution,
-        output_format: 'png',
-        enable_sync_mode: false,
-      }),
+      body: JSON.stringify(body),
     }, context);
 
     return { taskId: data.data?.id };

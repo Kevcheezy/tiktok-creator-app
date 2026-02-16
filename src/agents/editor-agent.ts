@@ -1,7 +1,7 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { BaseAgent } from './base-agent';
 import { CreatomateClient } from '@/lib/api-clients/creatomate';
-import { CREATOMATE_TEMPLATE_ID, API_COSTS } from '@/lib/constants';
+import { CREATOMATE_TEMPLATE_ID, API_COSTS, RESOLUTION } from '@/lib/constants';
 
 export class EditorAgent extends BaseAgent {
   private creatomate: CreatomateClient;
@@ -65,6 +65,8 @@ export class EditorAgent extends BaseAgent {
     const render = await this.creatomate.renderVideo({
       templateId: CREATOMATE_TEMPLATE_ID,
       modifications,
+      maxWidth: RESOLUTION.width,
+      maxHeight: RESOLUTION.height,
     });
 
     // 4. Create asset row for final video
