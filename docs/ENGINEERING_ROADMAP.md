@@ -385,6 +385,25 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [ ] Apply same pattern to product image upload (`/api/products/[id]/image`) and project product image (`/api/projects/[id]/product-image`)
 - [ ] Remove client-side compression workaround once direct uploads are in place
 
+#### R1.5.8 - Navigable Pipeline Stages
+**Priority:** P1 - Medium
+**Effort:** Medium
+**Spec:** `docs/plans/2026-02-15-navigable-pipeline-stages-design.md`
+**Why:** Users can't review or edit past stages without restarting the pipeline. Clicking completed stages lets them navigate back, view previous work, and make minor edits with downstream impact warnings.
+
+**Backend:**
+- [x] `DOWNSTREAM_IMPACT_MAP` constant — classifies edits as safe/destructive per stage
+- [x] `PIPELINE_STAGE_ORDER` + `STAGE_COST_ESTIMATES` — cost estimation for impact warnings
+- [x] `POST /api/projects/[id]/impact` — returns downstream impact, restart point, cost estimate
+- [x] Fix retry endpoint to support broll_planning/broll_generation stages
+
+**Frontend:**
+- [ ] Clickable completed stage nodes in pipeline progress bar
+- [ ] `viewingStage` + `editMode` state in project-detail.tsx
+- [ ] Navigation banner: "Viewing [Stage] — Current: [Stage]" with Back/Edit buttons
+- [ ] `readOnly` prop on ScriptReview, AssetReview, StoryboardView, InfluencerSelection
+- [ ] Destructive edit confirmation dialog with cost estimate from impact API
+
 ---
 
 ### Tier 2: Make It Actually Convert (Quality & conversion optimization)
