@@ -333,6 +333,24 @@ Influencer `<select>` options displayed the entire `persona` field (full appeara
 - [x] Return 409 Conflict if the conditional update matches 0 rows
 - [x] Frontend: disable the button after first click (defense in depth — backend guard is primary)
 
+#### ~~B0.30 - Keyframe Reference Image Ordering Broken (Influencer Likeness Drift + Product Placement Overrides Ignored)~~ FIXED
+**Severity:** High (influencer face drifts across segments, user product placement overrides from Casting Review silently ignored)
+**Scope:** Backend
+**Discovered:** 2026-02-16
+
+**Why:** Four interconnected bugs in keyframe reference image handling:
+1. `selectProductImageForSegment` reads from `videoModel.product_placement_arc` (default arc) instead of the merged placement that includes user overrides from Casting Review's "4. Product Placement" settings. If user enables product for segment 0, the image API never receives a product reference.
+2. Reference image array ordered `[previousEndFrame, influencer, product]` — influencer buried at position 2 for segments 1+. Nano Banana Pro edit API gives more weight to earlier images, causing face/likeness drift over time.
+3. End frame references included `[startFrame, previousEndFrame, influencer, product]` — 4 refs with influencer at position 3. The `previousEndFrame` is redundant since `startFrame` already incorporated it.
+4. Same bugs existed in `regenerateKeyframe()` in `pipeline.worker.ts`.
+
+**Fix checklist:**
+- [x] `selectProductImageForSegment` now accepts `mergedVisibility` parameter from caller (includes user overrides)
+- [x] Reference image ordering changed to: influencer FIRST (face/likeness), product second, previousEndFrame third
+- [x] End frame references: startFrame first, influencer second, product third — no previousEndFrame
+- [x] `regenerateKeyframe()` in pipeline worker updated with same ordering + user override support
+- [x] `CONTINUITY_PROMPT` and `continuityNote` updated to reflect new reference ordering
+
 ---
 
 ### Tier 1: Complete the Core Pipeline (Ship a working end-to-end product)
@@ -1229,6 +1247,7 @@ BUGS ──→   Tier 0 Bug Bash Findings (fix BEFORE any new Tier 1.5 work)
            ~~B0.28 B-roll stages missing from rollback map (recovery blocked)~~ ✅ FIXED
            ~~B0.26 EditorAgent retry logic (elevated to High — $5-7 at stake)~~ ✅ FIXED
            ~~B0.29 Select-influencer race condition (duplicate casting jobs)~~ ✅ FIXED
+           ~~B0.30 Keyframe ref image ordering broken (influencer drift + product overrides ignored)~~ ✅ FIXED
 
 POLISH     Tier 1.5: UX Hardening
            R1.5.1 Influencer edit ──→ R1.5.2 Project settings ──→ R1.5.3 Navigation ──→ R1.5.4 Error handling (ALL DONE)

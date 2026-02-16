@@ -4,7 +4,7 @@ import { AVATAR_MAPPING, PRODUCT_PLACEMENT_ARC, ENERGY_ARC, API_COSTS, RESOLUTIO
 import { StructuredPrompt, STRUCTURED_PROMPT_SCHEMA_DESCRIPTION, IMAGE_NEGATIVE_PROMPT, resolveNegativePrompt, isStructuredPrompt } from '@/lib/prompt-schema';
 import { serializeForImage } from '@/lib/prompt-serializer';
 
-const CONTINUITY_PROMPT = 'CONTINUITY: This frame continues directly from the previous segment. The FIRST reference image is the previous segment\'s end frame. Preserve the EXACT same person, room, lighting, and wardrobe. Only change: pose, energy level, and product visibility as specified.';
+const CONTINUITY_PROMPT = 'CONTINUITY: This frame continues directly from the previous segment. The FIRST reference image is the influencer\'s base photo — preserve their EXACT face and likeness. A previous segment\'s end frame is also provided for scene continuity. Preserve the EXACT same person, room, lighting, and wardrobe. Only change: pose, energy level, and product visibility as specified.';
 
 export class CastingAgent extends BaseAgent {
   constructor(supabaseClient?: SupabaseClient) {
@@ -141,7 +141,7 @@ export class CastingAgent extends BaseAgent {
         : defaultPlacement;
       const energyArc = vmEnergy[segIdx] || ENERGY_ARC[segIdx];
 
-      const segmentProductImage = this.selectProductImageForSegment(segIdx, productImages, legacyProductImageUrl);
+      const segmentProductImage = this.selectProductImageForSegment(segIdx, productImages, legacyProductImageUrl, placement.visibility);
       const maxRetries = 1;
       let segmentSuccess = false;
 
@@ -178,11 +178,13 @@ export class CastingAgent extends BaseAgent {
             .update({ visual_prompt: promptPair })
             .eq('id', scene.id);
 
-          // Build reference images: previous end frame (chain) + influencer + product
+          // Build reference images: influencer FIRST (face/likeness), product second, chain ref third.
+          // Influencer must always be the primary reference so the model preserves the exact likeness.
+          // Previous end frame is a continuity hint, not the identity source.
           const referenceImages: string[] = [];
-          if (previousEndFrameUrl) referenceImages.push(previousEndFrameUrl);
           if (useInfluencer) referenceImages.push(influencer.image_url);
           if (segmentProductImage) referenceImages.push(segmentProductImage);
+          if (previousEndFrameUrl) referenceImages.push(previousEndFrameUrl);
 
           let startUrl = '';
           let endUrl = '';
@@ -196,9 +198,9 @@ export class CastingAgent extends BaseAgent {
             const editOpts = { aspectRatio: RESOLUTION.aspectRatio, resolution: '1k' as const };
 
             const refLabels = [
-              previousEndFrameUrl ? 'prev_end_frame' : null,
               useInfluencer ? `influencer: ${influencer.name}` : null,
               segmentProductImage ? `product (${productImages.find(i => (i.url_clean || i.url) === segmentProductImage)?.angle || 'legacy'})` : null,
+              previousEndFrameUrl ? 'prev_end_frame' : null,
             ].filter(Boolean).join(' + ');
 
             // INNER CHAIN: Generate start first, then use start as reference for end.
@@ -210,8 +212,12 @@ export class CastingAgent extends BaseAgent {
             startUrl = startPoll.url || '';
             await this.updateAssetUrl(startResult.taskId, startUrl);
 
-            // End frame: prepend the start frame as primary reference for face/scene consistency
-            const endRefs = startUrl ? [startUrl, ...referenceImages] : referenceImages;
+            // End frame: start frame first (intra-segment consistency), then influencer + product.
+            // Previous end frame is NOT included — start frame already incorporates that continuity.
+            const endRefs: string[] = [];
+            if (startUrl) endRefs.push(startUrl);
+            if (useInfluencer) endRefs.push(influencer.image_url);
+            if (segmentProductImage) endRefs.push(segmentProductImage);
             this.log(`Segment ${segIdx}: generating END keyframe with start frame as primary ref (attempt ${attempt + 1})`);
             const endResult = await this.wavespeed.editImage(endRefs, endPromptStr, editOpts);
             await this.createAsset(projectId, scene.id, 'keyframe_end', endResult.taskId, 'nano-banana-pro-edit');
@@ -324,7 +330,7 @@ export class CastingAgent extends BaseAgent {
       : '';
 
     const continuityNote = isContinuation
-      ? `\nThe FIRST reference image is the previous segment's end frame. Preserve its exact appearance — same person, room, lighting, wardrobe. Evolve only the pose and energy.`
+      ? `\nThe FIRST reference image is the influencer's base photo — preserve their exact face and likeness. A previous segment's end frame is also provided for scene continuity. Evolve only the pose and energy.`
       : '';
 
     const structuredOutputInstruction = `
@@ -435,14 +441,15 @@ Match this reference video's visual style: use similar lighting, camera angle, a
     segmentIndex: number,
     productImages: Array<{ url: string; url_clean: string | null; angle: string; is_primary: boolean }>,
     legacyUrl: string | null,
+    mergedVisibility?: string,
   ): string | null {
-    const placement = this.videoModel.product_placement_arc[segmentIndex] || PRODUCT_PLACEMENT_ARC[segmentIndex];
-    if (!placement) return null;
+    // Use the caller-provided merged visibility (includes user overrides from Casting Review)
+    // to ensure product placement settings from the UI are respected.
+    const visibility = mergedVisibility
+      ?? (this.videoModel.product_placement_arc[segmentIndex] || PRODUCT_PLACEMENT_ARC[segmentIndex])?.visibility;
 
-    const visibility = placement.visibility;
-
-    // No product image for 'none' visibility (hook segment)
-    if (visibility === 'none') return null;
+    // No product image for 'none' visibility (hook segment) or missing placement
+    if (!visibility || visibility === 'none') return null;
 
     // Legacy fallback
     if (productImages.length === 0) return legacyUrl;

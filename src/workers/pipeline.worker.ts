@@ -864,10 +864,53 @@ async function regenerateKeyframe(
     .single();
 
   // Build reference images matching CastingAgent pattern:
-  // [previousEndFrame, influencerImage, productImage]
+  // [influencerImage, productImage, chainReference]
+  // Influencer FIRST (face/likeness preservation), product second, chain ref third.
   const referenceImages: string[] = [];
 
-  // 1. Previous frame in chain (passed from cascade, or fetched for single regen)
+  // 1. Influencer image — ALWAYS first for likeness preservation
+  if (project?.influencer?.image_url) {
+    referenceImages.push(project.influencer.image_url);
+  }
+
+  // 2. Product image (angle-aware, respecting user overrides from Casting Review)
+  const productId = project?.product_id || project?.product?.id;
+  if (productId) {
+    const segmentIndex = scene?.segment_index ?? 0;
+    // Respect user product placement overrides (same merge logic as CastingAgent)
+    const defaultPlacement = PRODUCT_PLACEMENT_ARC[segmentIndex];
+    const customPlacement = project?.product_placement as
+      | { segment: number; visibility: string; notes?: string }[]
+      | null;
+    const userOverride = customPlacement?.find((p: any) => p.segment === segmentIndex);
+    const visibility = userOverride?.visibility || defaultPlacement?.visibility;
+
+    if (visibility && visibility !== 'none') {
+      const { data: productImages } = await supabase
+        .from('product_image')
+        .select('url, url_clean, angle, is_primary')
+        .eq('product_id', productId)
+        .order('sort_order');
+      const imgs = productImages || [];
+      if (imgs.length > 0) {
+        const preferredAngles = VISIBILITY_ANGLE_MAP[visibility] || ['front'];
+        let productUrl: string | null = null;
+        for (const angle of preferredAngles) {
+          const match = imgs.find((i: any) => i.angle === angle);
+          if (match) { productUrl = match.url_clean || match.url; break; }
+        }
+        if (!productUrl) {
+          const primary = imgs.find((i: any) => i.is_primary);
+          productUrl = primary ? (primary.url_clean || primary.url) : (imgs[0].url_clean || imgs[0].url);
+        }
+        if (productUrl) referenceImages.push(productUrl);
+      } else if (project?.product?.image_url) {
+        referenceImages.push(project.product.image_url);
+      }
+    }
+  }
+
+  // 3. Chain reference — previous frame for continuity (lowest priority)
   if (previousFrameUrl) {
     referenceImages.push(previousFrameUrl);
   } else if (asset.type === 'keyframe_end' && scene) {
@@ -895,41 +938,6 @@ async function regenerateKeyframe(
         return s?.segment_index === segmentIndex - 1;
       });
       if (prevEnd?.url) referenceImages.push(prevEnd.url);
-    }
-  }
-
-  // 2. Influencer image
-  if (project?.influencer?.image_url) {
-    referenceImages.push(project.influencer.image_url);
-  }
-
-  // 3. Product image (angle-aware, matching CastingAgent pattern)
-  const productId = project?.product_id || project?.product?.id;
-  if (productId) {
-    const segmentIndex = scene?.segment_index ?? 0;
-    const placement = PRODUCT_PLACEMENT_ARC[segmentIndex];
-    if (placement && placement.visibility !== 'none') {
-      const { data: productImages } = await supabase
-        .from('product_image')
-        .select('url, url_clean, angle, is_primary')
-        .eq('product_id', productId)
-        .order('sort_order');
-      const imgs = productImages || [];
-      if (imgs.length > 0) {
-        const preferredAngles = VISIBILITY_ANGLE_MAP[placement.visibility] || ['front'];
-        let productUrl: string | null = null;
-        for (const angle of preferredAngles) {
-          const match = imgs.find((i: any) => i.angle === angle);
-          if (match) { productUrl = match.url_clean || match.url; break; }
-        }
-        if (!productUrl) {
-          const primary = imgs.find((i: any) => i.is_primary);
-          productUrl = primary ? (primary.url_clean || primary.url) : (imgs[0].url_clean || imgs[0].url);
-        }
-        if (productUrl) referenceImages.push(productUrl);
-      } else if (project?.product?.image_url) {
-        referenceImages.push(project.product.image_url);
-      }
     }
   }
 
