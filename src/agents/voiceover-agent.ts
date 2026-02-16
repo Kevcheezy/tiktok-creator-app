@@ -3,8 +3,6 @@ import { BaseAgent } from './base-agent';
 import { ElevenLabsClient } from '@/lib/api-clients/elevenlabs';
 import { VOICE_MAPPING, FALLBACK_VOICES, API_COSTS } from '@/lib/constants';
 
-const SEGMENTS = [0, 1, 2, 3];
-
 export class VoiceoverAgent extends BaseAgent {
   private elevenlabs: ElevenLabsClient;
 
@@ -58,7 +56,7 @@ export class VoiceoverAgent extends BaseAgent {
 
     // 4. Generate TTS for each segment (with per-segment error recovery)
     let segmentsCompleted = 0;
-    for (const segIdx of SEGMENTS) {
+    for (let segIdx = 0; segIdx < this.videoModel.segment_count; segIdx++) {
       const scene = latestScenes.get(segIdx);
       if (!scene?.script_text?.trim()) {
         this.log(`Scene or script_text for segment ${segIdx} not found, skipping`);
@@ -71,13 +69,13 @@ export class VoiceoverAgent extends BaseAgent {
         // Generate audio
         const audioBuffer = await this.elevenlabs.textToSpeech(voiceId, scene.script_text);
 
-        // Validate audio duration: MP3 at ~128kbps, 15s segment ≈ 240KB
-        // Warn if audio is unexpectedly short (<5KB) or very long (>1MB for 15s)
+        // Validate audio duration: MP3 at ~128kbps, segment ≈ 16KB/s
+        // Warn if audio is unexpectedly short (<5KB) or very long (>1MB for target duration)
         const sizeKB = audioBuffer.length / 1024;
         if (sizeKB < 5) {
           this.log(`Warning: Audio for segment ${segIdx} is very small (${sizeKB.toFixed(1)}KB) — may be truncated`);
         } else if (sizeKB > 1024) {
-          this.log(`Warning: Audio for segment ${segIdx} is large (${sizeKB.toFixed(1)}KB) — may exceed 15s target`);
+          this.log(`Warning: Audio for segment ${segIdx} is large (${sizeKB.toFixed(1)}KB) — may exceed ${this.videoModel.segment_duration}s target`);
         }
 
         // Upload to Supabase Storage

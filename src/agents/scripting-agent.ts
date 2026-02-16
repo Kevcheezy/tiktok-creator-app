@@ -1,6 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { BaseAgent } from './base-agent';
-import { API_COSTS, PIPELINE_CONFIG, ENERGY_ARC, PRODUCT_PLACEMENT_ARC, SCRIPT_TONES, DEFAULT_TONE, type ScriptTone } from '@/lib/constants';
+import { API_COSTS, PIPELINE_CONFIG, SCRIPT_TONES, DEFAULT_TONE, type ScriptTone } from '@/lib/constants';
 import { countTextSyllables } from '@/lib/syllables';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -283,7 +283,8 @@ export class ScriptingAgent extends BaseAgent {
       throw new Error(`Failed to save script: ${scriptError?.message}`);
     }
 
-    // 9. Save 4 scene rows
+    // 9. Save scene rows
+    const vm = this.videoModel;
     const sceneRows = script.segments.map((seg, idx) => ({
       script_id: savedScript.id,
       segment_index: idx,
@@ -294,7 +295,7 @@ export class ScriptingAgent extends BaseAgent {
       shot_scripts: seg.shot_scripts,
       audio_sync: seg.audio_sync,
       text_overlay: seg.text_overlay,
-      product_visibility: PRODUCT_PLACEMENT_ARC[idx]?.visibility ?? 'none',
+      product_visibility: vm.product_placement_arc[idx]?.visibility ?? 'none',
       broll_cues: seg.broll_cues || [],
       props_needed: seg.props_needed || [],
       interaction_type: seg.interaction_type || null,
@@ -518,7 +519,7 @@ Split this script into 4 segments following the output format.`;
       throw new Error(`Failed to save script: ${scriptError?.message}`);
     }
 
-    // 9. Save 4 scene rows
+    // 9. Save scene rows
     const sceneRows = script.segments.map((seg, idx) => ({
       script_id: savedScript.id,
       segment_index: idx,
@@ -529,7 +530,7 @@ Split this script into 4 segments following the output format.`;
       shot_scripts: seg.shot_scripts,
       audio_sync: seg.audio_sync,
       text_overlay: seg.text_overlay,
-      product_visibility: PRODUCT_PLACEMENT_ARC[idx]?.visibility ?? 'none',
+      product_visibility: this.videoModel.product_placement_arc[idx]?.visibility ?? 'none',
       broll_cues: seg.broll_cues || [],
       props_needed: seg.props_needed || [],
       interaction_type: seg.interaction_type || null,
@@ -641,10 +642,7 @@ Split this script into 4 segments following the output format.`;
     }
 
     // 6. Get section name
-    const sectionNames = ['Hook', 'Problem', 'Solution + Product', 'CTA'];
-    const sectionName = PIPELINE_CONFIG.segmentCount > segmentIndex
-      ? sectionNames[segmentIndex]
-      : targetScene.section;
+    const sectionName = this.videoModel.section_names[segmentIndex] ?? targetScene.section;
 
     // 7. Build system prompt
     const systemPrompt = buildSystemPrompt(resolvedTone);
@@ -661,11 +659,11 @@ Split this script into 4 segments following the output format.`;
       )
       .join('\n\n');
 
-    const energyPattern = ENERGY_ARC[segmentIndex]
-      ? JSON.stringify(ENERGY_ARC[segmentIndex].pattern)
+    const energyPattern = this.videoModel.energy_arc[segmentIndex]
+      ? JSON.stringify(this.videoModel.energy_arc[segmentIndex].pattern)
       : '{ "start": "LOW", "middle": "PEAK", "end": "LOW" }';
 
-    const productVisibility = PRODUCT_PLACEMENT_ARC[segmentIndex]?.visibility ?? 'none';
+    const productVisibility = this.videoModel.product_placement_arc[segmentIndex]?.visibility ?? 'none';
 
     let userPrompt = `PRODUCT: ${productData.product_name}
 CATEGORY: ${productData.category}
@@ -759,9 +757,9 @@ ${segmentIndex === 0 ? 'Also include a "hook_score" object with curiosity_loop, 
       segment.syllable_count = programmaticCount;
     }
 
-    if (!segment.shot_scripts || segment.shot_scripts.length !== PIPELINE_CONFIG.shotsPerSegment) {
+    if (!segment.shot_scripts || segment.shot_scripts.length !== this.videoModel.shots_per_segment) {
       this.log(
-        `[Validation] WARNING: Segment ${segment.id} has ${segment.shot_scripts?.length ?? 0} shot_scripts, expected ${PIPELINE_CONFIG.shotsPerSegment}`
+        `[Validation] WARNING: Segment ${segment.id} has ${segment.shot_scripts?.length ?? 0} shot_scripts, expected ${this.videoModel.shots_per_segment}`
       );
     }
 
@@ -975,7 +973,7 @@ Adapt the CONTENT for the current product while preserving the reference's prove
   // ─── Validation ────────────────────────────────────────────────────────────
 
   private validateAndFix(script: ScriptResponse): void {
-    const { min, max, warnMin, warnMax } = PIPELINE_CONFIG.syllablesPerSegment;
+    const { min, max, warnMin, warnMax } = this.videoModel.syllables_per_segment;
 
     let totalSyllables = 0;
 
@@ -998,10 +996,10 @@ Adapt the CONTENT for the current product while preserving the reference's prove
         );
       }
 
-      // Validate shot_scripts count (must be 3 per segment)
-      if (!seg.shot_scripts || seg.shot_scripts.length !== PIPELINE_CONFIG.shotsPerSegment) {
+      // Validate shot_scripts count
+      if (!seg.shot_scripts || seg.shot_scripts.length !== this.videoModel.shots_per_segment) {
         this.log(
-          `[Validation] WARNING: Segment ${seg.id} has ${seg.shot_scripts?.length ?? 0} shot_scripts, expected ${PIPELINE_CONFIG.shotsPerSegment}`
+          `[Validation] WARNING: Segment ${seg.id} has ${seg.shot_scripts?.length ?? 0} shot_scripts, expected ${this.videoModel.shots_per_segment}`
         );
       }
     }
@@ -1010,9 +1008,9 @@ Adapt the CONTENT for the current product while preserving the reference's prove
     script.total_syllables = totalSyllables;
 
     // Validate segment count
-    if (script.segments.length !== PIPELINE_CONFIG.segmentCount) {
+    if (script.segments.length !== this.videoModel.segment_count) {
       this.log(
-        `[Validation] WARNING: Expected ${PIPELINE_CONFIG.segmentCount} segments, got ${script.segments.length}`
+        `[Validation] WARNING: Expected ${this.videoModel.segment_count} segments, got ${script.segments.length}`
       );
     }
 

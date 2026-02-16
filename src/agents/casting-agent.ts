@@ -1,12 +1,10 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { BaseAgent } from './base-agent';
-import { AVATAR_MAPPING, PRODUCT_PLACEMENT_ARC, ENERGY_ARC, API_COSTS, RESOLUTION, VISIBILITY_ANGLE_MAP, FRAME_ACTIONS } from '@/lib/constants';
+import { AVATAR_MAPPING, PRODUCT_PLACEMENT_ARC, ENERGY_ARC, API_COSTS, RESOLUTION, VISIBILITY_ANGLE_MAP } from '@/lib/constants';
 
 const NEGATIVE_PROMPT = 'watermark, text, logo, blurry, deformed, ugly, duplicate, extra limbs, poorly drawn';
 
 const CONTINUITY_PROMPT = 'CONTINUITY: This frame continues directly from the previous segment. The FIRST reference image is the previous segment\'s end frame. Preserve the EXACT same person, room, lighting, and wardrobe. Only change: pose, energy level, and product visibility as specified.';
-
-const SEGMENTS = [0, 1, 2, 3];
 
 export class CastingAgent extends BaseAgent {
   constructor(supabaseClient?: SupabaseClient) {
@@ -120,14 +118,17 @@ export class CastingAgent extends BaseAgent {
     let segmentsCompleted = 0;
     let previousEndFrameUrl: string | null = null;
 
-    for (const segIdx of SEGMENTS) {
+    const vmPlacement = this.videoModel.product_placement_arc;
+    const vmEnergy = this.videoModel.energy_arc;
+
+    for (let segIdx = 0; segIdx < this.videoModel.segment_count; segIdx++) {
       const scene = latestScenes.get(segIdx);
       if (!scene) {
         this.log(`Scene for segment ${segIdx} not found, skipping`);
         continue;
       }
 
-      const defaultPlacement = PRODUCT_PLACEMENT_ARC[segIdx];
+      const defaultPlacement = vmPlacement[segIdx] || PRODUCT_PLACEMENT_ARC[segIdx];
       const userOverride = customPlacement?.find((p) => p.segment === segIdx);
       const placement = userOverride
         ? {
@@ -138,7 +139,7 @@ export class CastingAgent extends BaseAgent {
               : defaultPlacement.description,
           }
         : defaultPlacement;
-      const energyArc = ENERGY_ARC[segIdx];
+      const energyArc = vmEnergy[segIdx] || ENERGY_ARC[segIdx];
 
       const segmentProductImage = this.selectProductImageForSegment(segIdx, productImages, legacyProductImageUrl);
       const maxRetries = 1;
@@ -294,7 +295,7 @@ export class CastingAgent extends BaseAgent {
     sceneDescription: string,
     scene: any,
     placement: { section: string; visibility: string; description: string },
-    energyArc: (typeof ENERGY_ARC)[number],
+    energyArc: { segment: number; section: string; pattern: { start: string; middle: string; end: string }; description: string },
     productName: string,
     projectId: string,
     isEdit: boolean = false,
@@ -306,7 +307,7 @@ export class CastingAgent extends BaseAgent {
   ): Promise<{ start: string; end: string }> {
     const consistencyRule = `CONSISTENCY RULE: All 4 segments MUST use the same room, lighting setup, and props. Only vary: character pose, energy level, product visibility, and camera micro-adjustments (slight angle shift, subtle lighting warmth change matching energy arc). The video must look like one continuous shoot in one location.`;
 
-    const frameActions = FRAME_ACTIONS[segmentIndex];
+    const frameActions = this.videoModel.frame_actions[segmentIndex];
     const differentiationRule = frameActions
       ? `\nDIFFERENTIATION RULE: The START and END frames MUST show visibly DIFFERENT poses and body positions. START pose: ${frameActions.start}. END pose: ${frameActions.end}. These are NOT optional — the two frames must be clearly distinguishable at a glance.`
       : '';
@@ -423,7 +424,7 @@ Match this reference video's visual style: use similar lighting, camera angle, a
     productImages: Array<{ url: string; url_clean: string | null; angle: string; is_primary: boolean }>,
     legacyUrl: string | null,
   ): string | null {
-    const placement = PRODUCT_PLACEMENT_ARC[segmentIndex];
+    const placement = this.videoModel.product_placement_arc[segmentIndex] || PRODUCT_PLACEMENT_ARC[segmentIndex];
     if (!placement) return null;
 
     const visibility = placement.visibility;

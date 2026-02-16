@@ -1,3 +1,65 @@
+// ─── Video Model Config Type ────────────────────────────────────────────────
+
+/**
+ * VideoModelConfig — the shape of a video_model row from the database.
+ * All agents read pipeline params from this config instead of hardcoded constants.
+ */
+export interface VideoModelConfig {
+  id: string;
+  slug: string;
+  name: string;
+  provider: string;
+  api_endpoint: string;
+  segment_count: number;
+  segment_duration: number;
+  shots_per_segment: number;
+  shot_duration: number;
+  total_duration: number;
+  resolution: string;
+  aspect_ratio: string;
+  supports_tail_image: boolean;
+  supports_multi_prompt: boolean;
+  cost_per_segment: number;
+  syllables_per_segment: { min: number; max: number; warnMin: number; warnMax: number; errorMin: number; errorMax: number };
+  energy_arc: Array<{ segment: number; section: string; pattern: { start: string; middle: string; end: string }; description: string }>;
+  product_placement_arc: Array<{ segment: number; section: string; visibility: string; description: string }>;
+  section_names: string[];
+  frame_actions: Array<{ segment: number; start: string; end: string }>;
+  is_default: boolean;
+  status: string;
+}
+
+/**
+ * Build a VideoModelConfig from PIPELINE_CONFIG + hardcoded constants.
+ * Used as fallback when a project has no video_model_id.
+ */
+export function getFallbackVideoModel(): VideoModelConfig {
+  return {
+    id: 'fallback',
+    slug: 'kling-3.0-pro',
+    name: 'Kling 3.0 Pro (fallback)',
+    provider: 'wavespeed',
+    api_endpoint: '/api/v3/kwaivgi/kling-v3.0-pro/image-to-video',
+    segment_count: PIPELINE_CONFIG.segmentCount,
+    segment_duration: PIPELINE_CONFIG.segmentDuration,
+    shots_per_segment: PIPELINE_CONFIG.shotsPerSegment,
+    shot_duration: PIPELINE_CONFIG.shotDuration,
+    total_duration: PIPELINE_CONFIG.totalDuration,
+    resolution: '1080p',
+    aspect_ratio: '9:16',
+    supports_tail_image: true,
+    supports_multi_prompt: true,
+    cost_per_segment: API_COSTS.klingVideo,
+    syllables_per_segment: { ...PIPELINE_CONFIG.syllablesPerSegment },
+    energy_arc: ENERGY_ARC.map(e => ({ ...e, pattern: { ...e.pattern } })),
+    product_placement_arc: PRODUCT_PLACEMENT_ARC.map(p => ({ ...p })),
+    section_names: ['Hook', 'Problem', 'Solution + Product', 'CTA'],
+    frame_actions: FRAME_ACTIONS.map(f => ({ ...f })),
+    is_default: true,
+    status: 'active',
+  };
+}
+
 // Avatar mapping: product category -> authority figure description
 export const AVATAR_MAPPING: Record<string, { title: string; appearance: string; wardrobe: string; setting: string }> = {
   supplements: {

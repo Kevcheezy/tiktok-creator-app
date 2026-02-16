@@ -11,6 +11,7 @@ const createProjectSchema = z.object({
   videoUrl: z.string().url().optional(),
   influencerId: z.string().uuid().optional(),
   characterId: z.string().uuid().optional(),
+  videoModelId: z.string().uuid().optional(),
   name: z.string().optional(),
   tone: z.enum(TONE_IDS as [string, ...string[]]).optional().default('reluctant-insider'),
 }).refine(
@@ -21,7 +22,7 @@ const createProjectSchema = z.object({
 export async function GET() {
   const { data: projects, error } = await supabase
     .from('project')
-    .select('*, character:ai_character(*)')
+    .select('*, character:ai_character(*), video_model:video_model(*)')
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -44,7 +45,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { productId, productUrl, videoUrl, influencerId, characterId, name, tone } = parsed.data;
+    const { productId, productUrl, videoUrl, influencerId, characterId, videoModelId, name, tone } = parsed.data;
+
+    // Resolve video model: use provided ID, or fall back to the default model
+    let resolvedVideoModelId = videoModelId || null;
+    if (!resolvedVideoModelId) {
+      const { data: defaultModel } = await supabase
+        .from('video_model')
+        .select('id')
+        .eq('is_default', true)
+        .eq('status', 'active')
+        .limit(1)
+        .single();
+      resolvedVideoModelId = defaultModel?.id || null;
+    }
 
     // Path A: existing product by ID
     if (productId) {
@@ -70,6 +84,7 @@ export async function POST(request: NextRequest) {
           video_url: videoUrl || null,
           influencer_id: influencerId || null,
           character_id: characterId || null,
+          video_model_id: resolvedVideoModelId,
           name: name || null,
           tone,
           input_mode: videoUrl ? 'video_analysis' : 'product_only',
@@ -141,6 +156,7 @@ export async function POST(request: NextRequest) {
         video_url: videoUrl || null,
         influencer_id: influencerId || null,
         character_id: characterId || null,
+        video_model_id: resolvedVideoModelId,
         name: name || null,
         tone,
         input_mode: videoUrl ? 'video_analysis' : 'product_only',

@@ -1,6 +1,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { WaveSpeedClient } from '@/lib/api-clients/wavespeed';
 import { createLogger, logToGenerationLog } from '@/lib/logger';
+import { VideoModelConfig, getFallbackVideoModel } from '@/lib/constants';
 import type pino from 'pino';
 
 export abstract class BaseAgent {
@@ -8,6 +9,7 @@ export abstract class BaseAgent {
   protected wavespeed: WaveSpeedClient;
   protected agentName: string;
   protected correlationId?: string;
+  protected videoModel: VideoModelConfig;
   private _logger: pino.Logger;
 
   constructor(agentName: string, supabaseClient?: SupabaseClient) {
@@ -17,7 +19,16 @@ export abstract class BaseAgent {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
     this.wavespeed = new WaveSpeedClient();
+    this.videoModel = getFallbackVideoModel();
     this._logger = createLogger({ agentName });
+  }
+
+  /**
+   * Set the video model config for this agent run.
+   * Called by the pipeline worker after fetching the project's video model.
+   */
+  setVideoModel(config: VideoModelConfig): void {
+    this.videoModel = config;
   }
 
   /**

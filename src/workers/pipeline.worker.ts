@@ -14,7 +14,7 @@ import { BRollAgent } from '../agents/broll-agent';
 import { VideoAnalysisAgent } from '../agents/video-analysis-agent';
 import { WaveSpeedClient } from '../lib/api-clients/wavespeed';
 import { ElevenLabsClient } from '../lib/api-clients/elevenlabs';
-import { FALLBACK_VOICES, API_COSTS } from '../lib/constants';
+import { FALLBACK_VOICES, API_COSTS, VideoModelConfig, getFallbackVideoModel } from '../lib/constants';
 import { getPipelineQueue } from '../lib/queue';
 import { APP_VERSION, GIT_COMMIT } from '../lib/version';
 import { createLogger, logToGenerationLog } from '../lib/logger';
@@ -37,6 +37,30 @@ const connection = new IORedis(redisUrl, {
   maxRetriesPerRequest: null,
   ...(isLocalhost ? {} : { tls: {} }),
 });
+
+/**
+ * Fetch the video model config for a project. Falls back to hardcoded constants
+ * if the project has no video_model_id (pre-migration projects).
+ */
+async function getVideoModelForProject(projectId: string): Promise<VideoModelConfig> {
+  const { data: proj } = await supabase
+    .from('project')
+    .select('video_model_id')
+    .eq('id', projectId)
+    .single();
+
+  if (proj?.video_model_id) {
+    const { data: vm } = await supabase
+      .from('video_model')
+      .select('*')
+      .eq('id', proj.video_model_id)
+      .single();
+
+    if (vm) return vm as VideoModelConfig;
+  }
+
+  return getFallbackVideoModel();
+}
 
 log.info({ version: APP_VERSION, commit: GIT_COMMIT }, 'Pipeline worker starting');
 
@@ -361,6 +385,7 @@ async function handleScripting(projectId: string, correlationId: string, jobLog:
 
     const agent = new ScriptingAgent(supabase);
     agent.setCorrelationId(correlationId);
+    agent.setVideoModel(await getVideoModelForProject(projectId));
     await agent.run(projectId);
 
     await supabase
@@ -416,6 +441,7 @@ async function handleCasting(projectId: string, correlationId: string, jobLog: R
 
     const agent = new CastingAgent(supabase);
     agent.setCorrelationId(correlationId);
+    agent.setVideoModel(await getVideoModelForProject(projectId));
     await agent.run(projectId);
 
     await supabase
@@ -471,6 +497,7 @@ async function handleDirecting(projectId: string, correlationId: string, jobLog:
 
     const agent = new DirectorAgent(supabase);
     agent.setCorrelationId(correlationId);
+    agent.setVideoModel(await getVideoModelForProject(projectId));
     await agent.run(projectId);
 
     // Auto-enqueue voiceover (no review gate between directing and voiceover)
@@ -527,6 +554,7 @@ async function handleVoiceover(projectId: string, correlationId: string, jobLog:
 
     const agent = new VoiceoverAgent(supabase);
     agent.setCorrelationId(correlationId);
+    agent.setVideoModel(await getVideoModelForProject(projectId));
     await agent.run(projectId);
 
     // Auto-enqueue B-roll generation (runs before asset review)
@@ -583,6 +611,7 @@ async function handleEditing(projectId: string, correlationId: string, jobLog: R
 
     const agent = new EditorAgent(supabase);
     agent.setCorrelationId(correlationId);
+    agent.setVideoModel(await getVideoModelForProject(projectId));
     await agent.run(projectId);
 
     await supabase
@@ -638,6 +667,7 @@ async function handleBrollPlanning(projectId: string, correlationId: string, job
 
     const agent = new BRollAgent(supabase);
     agent.setCorrelationId(correlationId);
+    agent.setVideoModel(await getVideoModelForProject(projectId));
     await agent.plan(projectId);
 
     await supabase
@@ -693,6 +723,7 @@ async function handleBrollGeneration(projectId: string, correlationId: string, j
 
     const agent = new BRollAgent(supabase);
     agent.setCorrelationId(correlationId);
+    agent.setVideoModel(await getVideoModelForProject(projectId));
     await agent.generate(projectId);
 
     await supabase

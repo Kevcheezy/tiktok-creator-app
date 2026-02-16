@@ -11,7 +11,7 @@ export async function GET(
 
   const { data: proj, error } = await supabase
     .from('project')
-    .select('*, character:ai_character(*), script_template:script_template(*), influencer:influencer(*), product:product(*)')
+    .select('*, character:ai_character(*), script_template:script_template(*), influencer:influencer(*), product:product(*), video_model:video_model(*)')
     .eq('id', id)
     .single();
 
@@ -65,6 +65,17 @@ export async function PATCH(
         }
         updates[field] = body[field];
       }
+    }
+
+    // video_model_id — editable at review gates (same rules as tone/character)
+    if ('video_model_id' in body) {
+      if (!REVIEW_GATE_STATUSES.includes(proj.status as typeof REVIEW_GATE_STATUSES[number])) {
+        return NextResponse.json(
+          { error: `Cannot change video model: project is in '${proj.status}' status. Video model can only be changed at review stages.` },
+          { status: 400 }
+        );
+      }
+      updates.video_model_id = body.video_model_id;
     }
 
     // Always-allowed fields (internal updates from frontend — product_placement, etc.)

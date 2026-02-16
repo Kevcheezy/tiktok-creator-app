@@ -2,8 +2,6 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { BaseAgent } from './base-agent';
 import { API_COSTS } from '@/lib/constants';
 
-const SEGMENTS = [0, 1, 2, 3];
-
 export class DirectorAgent extends BaseAgent {
   constructor(supabaseClient?: SupabaseClient) {
     super('DirectorAgent', supabaseClient);
@@ -13,6 +11,8 @@ export class DirectorAgent extends BaseAgent {
     const stageStart = Date.now();
     await this.logEvent(projectId, 'stage_start', 'directing');
     this.log(`Starting directing for project ${projectId}`);
+
+    const vm = this.videoModel;
 
     // 1. Get the approved script
     const { data: scripts } = await this.supabase
@@ -41,7 +41,7 @@ export class DirectorAgent extends BaseAgent {
     }
 
     // 3. For each segment, generate video from start+end keyframes
-    for (const segIdx of SEGMENTS) {
+    for (let segIdx = 0; segIdx < vm.segment_count; segIdx++) {
       const scene = latestScenes.get(segIdx);
       if (!scene) {
         this.log(`Scene for segment ${segIdx} not found, skipping`);
@@ -65,7 +65,7 @@ export class DirectorAgent extends BaseAgent {
           project_id: projectId,
           scene_id: scene.id,
           type: 'video',
-          provider: 'kling-3.0-pro',
+          provider: vm.slug,
           status: 'failed',
           cost_usd: 0,
         });
@@ -74,16 +74,17 @@ export class DirectorAgent extends BaseAgent {
 
       // Build multi_prompt from shot_scripts
       const shotScripts = scene.shot_scripts as { index: number; text: string; energy: string }[] | null;
+      const shotDuration = String(vm.shot_duration);
       const multiPrompt = (shotScripts || []).map((shot: { index: number; text: string; energy: string }) => ({
         prompt: `${shot.text}. Energy: ${shot.energy}. Camera follows subject naturally.`,
-        duration: '5',
+        duration: shotDuration,
       }));
 
       // Build main prompt from scene context
       const mainPrompt = [
         scene.script_text ? `Scene: ${scene.script_text.substring(0, 200)}` : '',
         scene.section ? `Section: ${scene.section}` : '',
-        'Natural movement, professional lighting, TikTok style video, 9:16 portrait',
+        `Natural movement, professional lighting, TikTok style video, ${vm.aspect_ratio} portrait`,
       ].filter(Boolean).join('. ');
 
       const negativePrompt = 'watermark, text overlay, blurry, distorted, flickering, low quality, static, frozen';
@@ -103,11 +104,11 @@ export class DirectorAgent extends BaseAgent {
 
           const result = await this.wavespeed.generateVideo({
             image: startKeyframe.url,
-            tailImage: endKeyframe?.url,
+            tailImage: vm.supports_tail_image ? endKeyframe?.url : undefined,
             prompt: mainPrompt,
             negativePrompt,
-            multiPrompt,
-            duration: 15,
+            multiPrompt: vm.supports_multi_prompt ? multiPrompt : [],
+            duration: vm.segment_duration,
             cfgScale: 0.5,
           });
 
@@ -115,10 +116,10 @@ export class DirectorAgent extends BaseAgent {
             project_id: projectId,
             scene_id: scene.id,
             type: 'video',
-            provider: 'kling-3.0-pro',
+            provider: vm.slug,
             provider_task_id: result.taskId,
             status: 'generating',
-            cost_usd: API_COSTS.klingVideo,
+            cost_usd: vm.cost_per_segment,
           });
 
           this.log(`Polling video task ${result.taskId} (up to 5 min)...`);
@@ -129,7 +130,7 @@ export class DirectorAgent extends BaseAgent {
             .update({ url: pollResult.url || '', status: 'completed' })
             .eq('provider_task_id', result.taskId);
 
-          await this.trackCost(projectId, API_COSTS.klingVideo);
+          await this.trackCost(projectId, vm.cost_per_segment);
           this.log(`Video complete for segment ${segIdx}: ${pollResult.url}`);
           lastError = null;
           break;
@@ -146,7 +147,7 @@ export class DirectorAgent extends BaseAgent {
           project_id: projectId,
           scene_id: scene.id,
           type: 'video',
-          provider: 'kling-3.0-pro',
+          provider: vm.slug,
           status: 'failed',
           cost_usd: 0,
         });

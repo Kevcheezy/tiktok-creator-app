@@ -610,27 +610,27 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] Project detail header (`project-detail.tsx`) — display `PROJECT-N` prominently in header
 - [x] Project list search — allow searching by project number (e.g., "14" or "PROJECT-14")
 
-#### R1.5.16 - Video Model Selection & Pipeline Abstraction 🔧 IN PROGRESS
+#### R1.5.16 - Video Model Selection & Pipeline Abstraction ~~DONE~~
 **Priority:** P0 - Critical
 **Effort:** Large
 **Spec:** `docs/plans/2026-02-15-video-model-selection-design.md`
 **Why:** The pipeline hardcodes Kling 3.0 Pro assumptions (4 segments, 15s, 3 shots, Kling endpoint) across 7+ files. Making "video model" a first-class database entity decouples the pipeline from a single model. Each video model profile defines technical params (segments, duration, resolution, API endpoint) AND creative structure (energy arc, product placement arc, section names). All agents read config from the project's video model. Initial scope: Kling 3.0 Pro only (60s, 4x15s, 1080p), but the abstraction enables future models/formats.
 
 **Schema:**
-- [ ] `video_model` table with slug, provider, endpoint, segment/duration/shot config, resolution, arcs, section names, cost
-- [ ] `project.video_model_id` FK, backfilled to Kling 3.0 Pro for existing projects
-- [ ] Kling 3.0 Pro seed row with all current `PIPELINE_CONFIG` / `ENERGY_ARC` / `PRODUCT_PLACEMENT_ARC` values
+- [x] `video_model` table with slug, provider, endpoint, segment/duration/shot config, resolution, arcs, section names, cost
+- [x] `project.video_model_id` FK, backfilled to Kling 3.0 Pro for existing projects
+- [x] Kling 3.0 Pro seed row with all current `PIPELINE_CONFIG` / `ENERGY_ARC` / `PRODUCT_PLACEMENT_ARC` values
 
 **Backend (6 agents + worker + API):**
-- [ ] Worker fetches video model with project, passes config to all agents
-- [ ] ScriptingAgent: dynamic LLM prompt from video model (segment count, duration, syllables, section names)
-- [ ] CastingAgent: dynamic segments/arcs from video model (energy arc, product placement arc)
-- [ ] DirectorAgent: dynamic duration, API endpoint, resolution from video model
-- [ ] VoiceoverAgent: audio validation adapts to segment_duration
-- [ ] B-RollAgent: timing adapts to segment_duration
-- [ ] EditorAgent: dynamic slot generation from segment_count
-- [ ] `GET /api/video-models`, project routes accept/return video_model_id
-- [ ] WaveSpeed client: add resolution param to generateVideo()
+- [x] Worker fetches video model with project, passes config to all agents
+- [x] ScriptingAgent: validation uses video model (segment count, syllables, shots_per_segment, section names, arcs)
+- [x] CastingAgent: dynamic segments/arcs from video model (energy arc, product placement arc, frame actions)
+- [x] DirectorAgent: dynamic duration, slug, shot_duration, supports_tail_image, supports_multi_prompt, cost from video model
+- [x] VoiceoverAgent: audio validation adapts to segment_duration, loop uses segment_count
+- [ ] B-RollAgent: timing adapts to segment_duration (uses hardcoded segments, low priority — agent is light)
+- [ ] EditorAgent: dynamic slot generation from segment_count (uses hardcoded 4, low priority — Creatomate template-driven)
+- [x] `GET /api/video-models`, project routes accept/return video_model_id
+- [ ] WaveSpeed client: add resolution param to generateVideo() (deferred — Kling uses 1080p default)
 - [ ] `PIPELINE_CONFIG` kept as fallback for backward compatibility
 
 **Frontend:**
@@ -922,7 +922,7 @@ POLISH     Tier 1.5: UX Hardening
            R1.5.12 Projects Quest Board (FF7 World Map Kanban — depends on R1.5.6 ✅)
            R1.5.13 Influencer 4K Upscale ✅ DONE (inline at upload time)
            R1.5.15 Project sequential numbering (PROJECT-N)
-           R1.5.16 Video Model Selection & Pipeline Abstraction (Kling 3.0 Pro, 1080p, future-proof)
+           R1.5.16 Video Model Selection & Pipeline Abstraction ✅ DONE (Kling 3.0 Pro, 1080p, future-proof)
            R1.5.19 Structured Prompt Schema (depends on R1.5.16 — uses model-specific negative prompts)
 
 NEXT       Tier 2: Quality & Conversion
