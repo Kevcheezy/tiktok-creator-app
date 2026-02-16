@@ -1128,6 +1128,8 @@ const ANALYSIS_ARRAY_FIELDS: Array<{ key: string; label: string; dotColor: strin
 function AnalysisResults({ data, costUsd, character, editable = false, projectId, onDataUpdated }: AnalysisResultsProps) {
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);
+  const [regenerating, setRegenerating] = useState<string | null>(null);
+  const [regenFeedback, setRegenFeedback] = useState<{ field: string; text: string } | null>(null);
   const [editValues, setEditValues] = useState<Record<string, string>>({});
   const [editArrays, setEditArrays] = useState<Record<string, string[]>>({});
 
@@ -1158,6 +1160,31 @@ function AnalysisResults({ data, costUsd, character, editable = false, projectId
       if (res.ok) onDataUpdated?.();
     } finally {
       setSaving(null);
+    }
+  }
+
+  async function regenerateField(field: string, feedback?: string) {
+    if (!projectId) return;
+    setRegenerating(field);
+    setRegenFeedback(null);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/regenerate-field`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ field, feedback: feedback || undefined }),
+      });
+      if (res.ok) {
+        const result = await res.json();
+        // Update local state with regenerated value
+        if (Array.isArray(result.value)) {
+          setEditArrays((v) => ({ ...v, [field]: result.value }));
+        } else {
+          setEditValues((v) => ({ ...v, [field]: result.value }));
+        }
+        onDataUpdated?.();
+      }
+    } finally {
+      setRegenerating(null);
     }
   }
 
@@ -1264,7 +1291,53 @@ function AnalysisResults({ data, costUsd, character, editable = false, projectId
                 {saving === field.key && (
                   <span className="font-[family-name:var(--font-mono)] text-[10px] text-electric">Saving...</span>
                 )}
+                {regenerating === field.key && (
+                  <span className="font-[family-name:var(--font-mono)] text-[10px] text-magenta animate-pulse">Regenerating...</span>
+                )}
+                {editMode && regenerating !== field.key && (
+                  <button
+                    type="button"
+                    title="Regenerate with AI ($0.01)"
+                    onClick={() => setRegenFeedback(regenFeedback?.field === field.key ? null : { field: field.key, text: '' })}
+                    className="ml-auto rounded p-1 text-text-muted transition-colors hover:bg-magenta/10 hover:text-magenta"
+                  >
+                    <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M1 4v5h5" />
+                      <path d="M15 12V7h-5" />
+                      <path d="M13.5 5.5A6 6 0 002.3 8" />
+                      <path d="M2.5 10.5A6 6 0 0013.7 8" />
+                    </svg>
+                  </button>
+                )}
               </div>
+              {regenFeedback?.field === field.key && (
+                <div className="mb-3 flex items-center gap-2">
+                  <input
+                    type="text"
+                    placeholder="Optional feedback for AI..."
+                    value={regenFeedback.text}
+                    onChange={(e) => setRegenFeedback({ field: field.key, text: e.target.value })}
+                    onKeyDown={(e) => { if (e.key === 'Enter') regenerateField(field.key, regenFeedback.text); }}
+                    className="flex-1 rounded-lg border border-magenta/30 bg-surface-raised px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted/50 focus:border-magenta focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => regenerateField(field.key, regenFeedback.text)}
+                    className="rounded-lg bg-magenta/10 px-2.5 py-1.5 font-[family-name:var(--font-display)] text-[10px] font-semibold text-magenta transition-colors hover:bg-magenta/20"
+                  >
+                    Regenerate
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRegenFeedback(null)}
+                    className="rounded p-1 text-text-muted hover:text-text-secondary"
+                  >
+                    <svg viewBox="0 0 16 16" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+                      <line x1="4" y1="4" x2="12" y2="12" /><line x1="12" y1="4" x2="4" y2="12" />
+                    </svg>
+                  </button>
+                </div>
+              )}
 
               {editMode ? (
                 <div className="space-y-2">
@@ -1333,81 +1406,81 @@ function AnalysisResults({ data, costUsd, character, editable = false, projectId
           );
         })}
 
-        {/* Usage (text field in grid) */}
-        {(editMode || data.usage) && (
-          <div className="rounded-xl border border-border bg-surface p-5">
-            <div className="mb-3 flex items-center gap-2">
-              <h3 className="font-[family-name:var(--font-display)] text-xs font-semibold uppercase tracking-wider text-text-muted">
-                Usage
-              </h3>
-              {saving === 'usage' && (
-                <span className="font-[family-name:var(--font-mono)] text-[10px] text-electric">Saving...</span>
+        {/* Text fields (Usage, Hook Angle, Avatar Description) — in grid */}
+        {ANALYSIS_TEXT_FIELDS.map((tf) => {
+          const value = (data as unknown as Record<string, string>)[tf.key] || '';
+          if (!editMode && !value) return null;
+          return (
+            <div key={tf.key} className="rounded-xl border border-border bg-surface p-5">
+              <div className="mb-3 flex items-center gap-2">
+                <h3 className="font-[family-name:var(--font-display)] text-xs font-semibold uppercase tracking-wider text-text-muted">
+                  {tf.label}
+                </h3>
+                {saving === tf.key && (
+                  <span className="font-[family-name:var(--font-mono)] text-[10px] text-electric">Saving...</span>
+                )}
+                {regenerating === tf.key && (
+                  <span className="font-[family-name:var(--font-mono)] text-[10px] text-magenta animate-pulse">Regenerating...</span>
+                )}
+                {editMode && regenerating !== tf.key && (
+                  <button
+                    type="button"
+                    title="Regenerate with AI ($0.01)"
+                    onClick={() => setRegenFeedback(regenFeedback?.field === tf.key ? null : { field: tf.key, text: '' })}
+                    className="ml-auto rounded p-1 text-text-muted transition-colors hover:bg-magenta/10 hover:text-magenta"
+                  >
+                    <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M1 4v5h5" />
+                      <path d="M15 12V7h-5" />
+                      <path d="M13.5 5.5A6 6 0 002.3 8" />
+                      <path d="M2.5 10.5A6 6 0 0013.7 8" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+              {regenFeedback?.field === tf.key && (
+                <div className="mb-3 flex items-center gap-2">
+                  <input
+                    type="text"
+                    placeholder="Optional feedback for AI..."
+                    value={regenFeedback.text}
+                    onChange={(e) => setRegenFeedback({ field: tf.key, text: e.target.value })}
+                    onKeyDown={(e) => { if (e.key === 'Enter') regenerateField(tf.key, regenFeedback.text); }}
+                    className="flex-1 rounded-lg border border-magenta/30 bg-surface-raised px-3 py-1.5 text-xs text-text-primary placeholder:text-text-muted/50 focus:border-magenta focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => regenerateField(tf.key, regenFeedback.text)}
+                    className="rounded-lg bg-magenta/10 px-2.5 py-1.5 font-[family-name:var(--font-display)] text-[10px] font-semibold text-magenta transition-colors hover:bg-magenta/20"
+                  >
+                    Regenerate
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRegenFeedback(null)}
+                    className="rounded p-1 text-text-muted hover:text-text-secondary"
+                  >
+                    <svg viewBox="0 0 16 16" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+                      <line x1="4" y1="4" x2="12" y2="12" /><line x1="12" y1="4" x2="4" y2="12" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+              {editMode ? (
+                <textarea
+                  value={editValues[tf.key] || ''}
+                  onChange={(e) => setEditValues((v) => ({ ...v, [tf.key]: e.target.value }))}
+                  onBlur={() => saveField(tf.key, editValues[tf.key] || '')}
+                  rows={tf.multiline ? 3 : 2}
+                  className="w-full rounded-lg border border-border bg-surface-raised px-4 py-3 text-sm text-text-primary transition-all focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric resize-none"
+                />
+              ) : (
+                <p className="text-sm leading-relaxed text-text-secondary">{value}</p>
               )}
             </div>
-            {editMode ? (
-              <textarea
-                value={editValues.usage || ''}
-                onChange={(e) => setEditValues((v) => ({ ...v, usage: e.target.value }))}
-                onBlur={() => saveField('usage', editValues.usage || '')}
-                rows={3}
-                className="w-full rounded-lg border border-border bg-surface-raised px-4 py-3 text-sm text-text-primary transition-all focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric resize-none"
-              />
-            ) : (
-              <p className="text-sm leading-relaxed text-text-secondary">{data.usage}</p>
-            )}
-          </div>
-        )}
+          );
+        })}
       </div>
-
-      {/* Hook Angle */}
-      {(editMode || data.hook_angle) && (
-        <div className="rounded-xl border border-border bg-surface p-5">
-          <div className="mb-2 flex items-center gap-2">
-            <h3 className="font-[family-name:var(--font-display)] text-xs font-semibold uppercase tracking-wider text-text-muted">
-              Hook Angle
-            </h3>
-            {saving === 'hook_angle' && (
-              <span className="font-[family-name:var(--font-mono)] text-[10px] text-electric">Saving...</span>
-            )}
-          </div>
-          {editMode ? (
-            <textarea
-              value={editValues.hook_angle || ''}
-              onChange={(e) => setEditValues((v) => ({ ...v, hook_angle: e.target.value }))}
-              onBlur={() => saveField('hook_angle', editValues.hook_angle || '')}
-              rows={2}
-              className="w-full rounded-lg border border-border bg-surface-raised px-4 py-3 text-sm text-text-primary transition-all focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric resize-none"
-            />
-          ) : (
-            <p className="text-sm leading-relaxed text-text-secondary">{data.hook_angle}</p>
-          )}
-        </div>
-      )}
-
-      {/* Avatar Description */}
-      {(editMode || data.avatar_description) && (
-        <div className="rounded-xl border border-border bg-surface p-5">
-          <div className="mb-2 flex items-center gap-2">
-            <h3 className="font-[family-name:var(--font-display)] text-xs font-semibold uppercase tracking-wider text-text-muted">
-              Avatar Description
-            </h3>
-            {saving === 'avatar_description' && (
-              <span className="font-[family-name:var(--font-mono)] text-[10px] text-electric">Saving...</span>
-            )}
-          </div>
-          {editMode ? (
-            <textarea
-              value={editValues.avatar_description || ''}
-              onChange={(e) => setEditValues((v) => ({ ...v, avatar_description: e.target.value }))}
-              onBlur={() => saveField('avatar_description', editValues.avatar_description || '')}
-              rows={3}
-              className="w-full rounded-lg border border-border bg-surface-raised px-4 py-3 text-sm text-text-primary transition-all focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric resize-none"
-            />
-          ) : (
-            <p className="text-sm leading-relaxed text-text-secondary">{data.avatar_description}</p>
-          )}
-        </div>
-      )}
     </div>
   );
 }
