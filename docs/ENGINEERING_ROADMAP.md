@@ -847,6 +847,38 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 
 **Requires:** Creatomate template changes to support dynamic overlay timing (may need template redesign)
 
+#### R1.5.23 - Smart Cascade Editing (Per-Segment Regeneration)
+**Priority:** P0 - Critical
+**Effort:** Large
+**Spec:** `docs/plans/2026-02-16-smart-cascade-editing-design.md`
+**Depends on:** R1.5.8 (navigable pipeline stages provides the edit-past-stages mechanism)
+**Why:** After keyframes are generated, editing the script costs ~$6.20 to cascade through ALL 4 segments — even if only 1 segment changed (~$1.60). There's no auto-cascade (user must manually restart), no per-segment diff detection, and B-roll gets orphaned (planned for old script, not re-planned for edits). This makes script iteration prohibitively expensive and clumsy. Smart cascade detects which segments changed, shows per-segment cost impact, auto-enqueues only affected segments, and re-plans B-roll for changed segments only.
+
+**Segment diff detection:**
+- [ ] `src/lib/segment-diff.ts` — compare old vs new per-segment: script_text, shot_scripts, energy_arc, broll_cues
+- [ ] Return `SegmentDiff[]` with changed fields, downstream asset counts, and per-segment cost estimate
+
+**Cascade API:**
+- [ ] `POST /api/projects/[id]/cascade` — accepts confirmed segment diffs, enqueues surgical regeneration
+- [ ] `PATCH /api/projects/[id]` returns `segmentDiffs` in response when script edited with downstream assets present
+- [ ] New `cascade_in_progress` pipeline status with per-segment tracking
+
+**Agent surgical support (all agents accept `segmentIndices` parameter):**
+- [ ] CastingAgent: process only affected segments, preserve keyframe chain from unchanged segments' end frames
+- [ ] DirectorAgent: process only affected segments
+- [ ] VoiceoverAgent: process only affected segments
+- [ ] B-RollAgent: re-plan only for segments with changed script_text or broll_cues
+- [ ] EditorAgent: re-composite full video after all affected segments complete
+- [ ] Pipeline worker: cascade job handler passes segmentIndices to agents
+
+**Frontend:**
+- [ ] Cascade confirmation dialog: per-segment changes, downstream impact, cost estimate
+- [ ] "Save & Regenerate Affected" vs "Save Only" buttons at script review in edit mode
+- [ ] Per-segment progress indicators during cascade (which segments are regenerating)
+- [ ] Old assets marked 'superseded' (not deleted) during cascade
+
+**Cost savings:** Editing 1 of 4 segments: ~$1.60 instead of ~$6.20 (74% savings).
+
 ---
 
 ### Tier 2: Make It Actually Convert (Quality & conversion optimization)
@@ -1084,6 +1116,7 @@ POLISH     Tier 1.5: UX Hardening
            R1.5.20 Influencer Voice Design System (no deps — voice as first-class influencer attribute, mute Kling audio)
            R1.5.21 Parallel Directing + Voiceover (~5 min savings per run, no deps)
            R1.5.22 B-Roll Timing in EditorAgent (depends on Creatomate template work)
+           R1.5.23 Smart Cascade Editing — per-segment regeneration after script edits (depends on R1.5.8 ✅)
 
 NEXT       Tier 2: Quality & Conversion
            R2.0 Performance Tracking ✅ DONE (backend) ──→ R2.4 Product Images ✅ DONE (backend) ──→ R2.3 Avatar Consistency ──→ R2.1 Hook Testing ──→ R2.2 Trends
