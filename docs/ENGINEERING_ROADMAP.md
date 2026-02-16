@@ -124,13 +124,12 @@ Updated `src/db/schema.ts` with `influencer` table, `completed_run` table, and m
 #### ~~B0.13 - Influencer Dropdown Shows Full Persona Text~~ FIXED
 Influencer `<select>` options displayed the entire `persona` field (full appearance description). Truncated to name + first 4 words of persona in both `create-project-form.tsx` and `project-detail.tsx` settings panel.
 
-#### B0.15 - Generate Keyframes Requires Double-Click
+#### ~~B0.15 - Generate Keyframes Requires Double-Click~~ FIXED
 **Severity:** Medium (UX — first click appears to do nothing)
-**Why:** `POST /api/projects/[id]/select-influencer` enqueues the casting job but does NOT update the project status from `influencer_selection` to `casting` on first selection (line 132-137: status only updates when re-casting from a downstream stage). The immediate `fetchProject()` call returns the stale status, and the UI stays on the InfluencerSelection view. A second click works because the worker has since updated the status.
-**Frontend workaround applied:** Added `influencer_selection` to frontend polling list so the UI auto-advances within ~2s. But the proper fix is backend.
+**Why:** `POST /api/projects/[id]/select-influencer` enqueues the casting job but did NOT update the project status from `influencer_selection` to `casting` on first selection (status only updated when re-casting from a downstream stage). The immediate `fetchProject()` call returned the stale status, and the UI stayed on the InfluencerSelection view.
 
-- [ ] `select-influencer/route.ts`: Always set `updateData.status = 'casting'` when confirming (not just on re-cast)
-- [ ] Move the `error_message`/`failed_at_status` reset into the re-cast conditional only
+- [x] `select-influencer/route.ts`: Always set `updateData.status = 'casting'` when confirming (not just on re-cast)
+- [x] Move the `error_message`/`failed_at_status` reset into the re-cast conditional only
 
 #### ~~B0.14 - Influencers Without Images Shown in Selection UI~~ FIXED
 **Severity:** Low (UX confusion, not data integrity)

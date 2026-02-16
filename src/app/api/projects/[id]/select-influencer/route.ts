@@ -129,9 +129,11 @@ export async function POST(
       }
     }
 
-    // Reset status to casting when re-casting from a downstream stage
+    // Always advance to casting status
+    updateData.status = 'casting';
+
+    // Clear error state when re-casting from a failed/downstream stage
     if (proj.status !== 'influencer_selection') {
-      updateData.status = 'casting';
       updateData.error_message = null;
       updateData.failed_at_status = null;
     }
