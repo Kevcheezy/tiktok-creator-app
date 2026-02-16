@@ -193,6 +193,23 @@ export function InfluencerForm() {
         />
       </div>
 
+      {/* Voice note */}
+      <div className="rounded-lg border border-border bg-surface-raised/50 px-4 py-3">
+        <div className="flex items-start gap-3">
+          <svg viewBox="0 0 16 16" fill="none" className="mt-0.5 h-4 w-4 flex-shrink-0 text-text-muted" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M8 2v12M5 5l-2 3 2 3M11 5l2 3-2 3" />
+          </svg>
+          <div>
+            <p className="font-[family-name:var(--font-display)] text-xs font-medium text-text-secondary">
+              Voice design available on the influencer detail page.
+            </p>
+            <p className="mt-0.5 text-[11px] text-text-muted">
+              After creating this influencer, you can design their voice from voice presets or a custom description.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Submit */}
       <button
         type="submit"

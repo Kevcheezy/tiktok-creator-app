@@ -34,6 +34,19 @@ export const aiCharacterRelations = relations(aiCharacter, ({ many }) => ({
   projects: many(project),
 }));
 
+// ─── Voice Preset ──────────────────────────────────────────────────────────
+
+export const voicePreset = pgTable('voice_preset', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  description: text('description').notNull(),
+  gender: text('gender').notNull(), // 'male' | 'female'
+  sampleText: text('sample_text'),
+  categoryAffinity: text('category_affinity').array().default([]),
+  isSystem: boolean('is_system').default(false),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
 // ─── Influencer ─────────────────────────────────────────────────────────────
 
 export const influencer = pgTable('influencer', {
@@ -41,13 +54,21 @@ export const influencer = pgTable('influencer', {
   name: text('name').notNull(),
   persona: text('persona'),
   imageUrl: text('image_url'),
+  voiceId: text('voice_id'),
+  voicePresetId: uuid('voice_preset_id').references(() => voicePreset.id),
+  voiceDescription: text('voice_description'),
+  voicePreviewUrl: text('voice_preview_url'),
   status: text('status').default('active'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
-export const influencerRelations = relations(influencer, ({ many }) => ({
+export const influencerRelations = relations(influencer, ({ one, many }) => ({
   projects: many(project),
+  voicePreset: one(voicePreset, {
+    fields: [influencer.voicePresetId],
+    references: [voicePreset.id],
+  }),
 }));
 
 // ─── Product ────────────────────────────────────────────────────────────────

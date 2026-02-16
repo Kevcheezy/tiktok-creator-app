@@ -1734,6 +1734,8 @@ interface InfluencerOption {
   name: string;
   persona: string | null;
   image_url: string | null;
+  voice_id: string | null;
+  voice_preview_url: string | null;
 }
 
 interface InfluencerSelectionProps {
@@ -1762,9 +1764,30 @@ function InfluencerSelection({ projectId, currentInfluencerId, productCategory, 
   const [sceneOverride, setSceneOverride] = useState('');
   const [selectedInteractionId, setSelectedInteractionId] = useState<string | null>(null);
   const [interactionOverride, setInteractionOverride] = useState('');
+  const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
+  const voiceAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  function handleVoicePlay(e: React.MouseEvent, inf: InfluencerOption) {
+    e.stopPropagation();
+    if (!inf.voice_preview_url) return;
+    if (playingVoiceId === inf.id && voiceAudioRef.current) {
+      voiceAudioRef.current.pause();
+      voiceAudioRef.current.currentTime = 0;
+      setPlayingVoiceId(null);
+      return;
+    }
+    if (!voiceAudioRef.current) {
+      voiceAudioRef.current = new Audio();
+      voiceAudioRef.current.addEventListener('ended', () => setPlayingVoiceId(null));
+    }
+    voiceAudioRef.current.pause();
+    voiceAudioRef.current.src = inf.voice_preview_url;
+    voiceAudioRef.current.play().catch(() => setPlayingVoiceId(null));
+    setPlayingVoiceId(inf.id);
+  }
 
   useEffect(() => {
-    fetch('/api/influencers?hasImage=true')
+    fetch('/api/influencers?hasImage=true&hasVoice=true')
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
         setInfluencers(data);
@@ -1843,10 +1866,10 @@ function InfluencerSelection({ projectId, currentInfluencerId, productCategory, 
     return (
       <div className="rounded-xl border border-amber-hot/30 bg-amber-hot/5 p-6">
         <h3 className="font-[family-name:var(--font-display)] text-sm font-semibold text-amber-hot">
-          No Influencers Available
+          No Influencers Ready
         </h3>
         <p className="mt-1 text-sm text-text-secondary">
-          Create an influencer with a reference image before generating keyframes.
+          No influencers ready. Influencers need both a reference image and a designed voice to be selected.
         </p>
         <a
           href="/influencers/new"
@@ -1905,9 +1928,35 @@ function InfluencerSelection({ projectId, currentInfluencerId, productCategory, 
                 </div>
                 {/* Info */}
                 <div className="p-2.5">
-                  <p className="font-[family-name:var(--font-display)] text-xs font-semibold text-text-primary truncate">
-                    {inf.name}
-                  </p>
+                  <div className="flex items-center justify-between gap-1">
+                    <p className="font-[family-name:var(--font-display)] text-xs font-semibold text-text-primary truncate">
+                      {inf.name}
+                    </p>
+                    {/* Voice preview icon */}
+                    {inf.voice_preview_url && (
+                      <button
+                        type="button"
+                        onClick={(e) => handleVoicePlay(e, inf)}
+                        className={`flex-shrink-0 rounded p-0.5 transition-all ${
+                          playingVoiceId === inf.id
+                            ? 'text-lime bg-lime/15'
+                            : 'text-lime/60 hover:text-lime hover:bg-lime/10'
+                        }`}
+                        title={playingVoiceId === inf.id ? 'Stop' : 'Preview voice'}
+                      >
+                        <svg viewBox="0 0 12 12" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                          {playingVoiceId === inf.id ? (
+                            <>
+                              <rect x="2.5" y="2.5" width="2.5" height="7" fill="currentColor" stroke="none" rx="0.5" />
+                              <rect x="7" y="2.5" width="2.5" height="7" fill="currentColor" stroke="none" rx="0.5" />
+                            </>
+                          ) : (
+                            <path d="M6 1v10M3.5 3.5L2 6l1.5 2.5M8.5 3.5L10 6 8.5 8.5" />
+                          )}
+                        </svg>
+                      </button>
+                    )}
+                  </div>
                   {inf.persona && (
                     <p className="mt-0.5 text-[10px] text-text-muted truncate">{inf.persona}</p>
                   )}

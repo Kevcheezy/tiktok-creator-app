@@ -57,7 +57,8 @@ export class EditorAgent extends BaseAgent {
       const slotNum = segIdx + 1;
 
       if (asset.type === 'video') {
-        modifications[`Video-${slotNum}`] = asset.url;
+        // Mute Kling's native audio track — only ElevenLabs TTS should be heard
+        modifications[`Video-${slotNum}`] = { source: asset.url, volume: '0%' };
       } else if (asset.type === 'audio') {
         modifications[`Audio-${slotNum}`] = asset.url;
       }
@@ -113,9 +114,13 @@ export class EditorAgent extends BaseAgent {
     // 2b. B0.23: Pre-render validation — reject non-HTTPS asset URLs (e.g., data URIs)
     const invalidAssetSlots: string[] = [];
     for (const [slotKey, value] of Object.entries(modifications)) {
-      // Only validate Video and Audio slots (string URLs)
+      // Only validate Video and Audio slots (string URLs or objects with source URL)
       if (!slotKey.startsWith('Video-') && !slotKey.startsWith('Audio-')) continue;
-      const url = typeof value === 'string' ? value : null;
+      const url = typeof value === 'string'
+        ? value
+        : (typeof value === 'object' && value !== null && 'source' in value && typeof (value as Record<string, unknown>).source === 'string')
+          ? (value as Record<string, unknown>).source as string
+          : null;
       if (!url) continue;
 
       if (url.startsWith('data:')) {

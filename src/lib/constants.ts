@@ -124,35 +124,6 @@ export const AVATAR_MAPPING: Record<string, { title: string; appearance: string;
   },
 };
 
-// Voice mapping: persona -> voice description for ElevenLabs Voice Design
-export const VOICE_MAPPING: Record<string, { gender: string; description: string }> = {
-  pharmacist: { gender: 'male', description: 'Deep, calm, professional, trustworthy, authoritative' },
-  dermatologist: { gender: 'female', description: 'Warm, professional, caring, confident. Clear enunciation with a soothing tone' },
-  fitness_coach: { gender: 'female', description: 'High energy, motivational, intense, assertive. Fast-paced and punchy' },
-  tech_reviewer: { gender: 'male', description: 'Crisp, articulate, fast-paced, geeky but cool. Clear enunciation' },
-  chef: { gender: 'male', description: 'Deep, gravelly, warm, passionate. Italian-American accent is subtle but present' },
-  stylist: { gender: 'female', description: 'Trendy, confident, enthusiastic. Upbeat and engaging' },
-  interior_designer: { gender: 'female', description: 'Creative, warm, articulate. Sophisticated but approachable' },
-  pediatric_nurse: { gender: 'female', description: 'Caring, nurturing, gentle. Reassuring and trustworthy' },
-  veterinarian: { gender: 'male', description: 'Friendly, compassionate, knowledgeable. Warm and reassuring' },
-  financial_advisor: { gender: 'male', description: 'Professional, trustworthy, confident. Clear and authoritative' },
-};
-
-// Category-to-persona bridge map: maps product categories to VOICE_MAPPING persona keys
-// Resolves the mismatch where VOICE_MAPPING keys are persona names but lookup is by product_category
-export const CATEGORY_TO_PERSONA: Record<string, string> = {
-  supplements: 'pharmacist',
-  skincare: 'dermatologist',
-  fitness: 'fitness_coach',
-  tech: 'tech_reviewer',
-  kitchen: 'chef',
-  fashion: 'stylist',
-  home: 'interior_designer',
-  baby: 'pediatric_nurse',
-  pet: 'veterinarian',
-  finance: 'financial_advisor',
-};
-
 // Fallback voices if Voice Design fails
 export const FALLBACK_VOICES = {
   male: { name: 'Adam', voiceId: 'pNInz6obpgDQGcFmaJgB' },

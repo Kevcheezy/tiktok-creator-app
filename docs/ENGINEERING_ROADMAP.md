@@ -782,7 +782,7 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] isStructuredPrompt() type guard detects old string format vs new StructuredPrompt in `scene.visual_prompt`
 - [x] Existing projects continue working without migration — legacy strings pass through
 
-#### R1.5.20 - Influencer Voice Design System 🔧 IN PROGRESS
+#### ~~R1.5.20 - Influencer Voice Design System~~ DONE
 **Priority:** P0 - Critical
 **Effort:** Medium
 **Spec:** `docs/plans/2026-02-16-influencer-voice-design-system.md`
@@ -807,10 +807,10 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] Remove obsolete `CATEGORY_TO_PERSONA` from `src/lib/constants.ts`
 
 **Frontend:**
-- [ ] 🔧 IN PROGRESS Influencer page: voice preset card grid (same pattern as scene/interaction presets), "+ Custom" option
-- [ ] 🔧 IN PROGRESS "Design Voice" button → preview audio player → approve/regenerate
-- [ ] 🔧 IN PROGRESS Voice badge on influencer cards + play preview button
-- [ ] 🔧 IN PROGRESS Influencer selection gate: filter `hasImage=true&hasVoice=true`, voice preview on selection cards
+- [x] ~~Influencer page: voice preset card grid (same pattern as scene/interaction presets), "+ Custom" option~~ DONE
+- [x] ~~"Design Voice" button → preview audio player → approve/regenerate~~ DONE
+- [x] ~~Voice badge on influencer cards + play preview button~~ DONE
+- [x] ~~Influencer selection gate: filter `hasImage=true&hasVoice=true`, voice preview on selection cards~~ DONE
 
 **Cost:** ~$0.01 per voice design (one-time per influencer). TTS cost unchanged ($0.20/video).
 

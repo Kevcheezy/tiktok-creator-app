@@ -1230,14 +1230,14 @@ async function regenerateAudio(
   const scene = asset.scene;
   if (!scene?.script_text) throw new Error('Script text required for audio regeneration');
 
-  // Get the character's voice_id or use fallback
+  // Resolve voice: influencer (designed) -> character (legacy) -> fallback
   const { data: project } = await supabase
     .from('project')
-    .select('*, character:ai_character(*)')
+    .select('*, influencer:influencer(*), character:ai_character(*)')
     .eq('id', projectId)
     .single();
 
-  const voiceId = project?.character?.voice_id || FALLBACK_VOICES.male.voiceId;
+  const voiceId = project?.influencer?.voice_id || project?.character?.voice_id || FALLBACK_VOICES.male.voiceId;
 
   const elevenlabs = new ElevenLabsClient();
   jobLog.info({ voiceId }, 'Regenerating audio');

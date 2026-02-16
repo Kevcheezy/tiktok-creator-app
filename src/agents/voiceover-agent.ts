@@ -1,7 +1,7 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { BaseAgent } from './base-agent';
 import { ElevenLabsClient } from '@/lib/api-clients/elevenlabs';
-import { VOICE_MAPPING, CATEGORY_TO_PERSONA, FALLBACK_VOICES, API_COSTS } from '@/lib/constants';
+import { API_COSTS } from '@/lib/constants';
 
 // ElevenLabs returns ~128kbps MP3 audio. Bytes per second = 128000 / 8 = 16000.
 const ELEVENLABS_BYTES_PER_SECOND = 128000 / 8;
@@ -19,17 +19,23 @@ export class VoiceoverAgent extends BaseAgent {
     await this.logEvent(projectId, 'stage_start', 'voiceover');
     this.log(`Starting voiceover for project ${projectId}`);
 
-    // 1. Fetch project with character
+    // 1. Fetch project with influencer AND character (fallback for pre-voice-design projects)
     const { data: project, error: projError } = await this.supabase
       .from('project')
-      .select('*, character:ai_character(*)')
+      .select('*, influencer:influencer(*), character:ai_character(*)')
       .eq('id', projectId)
       .single();
 
     if (projError || !project) throw new Error('Project not found');
 
-    // 2. Resolve voice (B0.22: uses CATEGORY_TO_PERSONA bridge map)
-    const voiceId = await this.resolveVoice(project, projectId);
+    // 2. Resolve voice_id: influencer voice (designed) -> character voice (legacy fallback)
+    let voiceId = project?.influencer?.voice_id;
+    if (!voiceId) {
+      voiceId = project?.character?.voice_id;
+    }
+    if (!voiceId) {
+      throw new Error('Influencer has no designed voice. Design a voice from the Influencer page before running the pipeline.');
+    }
     this.log(`Using voice: ${voiceId}`);
 
     // 3. Get the approved script's latest scenes
@@ -199,83 +205,5 @@ export class VoiceoverAgent extends BaseAgent {
     const durationMs = Date.now() - stageStart;
     await this.logEvent(projectId, 'stage_complete', 'voiceover', { durationMs });
     this.log(`Voiceover complete for project ${projectId}`);
-  }
-
-  /**
-   * Resolve the ElevenLabs voice ID for a project.
-   * B0.22: Uses CATEGORY_TO_PERSONA bridge map to correctly resolve product_category → persona → voice.
-   */
-  private async resolveVoice(project: any, projectId: string): Promise<string> {
-    const character = project.character;
-    const category = project.product_category || 'supplements';
-
-    // 1. Check if character already has a voice_id
-    if (character?.voice_id) {
-      const isValid = await this.elevenlabs.isVoiceValid(character.voice_id);
-      if (isValid) {
-        return character.voice_id;
-      }
-      this.log(`Cached voice ${character.voice_id} is invalid, generating new one`);
-    }
-
-    // 2. B0.22: Resolve persona via CATEGORY_TO_PERSONA bridge map
-    const persona = CATEGORY_TO_PERSONA[category.toLowerCase()];
-    const voiceMapping = persona
-      ? VOICE_MAPPING[persona]
-      : VOICE_MAPPING[Object.keys(VOICE_MAPPING)[0]];
-
-    if (!persona) {
-      this.log(`Warning: No persona mapping for category "${category}", falling back to first persona (${Object.keys(VOICE_MAPPING)[0]})`);
-    }
-
-    const resolvedPersona = persona || Object.keys(VOICE_MAPPING)[0];
-    const gender = voiceMapping?.gender || 'male';
-    const voiceDescription = voiceMapping?.description || 'Professional, clear, engaging speaker';
-
-    // B0.22: Log which persona was selected for debugging
-    await this.logEvent(projectId, 'voice_selected', 'voiceover', {
-      category,
-      persona: resolvedPersona,
-      gender,
-      voiceDescription,
-      mappedViaBridge: !!persona,
-    });
-
-    this.log(`Voice persona resolved: category="${category}" -> persona="${resolvedPersona}" (${gender})`, {
-      category,
-      persona: resolvedPersona,
-      gender,
-    });
-
-    // 3. Try to generate a voice via Voice Design
-    try {
-      const sampleText = 'Hey, I just tried this product and honestly, I was not expecting these results.';
-
-      this.log(`Designing voice: ${voiceDescription}`);
-      const generatedVoiceId = await this.elevenlabs.designVoice(voiceDescription, sampleText);
-
-      this.log(`Saving voice to library`);
-      const permanentVoiceId = await this.elevenlabs.saveVoice(
-        generatedVoiceId,
-        `${category}-voice-${Date.now()}`,
-        voiceDescription,
-      );
-
-      // Cache on character
-      if (character?.id) {
-        await this.supabase
-          .from('ai_character')
-          .update({ voice_id: permanentVoiceId })
-          .eq('id', character.id);
-      }
-
-      return permanentVoiceId;
-    } catch (error) {
-      this.log(`Voice design failed: ${error instanceof Error ? error.message : error}. Using fallback.`);
-
-      // 4. Fallback to preset voices
-      const fallback = gender === 'female' ? FALLBACK_VOICES.female : FALLBACK_VOICES.male;
-      return fallback.voiceId;
-    }
   }
 }

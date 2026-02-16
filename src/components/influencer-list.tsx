@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ConfirmDialog } from './confirm-dialog';
@@ -12,6 +12,8 @@ interface Influencer {
   image_url: string | null;
   status: string;
   created_at: string | null;
+  voice_id: string | null;
+  voice_preview_url: string | null;
 }
 
 function timeAgo(date: string | null): string {
@@ -35,6 +37,32 @@ export function InfluencerList() {
   const [deleteTarget, setDeleteTarget] = useState<Influencer | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
+  const sharedAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  function handleVoicePreview(e: React.MouseEvent, influencer: Influencer) {
+    e.stopPropagation();
+    if (!influencer.voice_preview_url) return;
+
+    // If already playing this one, stop it
+    if (playingVoiceId === influencer.id && sharedAudioRef.current) {
+      sharedAudioRef.current.pause();
+      sharedAudioRef.current.currentTime = 0;
+      setPlayingVoiceId(null);
+      return;
+    }
+
+    // Create or reuse audio element
+    if (!sharedAudioRef.current) {
+      sharedAudioRef.current = new Audio();
+      sharedAudioRef.current.addEventListener('ended', () => setPlayingVoiceId(null));
+    }
+
+    sharedAudioRef.current.pause();
+    sharedAudioRef.current.src = influencer.voice_preview_url;
+    sharedAudioRef.current.play().catch(() => setPlayingVoiceId(null));
+    setPlayingVoiceId(influencer.id);
+  }
 
   async function handleDelete() {
     if (!deleteTarget) return;
@@ -209,9 +237,42 @@ export function InfluencerList() {
 
           {/* Footer */}
           <div className="mt-3 flex items-center justify-between">
-            <span className="rounded-md bg-surface-overlay px-2 py-0.5 font-[family-name:var(--font-mono)] text-[11px] text-text-secondary">
-              {influencer.status}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="rounded-md bg-surface-overlay px-2 py-0.5 font-[family-name:var(--font-mono)] text-[11px] text-text-secondary">
+                {influencer.status}
+              </span>
+              {/* Voice status indicator */}
+              {influencer.voice_id ? (
+                <button
+                  type="button"
+                  onClick={(e) => handleVoicePreview(e, influencer)}
+                  className={`group/voice rounded-md p-1 transition-all ${
+                    playingVoiceId === influencer.id
+                      ? 'bg-lime/15 text-lime'
+                      : 'text-lime/70 hover:bg-lime/10 hover:text-lime'
+                  }`}
+                  title={playingVoiceId === influencer.id ? 'Stop preview' : 'Play voice preview'}
+                >
+                  <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    {playingVoiceId === influencer.id ? (
+                      <>
+                        <rect x="4" y="4" width="3" height="8" fill="currentColor" stroke="none" rx="0.5" />
+                        <rect x="9" y="4" width="3" height="8" fill="currentColor" stroke="none" rx="0.5" />
+                      </>
+                    ) : (
+                      <path d="M8 2v12M5 5l-2 3 2 3M11 5l2 3-2 3" />
+                    )}
+                  </svg>
+                </button>
+              ) : (
+                <span className="rounded-md p-1 text-text-muted/40" title="No voice designed">
+                  <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M8 2v12M5 5l-2 3 2 3M11 5l2 3-2 3" />
+                    <line x1="2" y1="14" x2="14" y2="2" strokeWidth={1.5} />
+                  </svg>
+                </span>
+              )}
+            </div>
             <button
               type="button"
               onClick={(e) => {

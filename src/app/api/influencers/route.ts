@@ -20,6 +20,10 @@ export async function GET(request: NextRequest) {
     query = query.not('image_url', 'is', null);
   }
 
+  if (searchParams.get('hasVoice') === 'true') {
+    query = query.not('voice_id', 'is', null);
+  }
+
   const { data: influencers, error } = await query;
 
   if (error) {

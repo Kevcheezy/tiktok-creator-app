@@ -88,17 +88,21 @@ export class ElevenLabsClient {
 
   /**
    * Generate a new voice from a text description.
-   * Returns a temporary generated_voice_id that must be saved to make permanent.
+   * Returns a temporary generated_voice_id and audio preview (base64).
    */
-  async designVoice(description: string, sampleText: string, context?: ElevenLabsCallContext): Promise<string> {
+  async designVoice(description: string, sampleText: string, gender?: string, context?: ElevenLabsCallContext): Promise<{ generatedVoiceId: string; audioBase64: string }> {
     const data = await this.request('/v1/text-to-speech/voice-design/preview', {
       method: 'POST',
       body: JSON.stringify({
         voice_description: description,
         text: sampleText,
+        ...(gender && { gender }),
       }),
     }, context);
-    return data.generated_voice_id;
+    return {
+      generatedVoiceId: data.generated_voice_id,
+      audioBase64: data.audio_base_64,
+    };
   }
 
   /**
