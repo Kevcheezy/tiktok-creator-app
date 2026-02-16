@@ -543,7 +543,7 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] Array fields (Selling Points, Key Claims, Benefits): inline edit, add, remove items with auto-save on blur
 - [x] Text fields (Usage, Hook Angle, Avatar Description): textarea editing with auto-save on blur
 - [x] Saving indicator per field
-- [ ] Per-field regeneration via LLM (e.g., "regenerate just the selling points") — requires backend endpoint
+- [x] Per-field regeneration via LLM — `POST /api/projects/[id]/regenerate-field` accepts `{ field, feedback? }`, regenerates one field via WaveSpeed LLM, updates `product_data`. Frontend "regenerate" button is a frontend agent task.
 
 #### R1.5.15 - Project Sequential Numbering ~~DONE~~
 **Priority:** P1 - Medium
