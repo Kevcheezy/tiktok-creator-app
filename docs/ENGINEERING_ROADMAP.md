@@ -593,6 +593,21 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 
 ---
 
+#### R1.5.17 - Keyframe Prompt Visibility
+**Priority:** P2 - Low
+**Effort:** Small
+**Status:** Backlog
+**Why:** During keyframe review, users have no visibility into the prompt that generated each keyframe. An info icon that reveals the generation prompt helps users understand why a keyframe looks the way it does, make better edit/regenerate decisions, and debug unexpected results.
+
+**Backend:**
+- [ ] Include generation prompt in the asset response for keyframe assets (from `metadata` or `visual_prompt`)
+
+**Frontend:**
+- [ ] Add info icon to each keyframe card in the casting review stage (`asset-card.tsx`)
+- [ ] On click/hover, show popover with the full prompt used for that keyframe's generation
+
+---
+
 ### Tier 2: Make It Actually Convert (Quality & conversion optimization)
 
 These features separate "generates a video" from "generates a video that sells."
