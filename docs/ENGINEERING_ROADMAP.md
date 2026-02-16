@@ -179,7 +179,19 @@ Influencer `<select>` options displayed the entire `persona` field (full appeara
 - [ ] Frontend: Add "Retry Edit" action on failed-after-edit assets
 - [x] Backend: Increase `pollResult` timeout from 120s to 240s in `editSingleKeyframe()` (matching CastingAgent fix)
 - [x] Backend: Store error message in `asset.metadata.lastEditError` on edit failure (both single and propagation handlers)
-- [x] Backend: Fix build break — remove extra `segIdx` arg from `generateVisualPrompts()` call
+- [x] Backend: Fix build break — `segIdx` arg now properly accepted via `segmentIndex` param in method signature (B0.18)
+
+#### ~~B0.18 - Identical Start/End Keyframes Per Segment~~ FIXED
+**Severity:** High (visually broken video — start and end keyframes look the same)
+**Scope:** Backend
+**Why:** ENERGY_ARC for segments 2-4 has identical start/end energy levels (e.g., `start: 'LOW', end: 'LOW'`). The LLM prompt told the model "Generate START frame (energy: LOW) and END frame (energy: LOW)" with no other differentiation signal, so it generated nearly identical start/end keyframes. Most visible on segment 2 where the character pose, expression, and product position were indistinguishable between frames.
+
+**Fix:**
+- Added `FRAME_ACTIONS` constant to `src/lib/constants.ts` with per-segment start/end pose descriptions (body language, expression, product interaction)
+- Updated `generateVisualPrompts()` in CastingAgent to accept `segmentIndex` parameter
+- Injected `DIFFERENTIATION RULE` into system prompt with explicit start/end pose requirements
+- Injected concrete pose cues into user prompt for both edit and text-to-image paths
+- Each segment now gets distinct start/end pose directions regardless of energy arc values
 
 ---
 

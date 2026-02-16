@@ -302,8 +302,14 @@ export class CastingAgent extends BaseAgent {
     interactionDescription?: string | null,
     hasProductImage: boolean = false,
     isContinuation: boolean = false,
+    segmentIndex: number = 0,
   ): Promise<{ start: string; end: string }> {
     const consistencyRule = `CONSISTENCY RULE: All 4 segments MUST use the same room, lighting setup, and props. Only vary: character pose, energy level, product visibility, and camera micro-adjustments (slight angle shift, subtle lighting warmth change matching energy arc). The video must look like one continuous shoot in one location.`;
+
+    const frameActions = FRAME_ACTIONS[segmentIndex];
+    const differentiationRule = frameActions
+      ? `\nDIFFERENTIATION RULE: The START and END frames MUST show visibly DIFFERENT poses and body positions. START pose: ${frameActions.start}. END pose: ${frameActions.end}. These are NOT optional — the two frames must be clearly distinguishable at a glance.`
+      : '';
 
     const productImageRule = hasProductImage
       ? `\nPRODUCT IMAGE RULE: A reference image of the real product is provided. The product in the generated image MUST match this reference EXACTLY — same packaging, shape, colors, label, and branding. Do NOT imagine or invent a different product appearance. The real product image is the ground truth.`
@@ -317,12 +323,12 @@ export class CastingAgent extends BaseAgent {
       ? `You are a visual prompt engineer for Nano Banana Pro image EDITING.
 Generate two edit prompts that describe how to transform reference images into specific scene contexts.
 ${hasProductImage ? 'Reference images include the person AND the actual product. Preserve both likenesses.' : 'Keep the person\'s likeness but change their pose, wardrobe, setting, and energy.'}
-${consistencyRule}${productImageRule}${continuityNote}
+${consistencyRule}${differentiationRule}${productImageRule}${continuityNote}
 Output ONLY valid JSON: { "start": "...", "end": "..." }`
       : `You are a visual prompt engineer for Nano Banana Pro image generation.
 Generate two detailed image prompts for a TikTok video keyframe: one for the START of the segment and one for the END.
 Both should show the SAME person in the SAME setting but with different poses/energy matching the energy arc.
-${consistencyRule}
+${consistencyRule}${differentiationRule}
 Output ONLY valid JSON: { "start": "...", "end": "..." }`;
 
     const interactionLine = interactionDescription
@@ -351,8 +357,8 @@ Energy arc: starts at ${energyArc.pattern.start}, peaks at ${energyArc.pattern.m
 Script context: ${scene.script_text || 'N/A'}
 Text overlay: ${scene.text_overlay || 'N/A'}${productRefLine}
 
-Generate START frame edit prompt (energy: ${energyArc.pattern.start}) and END frame edit prompt (energy: ${energyArc.pattern.end}).
-Describe how to transform the person's pose, wardrobe, scene, and energy for each frame.
+Generate START frame edit prompt (energy: ${energyArc.pattern.start}) and END frame edit prompt (energy: ${energyArc.pattern.end}).${frameActions ? `\nSTART pose: ${frameActions.start}\nEND pose: ${frameActions.end}` : ''}
+Describe how to transform the person's pose, wardrobe, scene, and energy for each frame. START and END must be visually distinct.
 The product must appear exactly as shown in the reference image when visible.
 Keep the scene LOCKED — same room, same lighting, same props across all segments.
 Aspect ratio: 9:16 portrait. Photorealistic. No text/watermarks in the image.
@@ -368,8 +374,8 @@ Energy arc: starts at ${energyArc.pattern.start}, peaks at ${energyArc.pattern.m
 Script context: ${scene.script_text || 'N/A'}
 Text overlay: ${scene.text_overlay || 'N/A'}
 
-Generate START frame prompt (energy: ${energyArc.pattern.start}) and END frame prompt (energy: ${energyArc.pattern.end}).
-Keep the scene LOCKED — same room, same lighting, same props across all segments.
+Generate START frame prompt (energy: ${energyArc.pattern.start}) and END frame prompt (energy: ${energyArc.pattern.end}).${frameActions ? `\nSTART pose: ${frameActions.start}\nEND pose: ${frameActions.end}` : ''}
+Keep the scene LOCKED — same room, same lighting, same props across all segments. START and END must be visually distinct.
 Aspect ratio: 9:16 portrait. Photorealistic. No text/watermarks in the image.
 Negative: ${NEGATIVE_PROMPT}`;
 

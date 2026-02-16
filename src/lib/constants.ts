@@ -130,6 +130,15 @@ export const ENERGY_ARC = [
   { segment: 4, section: 'CTA', pattern: { start: 'LOW', middle: 'PEAK', end: 'LOW' }, description: 'Casual -> peaks on value -> confident close' },
 ] as const;
 
+// Per-segment pose/action cues to differentiate START vs END keyframes.
+// Without these, segments where start/end energy are both "LOW" produce identical frames.
+export const FRAME_ACTIONS = [
+  { segment: 0, start: 'eyes wide, leaning toward camera, mouth slightly open mid-speech, one hand raised', end: 'head tilted, confident smirk, gesturing with opposite hand, slight lean back' },
+  { segment: 1, start: 'sitting relaxed, hands folded or in lap, neutral/curious expression, looking at camera', end: 'leaning forward, slight frown or concerned expression, one hand raised palm-up as if asking a question' },
+  { segment: 2, start: 'reaching toward the product on the table, beginning to pick it up, eager expression', end: 'holding product up toward camera showing label clearly, enthusiastic smile, slight head tilt' },
+  { segment: 3, start: 'product held at chest level, speaking earnestly to camera, open body language', end: 'setting product down on table, pointing at camera with confidence, warm smile, slight nod' },
+] as const;
+
 // Segment tagging enums (R1.5.10)
 export const INTERACTION_TYPES = [
   'hold_and_show', 'apply_to_skin', 'stir_mix', 'demonstrate',
