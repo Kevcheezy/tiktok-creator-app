@@ -163,16 +163,17 @@ These are blocking items. Nothing else matters until a user can go from product 
 - [x] Render status tracking and progress indicator — progress API polls final_video asset completion, StageProgress shows generating/completed/failed counts
 - [x] **Run archive:** `POST /api/projects/[id]/archive` snapshots full recipe into `completed_run` table. Archive button in completed UI.
 
-#### R1.3 - Reference Video Intelligence *(moved to Tier 2)*
-**Priority:** ~~P0 - Critical~~ → P1 - High (Tier 2)
+#### ~~R1.3 - Reference Video Intelligence~~ DONE
+**Priority:** P0 - Critical
 **Effort:** Medium
-**Why:** Core differentiator long-term, but NOT an MVP blocker. The pipeline produces complete videos without reference analysis. The `video_url` field is stored but unused — acceptable for MVP. Reclassified to Tier 2 because it's a quality enhancer, not a functional requirement. See R2.5 below.
+**Status:** Complete (2026-02-15)
+**Why:** Core differentiator — "drawing influence from existing TikTok videos" is the stated customer need.
 
-- [ ] Video analysis agent: Download and analyze reference TikTok videos
-- [ ] Extract pacing, hook style, energy arc, visual composition from reference
-- [ ] Feed reference analysis into ScriptingAgent (match proven viral patterns)
-- [ ] Feed reference analysis into DirectorAgent (match camera work, transitions)
-- [ ] UI: Show reference video alongside generated output for comparison
+- [x] Video analysis agent: Download and analyze reference TikTok videos — VideoAnalysisAgent uses yt-dlp + Google Gemini 2.5 Flash with SEAL method (Scene, Emotion, Angle, Lighting)
+- [x] Extract pacing, hook style, energy arc, visual composition from reference — SEAL framework: per-segment scene/emotion/angle/lighting breakdown stored as `video_analysis` JSONB
+- [x] Feed reference analysis into ScriptingAgent (match proven viral patterns) — SEAL data in prompt with strong influence instruction, reference structure dominates
+- [x] Feed reference analysis into DirectorAgent (match camera work, transitions) — SEAL data enriches CastingAgent keyframe prompts for visual style matching
+- [x] UI: Show reference video alongside generated output for comparison — Analysis review page shows SEAL cards + video player; completed page has side-by-side reference vs generated comparison
 
 #### ~~R1.4 - Pipeline Observability & Logging~~ DONE
 **Status:** Complete (2026-02-15)
@@ -417,17 +418,9 @@ These features separate "generates a video" from "generates a video that sells."
 - [ ] Product image enhancement (background removal, lighting correction)
 - [ ] Product placement choreography matching the PRODUCT_PLACEMENT_ARC
 
-#### R2.5 - Reference Video Intelligence *(moved from R1.3)*
-**Priority:** P1 - High
-**Effort:** Medium
-**Depends on:** R2.0 (performance data validates whether reference-influenced videos actually convert better)
-**Why:** Core differentiator long-term. Analyzing viral TikTok videos and feeding their pacing, hooks, and visual patterns into script/video generation. The `video_url` field is accepted and stored today but not analyzed. Not MVP-blocking — videos generate fine without it.
-
-- [ ] Video analysis agent: Download and analyze reference TikTok videos
-- [ ] Extract pacing, hook style, energy arc, visual composition from reference
-- [ ] Feed reference analysis into ScriptingAgent (match proven viral patterns)
-- [ ] Feed reference analysis into DirectorAgent (match camera work, transitions)
-- [ ] UI: Show reference video alongside generated output for comparison
+#### ~~R2.5 - Reference Video Intelligence~~ DONE *(completed as R1.3)*
+**Status:** Complete (2026-02-15) — Implemented ahead of schedule as part of Tier 1 (R1.3).
+See R1.3 above for full implementation details.
 
 ---
 
