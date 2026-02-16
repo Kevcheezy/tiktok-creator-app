@@ -740,3 +740,128 @@ export const BROLL_PRESETS: Record<string, BrollPreset> = {
     },
   },
 };
+
+// ─── Downstream Impact Map ──────────────────────────────────────────────────
+
+/**
+ * Pipeline order for determining earliest affected stage.
+ * Only includes stages that can be restarted (have RESTART_STAGE_MAP entries).
+ */
+export const PIPELINE_STAGE_ORDER = [
+  'scripting',
+  'broll_planning',
+  'casting',
+  'directing',
+  'voiceover',
+  'broll_generation',
+  'editing',
+] as const;
+
+/**
+ * Estimated cost per pipeline stage for impact warnings.
+ * Based on API_COSTS: images at $0.07 each, videos at $1.20 each, etc.
+ */
+export const STAGE_COST_ESTIMATES: Record<string, { cost: number; label: string }> = {
+  scripting: { cost: 0.01, label: 'Script Generation' },
+  broll_planning: { cost: 0.01, label: 'B-Roll Planning' },
+  broll_generation: { cost: 0.84, label: 'B-Roll Images (~12)' },
+  casting: { cost: 0.56, label: 'Keyframe Casting (8 images)' },
+  directing: { cost: 4.80, label: 'Video Directing (4 segments)' },
+  voiceover: { cost: 0.20, label: 'Voiceover (4 segments)' },
+  editing: { cost: 0.01, label: 'Final Video Rendering' },
+};
+
+/**
+ * Maps review gate stages to the fields editable at that gate,
+ * classified as safe (no regeneration) or destructive (requires pipeline restart).
+ */
+export const DOWNSTREAM_IMPACT_MAP: Record<string, Record<string, {
+  type: 'safe' | 'destructive';
+  affectedStages: string[];
+  description: string;
+}>> = {
+  analysis_review: {
+    product_image_url: { type: 'safe', affectedStages: [], description: 'Visual reference only' },
+    product_data: {
+      type: 'destructive',
+      affectedStages: ['scripting', 'broll_planning', 'casting', 'directing', 'voiceover', 'editing'],
+      description: 'Changes product context used by all downstream agents',
+    },
+    video_analysis: {
+      type: 'destructive',
+      affectedStages: ['scripting', 'casting', 'directing', 'editing'],
+      description: 'Changes SEAL reference used for script and visual style',
+    },
+  },
+  script_review: {
+    script_text: {
+      type: 'destructive',
+      affectedStages: ['casting', 'directing', 'voiceover', 'editing'],
+      description: 'Script text drives keyframe prompts, video, and voiceover audio',
+    },
+    energy_arc: {
+      type: 'destructive',
+      affectedStages: ['casting', 'directing', 'editing'],
+      description: 'Energy arc shapes keyframe poses and video motion',
+    },
+    shot_scripts: {
+      type: 'destructive',
+      affectedStages: ['directing', 'broll_planning', 'editing'],
+      description: 'Shot descriptions drive video generation and B-roll timing',
+    },
+    broll_cues: {
+      type: 'destructive',
+      affectedStages: ['broll_planning', 'broll_generation', 'editing'],
+      description: 'Timing cues drive entire B-roll shot list',
+    },
+    text_overlay: { type: 'safe', affectedStages: [], description: 'Applied at render time' },
+    hook_score: { type: 'safe', affectedStages: [], description: 'Metadata only' },
+    audio_sync: { type: 'safe', affectedStages: [], description: 'Metadata only' },
+  },
+  broll_review: {
+    prompt: {
+      type: 'destructive',
+      affectedStages: ['broll_generation', 'editing'],
+      description: 'Prompt drives image generation',
+    },
+    timing_seconds: {
+      type: 'destructive',
+      affectedStages: ['broll_generation', 'editing'],
+      description: 'Timing affects overlay placement in final video',
+    },
+    duration_seconds: {
+      type: 'destructive',
+      affectedStages: ['broll_generation', 'editing'],
+      description: 'Duration affects overlay length in final video',
+    },
+    category: { type: 'safe', affectedStages: [], description: 'Metadata only' },
+    narrative_role: { type: 'safe', affectedStages: [], description: 'Metadata only' },
+  },
+  influencer_selection: {
+    influencer_id: {
+      type: 'destructive',
+      affectedStages: ['casting', 'directing', 'editing'],
+      description: 'Reference image drives all keyframe generation',
+    },
+    product_placement: {
+      type: 'destructive',
+      affectedStages: ['casting', 'directing', 'editing'],
+      description: 'Placement overrides affect keyframe visual prompts',
+    },
+  },
+  casting_review: {
+    keyframe: {
+      type: 'destructive',
+      affectedStages: ['directing', 'editing'],
+      description: 'Keyframes are input to video generation',
+    },
+  },
+  asset_review: {
+    asset: {
+      type: 'destructive',
+      affectedStages: ['editing'],
+      description: 'Changed assets require re-rendering final video',
+    },
+    text_overlay: { type: 'safe', affectedStages: [], description: 'Applied at render time' },
+  },
+};
