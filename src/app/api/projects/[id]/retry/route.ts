@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/db';
-import { getPipelineQueue } from '@/lib/queue';
+import { getPipelineQueue, type PipelineJobData } from '@/lib/queue';
 import { RESTART_STAGE_MAP, REVIEW_GATE_STATUSES } from '@/lib/constants';
 import { logger } from '@/lib/logger';
 
@@ -64,7 +64,7 @@ export async function POST(
 
       await getPipelineQueue().add(mapping.queueStep, {
         projectId: id,
-        step: mapping.queueStep as 'product_analysis' | 'scripting' | 'casting' | 'directing' | 'voiceover' | 'editing',
+        step: mapping.queueStep as PipelineJobData['step'],
       });
 
       return NextResponse.json({
@@ -89,6 +89,8 @@ export async function POST(
     const stepToJob: Record<string, string> = {
       analyzing: 'product_analysis',
       scripting: 'scripting',
+      broll_planning: 'broll_planning',
+      broll_generation: 'broll_generation',
       casting: 'casting',
       directing: 'directing',
       voiceover: 'voiceover',
