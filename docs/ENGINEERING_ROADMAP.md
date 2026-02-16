@@ -614,18 +614,18 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 
 ---
 
-#### R1.5.17 - Keyframe Prompt Visibility
+#### R1.5.17 - Keyframe Prompt Visibility ~~DONE~~
 **Priority:** P2 - Low
 **Effort:** Small
-**Status:** ~~DONE~~ (backend)
+**Status:** Complete (2026-02-15).
 **Why:** During keyframe review, users have no visibility into the prompt that generated each keyframe. An info icon that reveals the generation prompt helps users understand why a keyframe looks the way it does, make better edit/regenerate decisions, and debug unexpected results.
 
 **Backend:**
 - [x] Include generation prompt in the asset response for keyframe assets — `GET /api/projects/[id]/assets` now joins `scene.visual_prompt` (a `{ start, end }` JSON object). Frontend matches `asset.type` (`keyframe_start`/`keyframe_end`) to the corresponding prompt string.
 
 **Frontend:**
-- [ ] Add info icon to each keyframe card in the casting review stage (`asset-card.tsx`)
-- [ ] On click/hover, show popover with the full prompt used for that keyframe's generation
+- [x] Add info icon to each keyframe card in the casting review stage (`asset-card.tsx`)
+- [x] On click, show popover with the full prompt used for that keyframe's generation
 
 ---
 

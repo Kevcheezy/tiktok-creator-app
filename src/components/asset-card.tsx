@@ -13,7 +13,7 @@ interface AssetCardProps {
     cost_usd: string | null;
     grade: string | null;
     metadata: Record<string, unknown> | null;
-    scene: { segment_index: number; section: string } | null;
+    scene: { segment_index: number; section: string; visual_prompt: { start: string; end: string } | null } | null;
   };
   showGrade?: boolean;
   compact?: boolean;
@@ -39,8 +39,16 @@ const GRADES = [
 
 export function AssetCard({ asset, showGrade, compact, onGrade, onReject, onRegenerate, onEdit }: AssetCardProps) {
   const [grading, setGrading] = useState(false);
+  const [showPrompt, setShowPrompt] = useState(false);
   const badge = TYPE_BADGES[asset.type] || { label: asset.type, color: 'bg-surface-overlay text-text-muted border-border' };
   const isKeyframe = asset.type.startsWith('keyframe');
+
+  // Extract the prompt for this specific keyframe (start or end)
+  const keyframePrompt = isKeyframe && asset.scene?.visual_prompt
+    ? asset.type === 'keyframe_start'
+      ? asset.scene.visual_prompt.start
+      : asset.scene.visual_prompt.end
+    : null;
 
   async function handleGrade(grade: string) {
     setGrading(true);
@@ -201,11 +209,48 @@ export function AssetCard({ asset, showGrade, compact, onGrade, onReject, onRege
         </div>
       )}
 
-      <div className="absolute left-2 top-2">
+      <div className="absolute left-2 top-2 flex items-center gap-1">
         <span className={`inline-flex rounded-md border px-1.5 py-0.5 font-[family-name:var(--font-display)] text-[9px] font-semibold uppercase tracking-wider ${badge.color}`}>
           {badge.label}
         </span>
+        {keyframePrompt && (
+          <button
+            type="button"
+            onClick={() => setShowPrompt(!showPrompt)}
+            title="View generation prompt"
+            className="flex h-5 w-5 items-center justify-center rounded-md bg-void/70 text-text-muted backdrop-blur-sm transition-colors hover:bg-summon/20 hover:text-summon"
+          >
+            <svg viewBox="0 0 16 16" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="8" cy="8" r="6.5" />
+              <path d="M8 11V7.5" />
+              <circle cx="8" cy="5.25" r="0.5" fill="currentColor" stroke="none" />
+            </svg>
+          </button>
+        )}
       </div>
+
+      {/* Prompt popover */}
+      {showPrompt && keyframePrompt && (
+        <div className="absolute inset-x-2 top-9 z-10 max-h-[60%] overflow-y-auto rounded-lg border border-summon/30 bg-void/90 p-3 backdrop-blur-md">
+          <div className="mb-1.5 flex items-center justify-between">
+            <span className="font-[family-name:var(--font-display)] text-[9px] font-semibold uppercase tracking-wider text-summon">
+              Generation Prompt
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowPrompt(false)}
+              className="flex h-4 w-4 items-center justify-center rounded text-text-muted hover:text-text-secondary"
+            >
+              <svg viewBox="0 0 16 16" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+                <path d="M4 4l8 8M12 4l-8 8" />
+              </svg>
+            </button>
+          </div>
+          <p className="font-[family-name:var(--font-mono)] text-[10px] leading-relaxed text-text-secondary">
+            {keyframePrompt}
+          </p>
+        </div>
+      )}
 
       {asset.cost_usd && parseFloat(asset.cost_usd) > 0 && (
         <div className="absolute right-2 top-2 rounded-md bg-void/70 px-1.5 py-0.5 backdrop-blur-sm">

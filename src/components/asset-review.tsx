@@ -15,7 +15,7 @@ interface Asset {
   grade: string | null;
   metadata: Record<string, unknown> | null;
   created_at: string;
-  scene: { segment_index: number; section: string } | null;
+  scene: { segment_index: number; section: string; visual_prompt: { start: string; end: string } | null } | null;
 }
 
 interface AssetReviewProps {
