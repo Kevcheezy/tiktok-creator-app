@@ -197,35 +197,63 @@ export class CastingAgent extends BaseAgent {
             // Edit mode: use reference images
             const editOpts = { aspectRatio: RESOLUTION.aspectRatio, resolution: '1k' as const };
 
-            const refLabels = [
-              useInfluencer ? `influencer: ${influencer.name}` : null,
-              segmentProductImage ? `product (${productImages.find(i => (i.url_clean || i.url) === segmentProductImage)?.angle || 'legacy'})` : null,
-              previousEndFrameUrl ? 'prev_end_frame' : null,
-            ].filter(Boolean).join(' + ');
+            if (isContinuation && previousEndFrameUrl) {
+              // CROSS-SEGMENT CONTINUITY: Reuse previous segment's end frame as this
+              // segment's start frame. This guarantees identical frames at the cut point
+              // and saves one API call per continuation segment.
+              startUrl = previousEndFrameUrl;
+              this.log(`Segment ${segIdx}: reusing previous end frame as START keyframe (attempt ${attempt + 1})`);
+              await this.supabase.from('asset').insert({
+                project_id: projectId,
+                scene_id: scene.id,
+                type: 'keyframe_start',
+                provider: 'reused',
+                provider_task_id: `reused-seg${segIdx - 1}-end`,
+                url: startUrl,
+                status: 'completed',
+                cost_usd: 0,
+              });
 
-            // INNER CHAIN: Generate start first, then use start as reference for end.
-            // This ensures the same person appears in both keyframes of a segment.
-            this.log(`Segment ${segIdx}: generating START keyframe with refs [${refLabels}] (attempt ${attempt + 1})`);
-            const startResult = await this.wavespeed.editImage(referenceImages, startPromptStr, editOpts);
-            await this.createAsset(projectId, scene.id, 'keyframe_start', startResult.taskId, 'nano-banana-pro-edit');
-            const startPoll = await this.wavespeed.pollResult(startResult.taskId, { maxWait: POLL_MAX_WAIT, initialInterval: POLL_INITIAL_INTERVAL });
-            startUrl = startPoll.url || '';
-            await this.updateAssetUrl(startResult.taskId, startUrl);
+              // Generate only the end keyframe: start frame first (continuity), then influencer + product
+              const endRefs: string[] = [startUrl];
+              if (useInfluencer) endRefs.push(influencer.image_url);
+              if (segmentProductImage) endRefs.push(segmentProductImage);
+              this.log(`Segment ${segIdx}: generating END keyframe with reused start as primary ref (attempt ${attempt + 1})`);
+              const endResult = await this.wavespeed.editImage(endRefs, endPromptStr, editOpts);
+              await this.createAsset(projectId, scene.id, 'keyframe_end', endResult.taskId, 'nano-banana-pro-edit');
+              const endPoll = await this.wavespeed.pollResult(endResult.taskId, { maxWait: POLL_MAX_WAIT, initialInterval: POLL_INITIAL_INTERVAL });
+              endUrl = endPoll.url || '';
+              await this.updateAssetUrl(endResult.taskId, endUrl);
 
-            // End frame: start frame first (intra-segment consistency), then influencer + product.
-            // Previous end frame is NOT included — start frame already incorporates that continuity.
-            const endRefs: string[] = [];
-            if (startUrl) endRefs.push(startUrl);
-            if (useInfluencer) endRefs.push(influencer.image_url);
-            if (segmentProductImage) endRefs.push(segmentProductImage);
-            this.log(`Segment ${segIdx}: generating END keyframe with start frame as primary ref (attempt ${attempt + 1})`);
-            const endResult = await this.wavespeed.editImage(endRefs, endPromptStr, editOpts);
-            await this.createAsset(projectId, scene.id, 'keyframe_end', endResult.taskId, 'nano-banana-pro-edit');
-            const endPoll = await this.wavespeed.pollResult(endResult.taskId, { maxWait: POLL_MAX_WAIT, initialInterval: POLL_INITIAL_INTERVAL });
-            endUrl = endPoll.url || '';
-            await this.updateAssetUrl(endResult.taskId, endUrl);
+              await this.trackCost(projectId, API_COSTS.nanoBananaProEdit);
+            } else {
+              // FIRST SEGMENT (or no previous end frame): Generate both keyframes
+              const refLabels = [
+                useInfluencer ? `influencer: ${influencer.name}` : null,
+                segmentProductImage ? `product (${productImages.find(i => (i.url_clean || i.url) === segmentProductImage)?.angle || 'legacy'})` : null,
+              ].filter(Boolean).join(' + ');
 
-            await this.trackCost(projectId, API_COSTS.nanoBananaProEdit * 2);
+              this.log(`Segment ${segIdx}: generating START keyframe with refs [${refLabels}] (attempt ${attempt + 1})`);
+              const startResult = await this.wavespeed.editImage(referenceImages, startPromptStr, editOpts);
+              await this.createAsset(projectId, scene.id, 'keyframe_start', startResult.taskId, 'nano-banana-pro-edit');
+              const startPoll = await this.wavespeed.pollResult(startResult.taskId, { maxWait: POLL_MAX_WAIT, initialInterval: POLL_INITIAL_INTERVAL });
+              startUrl = startPoll.url || '';
+              await this.updateAssetUrl(startResult.taskId, startUrl);
+
+              // End frame: start frame first (intra-segment consistency), then influencer + product
+              const endRefs: string[] = [];
+              if (startUrl) endRefs.push(startUrl);
+              if (useInfluencer) endRefs.push(influencer.image_url);
+              if (segmentProductImage) endRefs.push(segmentProductImage);
+              this.log(`Segment ${segIdx}: generating END keyframe with start frame as primary ref (attempt ${attempt + 1})`);
+              const endResult = await this.wavespeed.editImage(endRefs, endPromptStr, editOpts);
+              await this.createAsset(projectId, scene.id, 'keyframe_end', endResult.taskId, 'nano-banana-pro-edit');
+              const endPoll = await this.wavespeed.pollResult(endResult.taskId, { maxWait: POLL_MAX_WAIT, initialInterval: POLL_INITIAL_INTERVAL });
+              endUrl = endPoll.url || '';
+              await this.updateAssetUrl(endResult.taskId, endUrl);
+
+              await this.trackCost(projectId, API_COSTS.nanoBananaProEdit * 2);
+            }
           } else {
             // Text-to-image for start, then edit for end using start as reference
             const imgOpts = { aspectRatio: RESOLUTION.aspectRatio, width: RESOLUTION.width, height: RESOLUTION.height };
