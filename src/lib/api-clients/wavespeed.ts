@@ -204,6 +204,26 @@ export class WaveSpeedClient {
     return { taskId: data.data?.id };
   }
 
+  async upscaleImage(
+    imageUrl: string,
+    options?: { targetResolution?: '2k' | '4k' | '8k'; outputFormat?: 'jpeg' | 'png' | 'webp' },
+    context?: ApiCallContext
+  ): Promise<{ taskId: string }> {
+    const { targetResolution = '4k', outputFormat = 'png' } = options || {};
+
+    const data = await this.request('/api/v3/wavespeed-ai/image-upscaler', {
+      method: 'POST',
+      body: JSON.stringify({
+        image: imageUrl,
+        target_resolution: targetResolution,
+        output_format: outputFormat,
+        enable_sync_mode: false,
+      }),
+    }, context);
+
+    return { taskId: data.data?.id };
+  }
+
   async pollResult(
     taskId: string,
     options?: { maxWait?: number; initialInterval?: number }

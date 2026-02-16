@@ -415,6 +415,7 @@ export const API_COSTS = {
   creatomateRender: 0.50,
   geminiVideoAnalysis: 0.02,
   brollPlanning: 0.01, // 1 LLM call for B-roll shot list
+  imageUpscaler: 0.01, // WaveSpeed image upscaler to 4K
 } as const;
 
 // ─── B-Roll Presets ─────────────────────────────────────────────────────────

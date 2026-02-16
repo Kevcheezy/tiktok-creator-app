@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/db';
 import { logger } from '@/lib/logger';
 import { getPublicUrl } from '@/lib/storage';
+import { WaveSpeedClient } from '@/lib/api-clients/wavespeed';
+import { API_COSTS } from '@/lib/constants';
+
+const wavespeed = new WaveSpeedClient();
 
 export async function POST(
   request: NextRequest,
@@ -61,13 +65,48 @@ export async function POST(
       publicUrl = urlData.publicUrl;
     }
 
-    // Update product with image URL
+    // Upscale to 4K via WaveSpeed ($0.01 per image)
+    let finalUrl = publicUrl;
+    try {
+      logger.info({ productId: id, route: '/api/products/[id]/image' }, 'Upscaling product image to 4K');
+      const { taskId } = await wavespeed.upscaleImage(publicUrl, {
+        targetResolution: '4k',
+        outputFormat: 'png',
+      });
+
+      const result = await wavespeed.pollResult(taskId, {
+        maxWait: 60000,
+        initialInterval: 3000,
+      });
+
+      if (result.url) {
+        finalUrl = result.url;
+        logger.info({ productId: id, taskId }, 'Product image upscaled to 4K');
+      }
+
+      // Track upscale cost on the product
+      const { data: currentProd } = await supabase
+        .from('product')
+        .select('cost_usd')
+        .eq('id', id)
+        .single();
+      const currentCost = parseFloat(currentProd?.cost_usd || '0');
+      await supabase
+        .from('product')
+        .update({ cost_usd: (currentCost + API_COSTS.imageUpscaler).toFixed(4) })
+        .eq('id', id);
+    } catch (upscaleErr) {
+      // Non-fatal: use the original image if upscale fails
+      logger.error({ err: upscaleErr, productId: id, route: '/api/products/[id]/image' }, 'Image upscale failed, using original');
+    }
+
+    // Update product with (upscaled) image URL
     await supabase
       .from('product')
-      .update({ image_url: publicUrl, updated_at: new Date().toISOString() })
+      .update({ image_url: finalUrl, updated_at: new Date().toISOString() })
       .eq('id', id);
 
-    return NextResponse.json({ url: publicUrl });
+    return NextResponse.json({ url: finalUrl, upscaled: finalUrl !== publicUrl });
   } catch (error) {
     logger.error({ err: error, route: '/api/products/[id]/image' }, 'Error uploading product image');
     return NextResponse.json({ error: 'Failed to upload product image' }, { status: 500 });
