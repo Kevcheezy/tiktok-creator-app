@@ -155,9 +155,40 @@ async function handleProductAnalysis(projectId: string | undefined, correlationI
       event_type: 'stage_start', agent_name: 'ProductAnalyzerAgent', stage,
     });
 
+    // Check if project has a video_url for parallel video analysis
+    const { data: projCheck } = await supabase
+      .from('project')
+      .select('video_url')
+      .eq('id', projectId)
+      .single();
+
     const agent = new ProductAnalyzerAgent(supabase);
     agent.setCorrelationId(correlationId);
-    const analysis = await agent.run(projectId!);
+    const productAnalysisPromise = agent.run(projectId!);
+
+    let videoAnalysisPromise: Promise<unknown> | null = null;
+    if (projCheck?.video_url) {
+      jobLog.info('Video URL detected, running VideoAnalysisAgent in parallel');
+      const videoAgent = new VideoAnalysisAgent(supabase);
+      videoAgent.setCorrelationId(correlationId);
+      videoAnalysisPromise = videoAgent.run(projectId!);
+    }
+
+    const tasks: Promise<unknown>[] = [productAnalysisPromise];
+    if (videoAnalysisPromise) tasks.push(videoAnalysisPromise);
+
+    const results = await Promise.allSettled(tasks);
+
+    // Product analysis failure = pipeline failure
+    if (results[0].status === 'rejected') {
+      throw results[0].reason;
+    }
+    const analysis = (results[0] as PromiseFulfilledResult<any>).value;
+
+    // Video analysis failure = log warning, continue
+    if (results.length > 1 && results[1].status === 'rejected') {
+      jobLog.warn({ err: results[1].reason }, 'Video analysis failed (non-blocking), continuing pipeline');
+    }
 
     // Write to product table if project has a product_id
     const { data: proj } = await supabase
