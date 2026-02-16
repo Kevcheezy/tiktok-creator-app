@@ -11,6 +11,7 @@ interface Influencer {
   name: string;
   persona: string | null;
   image_url: string | null;
+  cost_usd: string | null;
   status: string;
   created_at: string | null;
   updated_at: string | null;
@@ -434,6 +435,10 @@ export function InfluencerDetail({ influencerId }: { influencerId: string }) {
               <div className="absolute right-0 top-0 h-px w-8 bg-gradient-to-l from-magenta/50 to-transparent" />
               <div className="absolute right-0 top-0 h-8 w-px bg-gradient-to-b from-magenta/50 to-transparent" />
             </div>
+            {/* 4K badge — cost_usd > 0 means image was auto-upscaled */}
+            {influencer.cost_usd && parseFloat(influencer.cost_usd) > 0 && (
+              <span className="absolute left-3 top-3 rounded border border-electric/30 bg-electric/90 px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-[10px] font-bold leading-none text-void shadow-sm shadow-electric/20">4K</span>
+            )}
           </div>
         ) : (
           <div className="flex h-64 items-center justify-center rounded-lg border border-dashed border-border-bright bg-surface-raised">
@@ -508,7 +513,11 @@ export function InfluencerDetail({ influencerId }: { influencerId: string }) {
             </dt>
             <dd className="mt-1 text-sm text-text-primary">
               {influencer.image_url ? (
-                <span className="text-lime">Yes</span>
+                influencer.cost_usd && parseFloat(influencer.cost_usd) > 0 ? (
+                  <span className="text-electric">Yes (4K)</span>
+                ) : (
+                  <span className="text-lime">Yes</span>
+                )
               ) : (
                 <span className="text-text-muted">No</span>
               )}

@@ -525,7 +525,8 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 
 **Frontend:**
 - [x] WHO selection grid: fetches with `hasImage=true` (done in B0.14)
-- [x] ~~4K badge / spinner~~ → Not needed; upscale is synchronous at upload time
+- [x] Influencer detail: "4K" badge when `cost_usd > 0` (inline upscale, no async status needed)
+- [x] Influencer detail: "Has Image" field shows "Yes (4K)" when upscaled
 
 **Cost:** $0.01 per upload. ~$0.20 for 20 influencers.
 
