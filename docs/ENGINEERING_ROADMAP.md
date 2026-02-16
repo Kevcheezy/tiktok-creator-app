@@ -405,7 +405,7 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] `readOnly` prop on ScriptReview, AssetReview, StoryboardView, InfluencerSelection
 - [x] Destructive edit confirmation dialog with cost estimate from impact API
 
-#### R1.5.9 - Scene & Interaction Presets for Casting
+#### ~~R1.5.9 - Scene & Interaction Presets for Casting~~ DONE
 **Priority:** P1 - High
 **Effort:** Medium
 **Spec:** `docs/plans/2026-02-15-scene-interaction-presets-design.md`
@@ -422,11 +422,11 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] Legacy fallback: old projects without presets use `ai_character.setting`
 
 **Frontend:**
-- [ ] Scene Selector component: card grid sorted by product category affinity, "★ Best match" badge, full description + virality notes on select, "+ Custom" form
-- [ ] Interaction Selector component: same card grid pattern with category sorting
-- [ ] Influencer selection page: WHO → WHERE → HOW three-section layout
-- [ ] Defaults pre-selected (Bedroom Ring Light + Hold & Show)
-- [ ] Custom presets saved to DB for reuse across projects
+- [x] Scene Selector component: card grid sorted by product category affinity, "★ Best match" badge, full description + virality notes on select, "+ Custom" form
+- [x] Interaction Selector component: same card grid pattern with category sorting
+- [x] Influencer selection page: WHO → WHERE → HOW three-section layout
+- [x] Defaults pre-selected (Bedroom Ring Light + Hold & Show)
+- [x] Custom presets saved to DB for reuse across projects
 
 #### R1.5.10 - Visual Script Breakdown
 **Priority:** P2 - Medium (backlog)
