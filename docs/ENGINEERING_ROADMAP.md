@@ -158,6 +158,27 @@ Influencer `<select>` options displayed the entire `persona` field (full appeara
 - [x] Added `product_id` and `product` relation to frontend `ProjectData` interface
 - [x] Product image resolution chain: `project.product_image_url → project.product?.image_url → data.product_image_url`
 
+#### B0.17 - Keyframe Edit Fails Silently (No Error Feedback)
+**Severity:** High (user action results in failed asset with no explanation)
+**Scope:** Frontend + Backend
+**Why:** When a user submits a keyframe edit via the "Edit Keyframe" dialog at casting_review, the edit is enqueued as a `keyframe_edit` BullMQ job. If the WaveSpeed Nano Banana Pro Edit API call fails (timeout, API error, or invalid image URL), the worker sets the asset to `failed` status but the user sees no error message — the dialog just closes. The user discovers the failure only by noticing the asset card shows a failed state.
+
+**Root causes (needs investigation by backend agent):**
+- Worker `editSingleKeyframe()` calls `wavespeed.editImage()` → if WaveSpeed returns an error or `pollResult` times out after 120s, the catch block sets asset to `failed` but no error detail is surfaced to the frontend
+- The API route (`POST /api/projects/[id]/keyframes/edit`) only enqueues the job — there's no mechanism to relay worker-side failures back to the polling frontend
+
+**Frontend issues:**
+- `handleEditSubmit()` in `asset-review.tsx:185` doesn't check `res.ok` — a 400/500 response is silently ignored
+- No error toast or inline error shown when the edit job fails
+- Asset card in `failed` state after edit doesn't show the failure reason or offer a "retry edit" action
+
+**Fix checklist:**
+- [ ] Frontend: Check `res.ok` in `handleEditSubmit()`, show error toast on API failure
+- [ ] Frontend: Show error reason on asset card when edit fails (read from asset metadata or error field)
+- [ ] Frontend: Add "Retry Edit" action on failed-after-edit assets
+- [ ] Backend: Investigate why WaveSpeed edit API is failing (check generation_log for `keyframe_edit_error` events)
+- [ ] Backend: Store error message in asset `metadata.lastEditError` so frontend can display it
+
 ---
 
 ### Tier 1: Complete the Core Pipeline (Ship a working end-to-end product)
