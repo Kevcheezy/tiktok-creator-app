@@ -257,7 +257,7 @@ Influencer `<select>` options displayed the entire `persona` field (full appeara
 - [x] Log Storage upload failures as `segment_error` events with detail (bucket, path, error message)
 - [x] EditorAgent: add pre-render validation that all asset URLs are HTTPS (reject data URIs with a clear error message)
 
-#### B0.24 - BRollAgent JSON Parse Failure — No Retry on Malformed LLM Response
+#### ~~B0.24 - BRollAgent JSON Parse Failure — No Retry on Malformed LLM Response~~ FIXED
 **Severity:** High (B-roll planning KOs the entire project with no recovery)
 **Scope:** Backend
 **Discovered:** 2026-02-16 (PROJECT-5: Collagen Bio-Peptides Powder, NeoCell Grassfed)
@@ -267,11 +267,11 @@ Influencer `<select>` options displayed the entire `persona` field (full appeara
 **Root cause:** BRollAgent parses the raw LLM response with `JSON.parse()` — no fallback, no retry, no repair. LLMs frequently produce slightly malformed JSON (trailing commas, unescaped quotes in string values, truncated responses), and a single parse failure shouldn't be terminal.
 
 **Fix checklist:**
-- [ ] Add JSON repair attempt before hard-failing (strip trailing commas, fix unclosed brackets/strings)
-- [ ] If `JSON.parse()` fails after repair, retry LLM call once with a simplified prompt that emphasizes strict JSON formatting
-- [ ] Add `JSON5.parse` or equivalent lenient parser as secondary fallback (tolerates trailing commas, single quotes)
-- [ ] Log the raw LLM response on parse failure (currently only logs a truncated snippet — need full response for debugging)
-- [ ] Consider chunking: if the shot list is large (>20 shots), generate in batches to reduce truncation risk
+- [x] Add JSON repair attempt before hard-failing (strip trailing commas, fix unclosed brackets/strings)
+- [x] If `JSON.parse()` fails after repair, retry LLM call once with a simplified prompt that emphasizes strict JSON formatting
+- [ ] ~~Add `JSON5.parse` or equivalent lenient parser as secondary fallback~~ — skipped per assignment (no new dependencies; string-based repair covers trailing commas)
+- [x] Log the raw LLM response on parse failure (currently only logs a truncated snippet — need full response for debugging)
+- [ ] Consider chunking: if the shot list is large (>20 shots), generate in batches to reduce truncation risk (deferred — not in scope for this fix)
 
 ---
 
@@ -729,7 +729,7 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] Create `energy-arc-graph.tsx` — inline SVG sparkline component, takes energy arc array, renders as a connected line graph with colored dots per energy level, segment dividers, gradient fill, and section labels
 - [x] Integrate into `script-review.tsx` between full script text and view toggle
 
-#### R1.5.19 - Structured Prompt Schema for Asset Generation
+#### R1.5.19 - Structured Prompt Schema for Asset Generation 🔧 IN PROGRESS
 **Priority:** P0 - Critical
 **Effort:** Medium
 **Spec:** `docs/plans/2026-02-16-structured-prompt-schema-design.md`

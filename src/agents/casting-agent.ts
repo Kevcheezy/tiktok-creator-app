@@ -1,8 +1,8 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { BaseAgent } from './base-agent';
 import { AVATAR_MAPPING, PRODUCT_PLACEMENT_ARC, ENERGY_ARC, API_COSTS, RESOLUTION, VISIBILITY_ANGLE_MAP } from '@/lib/constants';
-
-const NEGATIVE_PROMPT = 'watermark, text, logo, blurry, deformed, ugly, duplicate, extra limbs, poorly drawn';
+import { StructuredPrompt, STRUCTURED_PROMPT_SCHEMA_DESCRIPTION, IMAGE_NEGATIVE_PROMPT, resolveNegativePrompt, isStructuredPrompt } from '@/lib/prompt-schema';
+import { serializeForImage } from '@/lib/prompt-serializer';
 
 const CONTINUITY_PROMPT = 'CONTINUITY: This frame continues directly from the previous segment. The FIRST reference image is the previous segment\'s end frame. Preserve the EXACT same person, room, lighting, and wardrobe. Only change: pose, energy level, and product visibility as specified.';
 
@@ -19,7 +19,7 @@ export class CastingAgent extends BaseAgent {
     // 1. Fetch project with character, scene preset, and interaction preset
     const { data: project, error: projError } = await this.supabase
       .from('project')
-      .select('*, character:ai_character(*), influencer:influencer(*), product:product(*), scene_preset:scene_preset(*), interaction_preset:interaction_preset(*)')
+      .select('*, character:ai_character(*), influencer:influencer(*), product:product(*), scene_preset:scene_preset(*), interaction_preset:interaction_preset(*), negative_prompt_override')
       .eq('id', projectId)
       .single();
 
@@ -157,6 +157,7 @@ export class CastingAgent extends BaseAgent {
           // Use LLM to generate detailed prompts for start and end frames
           const sealSegment = project.video_analysis?.segments?.[segIdx] || null;
           const hasProductRef = !!segmentProductImage;
+          const negativePrompt = resolveNegativePrompt(project, 'casting');
           const promptPair = await this.generateVisualPrompts(
             appearance, wardrobe, sceneDescription,
             scene, placement, energyArc,
@@ -168,6 +169,7 @@ export class CastingAgent extends BaseAgent {
             hasProductRef,
             isContinuation,
             segIdx,
+            negativePrompt,
           );
 
           // Save visual prompts to scene
@@ -185,6 +187,10 @@ export class CastingAgent extends BaseAgent {
           let startUrl = '';
           let endUrl = '';
 
+          // Serialize structured prompts to API-ready strings
+          const startPromptStr = isStructuredPrompt(promptPair.start) ? serializeForImage(promptPair.start) : String(promptPair.start);
+          const endPromptStr = isStructuredPrompt(promptPair.end) ? serializeForImage(promptPair.end) : String(promptPair.end);
+
           if (referenceImages.length > 0) {
             // Edit mode: use reference images
             const editOpts = { aspectRatio: RESOLUTION.aspectRatio, resolution: '1k' as const };
@@ -198,7 +204,7 @@ export class CastingAgent extends BaseAgent {
             // INNER CHAIN: Generate start first, then use start as reference for end.
             // This ensures the same person appears in both keyframes of a segment.
             this.log(`Segment ${segIdx}: generating START keyframe with refs [${refLabels}] (attempt ${attempt + 1})`);
-            const startResult = await this.wavespeed.editImage(referenceImages, promptPair.start, editOpts);
+            const startResult = await this.wavespeed.editImage(referenceImages, startPromptStr, editOpts);
             await this.createAsset(projectId, scene.id, 'keyframe_start', startResult.taskId, 'nano-banana-pro-edit');
             const startPoll = await this.wavespeed.pollResult(startResult.taskId, { maxWait: POLL_MAX_WAIT, initialInterval: POLL_INITIAL_INTERVAL });
             startUrl = startPoll.url || '';
@@ -207,7 +213,7 @@ export class CastingAgent extends BaseAgent {
             // End frame: prepend the start frame as primary reference for face/scene consistency
             const endRefs = startUrl ? [startUrl, ...referenceImages] : referenceImages;
             this.log(`Segment ${segIdx}: generating END keyframe with start frame as primary ref (attempt ${attempt + 1})`);
-            const endResult = await this.wavespeed.editImage(endRefs, promptPair.end, editOpts);
+            const endResult = await this.wavespeed.editImage(endRefs, endPromptStr, editOpts);
             await this.createAsset(projectId, scene.id, 'keyframe_end', endResult.taskId, 'nano-banana-pro-edit');
             const endPoll = await this.wavespeed.pollResult(endResult.taskId, { maxWait: POLL_MAX_WAIT, initialInterval: POLL_INITIAL_INTERVAL });
             endUrl = endPoll.url || '';
@@ -219,7 +225,7 @@ export class CastingAgent extends BaseAgent {
             const imgOpts = { aspectRatio: RESOLUTION.aspectRatio, width: RESOLUTION.width, height: RESOLUTION.height };
 
             this.log(`Segment ${segIdx}: text-to-image START (no references) (attempt ${attempt + 1})`);
-            const startResult = await this.wavespeed.generateImage(promptPair.start, imgOpts);
+            const startResult = await this.wavespeed.generateImage(startPromptStr, imgOpts);
             await this.createAsset(projectId, scene.id, 'keyframe_start', startResult.taskId);
             const startPoll = await this.wavespeed.pollResult(startResult.taskId, { maxWait: POLL_MAX_WAIT, initialInterval: POLL_INITIAL_INTERVAL });
             startUrl = startPoll.url || '';
@@ -229,7 +235,7 @@ export class CastingAgent extends BaseAgent {
               // Use start frame as reference for end frame (edit mode) to preserve face
               const editOpts = { aspectRatio: RESOLUTION.aspectRatio, resolution: '1k' as const };
               this.log(`Segment ${segIdx}: generating END keyframe using start frame as ref (attempt ${attempt + 1})`);
-              const endResult = await this.wavespeed.editImage([startUrl], promptPair.end, editOpts);
+              const endResult = await this.wavespeed.editImage([startUrl], endPromptStr, editOpts);
               await this.createAsset(projectId, scene.id, 'keyframe_end', endResult.taskId, 'nano-banana-pro-edit');
               const endPoll = await this.wavespeed.pollResult(endResult.taskId, { maxWait: POLL_MAX_WAIT, initialInterval: POLL_INITIAL_INTERVAL });
               endUrl = endPoll.url || '';
@@ -238,7 +244,7 @@ export class CastingAgent extends BaseAgent {
             } else {
               // Fallback: generate end independently if start failed
               this.log(`Segment ${segIdx}: text-to-image END (start failed) (attempt ${attempt + 1})`);
-              const endResult = await this.wavespeed.generateImage(promptPair.end, imgOpts);
+              const endResult = await this.wavespeed.generateImage(endPromptStr, imgOpts);
               await this.createAsset(projectId, scene.id, 'keyframe_end', endResult.taskId);
               const endPoll = await this.wavespeed.pollResult(endResult.taskId, { maxWait: POLL_MAX_WAIT, initialInterval: POLL_INITIAL_INTERVAL });
               endUrl = endPoll.url || '';
@@ -304,7 +310,8 @@ export class CastingAgent extends BaseAgent {
     hasProductImage: boolean = false,
     isContinuation: boolean = false,
     segmentIndex: number = 0,
-  ): Promise<{ start: string; end: string }> {
+    negativePrompt: string = IMAGE_NEGATIVE_PROMPT,
+  ): Promise<{ start: StructuredPrompt | string; end: StructuredPrompt | string }> {
     const consistencyRule = `CONSISTENCY RULE: All 4 segments MUST use the same room, lighting setup, and props. Only vary: character pose, energy level, product visibility, and camera micro-adjustments (slight angle shift, subtle lighting warmth change matching energy arc). The video must look like one continuous shoot in one location.`;
 
     const frameActions = this.videoModel.frame_actions[segmentIndex];
@@ -320,17 +327,24 @@ export class CastingAgent extends BaseAgent {
       ? `\nThe FIRST reference image is the previous segment's end frame. Preserve its exact appearance — same person, room, lighting, wardrobe. Evolve only the pose and energy.`
       : '';
 
+    const structuredOutputInstruction = `
+
+Each prompt must be a StructuredPrompt JSON object with these fields:
+${STRUCTURED_PROMPT_SCHEMA_DESCRIPTION}
+
+Use the negative_prompt: "${negativePrompt}"
+
+Output ONLY valid JSON: { "start": <StructuredPrompt>, "end": <StructuredPrompt> }`;
+
     const systemPrompt = isEdit
       ? `You are a visual prompt engineer for Nano Banana Pro image EDITING.
-Generate two edit prompts that describe how to transform reference images into specific scene contexts.
+Generate two StructuredPrompt JSON objects that describe how to transform reference images into specific scene contexts.
 ${hasProductImage ? 'Reference images include the person AND the actual product. Preserve both likenesses.' : 'Keep the person\'s likeness but change their pose, wardrobe, setting, and energy.'}
-${consistencyRule}${differentiationRule}${productImageRule}${continuityNote}
-Output ONLY valid JSON: { "start": "...", "end": "..." }`
+${consistencyRule}${differentiationRule}${productImageRule}${continuityNote}${structuredOutputInstruction}`
       : `You are a visual prompt engineer for Nano Banana Pro image generation.
-Generate two detailed image prompts for a TikTok video keyframe: one for the START of the segment and one for the END.
+Generate two StructuredPrompt JSON objects for a TikTok video keyframe: one for the START of the segment and one for the END.
 Both should show the SAME person in the SAME setting but with different poses/energy matching the energy arc.
-${consistencyRule}${differentiationRule}
-Output ONLY valid JSON: { "start": "...", "end": "..." }`;
+${consistencyRule}${differentiationRule}${structuredOutputInstruction}`;
 
     const interactionLine = interactionDescription
       ? `Product interaction: ${interactionDescription}`
@@ -348,6 +362,7 @@ Output ONLY valid JSON: { "start": "...", "end": "..." }`;
 
     let userPrompt = isEdit
       ? `Transform the reference images into the following scene context:
+Character: ${appearance}
 Wardrobe: ${wardrobe}
 Scene: ${sceneDescription}
 ${interactionLine}${cameraLine ? `\n${cameraLine}` : ''}
@@ -358,12 +373,10 @@ Energy arc: starts at ${energyArc.pattern.start}, peaks at ${energyArc.pattern.m
 Script context: ${scene.script_text || 'N/A'}
 Text overlay: ${scene.text_overlay || 'N/A'}${productRefLine}
 
-Generate START frame edit prompt (energy: ${energyArc.pattern.start}) and END frame edit prompt (energy: ${energyArc.pattern.end}).${frameActions ? `\nSTART pose: ${frameActions.start}\nEND pose: ${frameActions.end}` : ''}
-Describe how to transform the person's pose, wardrobe, scene, and energy for each frame. START and END must be visually distinct.
-The product must appear exactly as shown in the reference image when visible.
+Generate START StructuredPrompt (energy: ${energyArc.pattern.start}) and END StructuredPrompt (energy: ${energyArc.pattern.end}).${frameActions ? `\nSTART pose: ${frameActions.start}\nEND pose: ${frameActions.end}` : ''}
+Fill all fields. START and END must be visually distinct.
 Keep the scene LOCKED — same room, same lighting, same props across all segments.
-Aspect ratio: 9:16 portrait. Photorealistic. No text/watermarks in the image.
-Negative: ${NEGATIVE_PROMPT}`
+Aspect ratio: 9:16 portrait. Photorealistic.`
       : `Character: ${appearance}
 Wardrobe: ${wardrobe}
 Scene: ${sceneDescription}
@@ -375,10 +388,9 @@ Energy arc: starts at ${energyArc.pattern.start}, peaks at ${energyArc.pattern.m
 Script context: ${scene.script_text || 'N/A'}
 Text overlay: ${scene.text_overlay || 'N/A'}
 
-Generate START frame prompt (energy: ${energyArc.pattern.start}) and END frame prompt (energy: ${energyArc.pattern.end}).${frameActions ? `\nSTART pose: ${frameActions.start}\nEND pose: ${frameActions.end}` : ''}
-Keep the scene LOCKED — same room, same lighting, same props across all segments. START and END must be visually distinct.
-Aspect ratio: 9:16 portrait. Photorealistic. No text/watermarks in the image.
-Negative: ${NEGATIVE_PROMPT}`;
+Generate START StructuredPrompt (energy: ${energyArc.pattern.start}) and END StructuredPrompt (energy: ${energyArc.pattern.end}).${frameActions ? `\nSTART pose: ${frameActions.start}\nEND pose: ${frameActions.end}` : ''}
+Fill all fields. Keep the scene LOCKED — same room, same lighting, same props across all segments. START and END must be visually distinct.
+Aspect ratio: 9:16 portrait. Photorealistic.`;
 
     // Prepend continuity instruction for chained segments
     if (isContinuation) {
@@ -406,8 +418,8 @@ Match this reference video's visual style: use similar lighting, camera angle, a
       const parsed = JSON.parse(cleaned);
       return { start: parsed.start, end: parsed.end };
     } catch {
-      // Fallback: use template-based prompts
-      this.log('LLM prompt generation failed, using template fallback');
+      // Fallback: use template-based prompts (legacy string format)
+      this.log('LLM StructuredPrompt generation failed, using template fallback');
       const cameraStr = cameraSpecs
         ? `${cameraSpecs.angle || 'medium'} shot, ${cameraSpecs.movement || 'static'}, ${cameraSpecs.lighting || 'natural_window'} lighting`
         : 'medium shot, static, cinematic lighting';

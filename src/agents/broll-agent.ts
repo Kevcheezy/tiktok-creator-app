@@ -134,16 +134,63 @@ export class BRollAgent extends BaseAgent {
       throw new Error(`B-roll planning LLM call failed: ${err instanceof Error ? err.message : String(err)}`);
     }
 
-    // 6. Parse response
+    // 6. Parse response with repair + retry pipeline
     let shots: BrollShotFromLLM[];
-    try {
-      const cleaned = rawResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      const parsed = JSON.parse(cleaned);
-      shots = Array.isArray(parsed) ? parsed : parsed.shots || parsed.broll_shots || [];
-    } catch (err) {
-      throw new Error(
-        `Failed to parse B-roll LLM response: ${err instanceof Error ? err.message : String(err)}\nRaw: ${rawResponse.substring(0, 500)}`
-      );
+    const parseResult = this.tryParseShots(rawResponse);
+
+    if (parseResult.ok) {
+      shots = parseResult.shots;
+    } else {
+      // Repair failed — log full raw response for debugging
+      this.log('JSON parse failed after repair attempt, logging full response and retrying LLM', {
+        projectId,
+        parseError: parseResult.error,
+        rawResponseLength: rawResponse.length,
+      });
+      await this.logEvent(projectId, 'json_parse_failure', 'broll_planning', {
+        error: parseResult.error,
+        rawResponse,
+        rawResponseLength: rawResponse.length,
+        attempt: 'initial',
+      });
+
+      // Retry LLM call once with strict formatting instructions
+      this.log('Retrying LLM call with strict JSON formatting instructions...');
+      let retryResponse: string;
+      try {
+        const strictSystemPrompt = systemPrompt
+          + '\n\nCRITICAL: Return ONLY valid JSON. No markdown, no comments, no trailing commas. '
+          + 'Do not wrap the response in ```json code fences. Output raw JSON only.';
+        retryResponse = await this.wavespeed.chatCompletion(strictSystemPrompt, userPrompt, {
+          temperature: 0.3,
+          maxTokens: 8192,
+        });
+      } catch (err) {
+        throw new Error(`B-roll planning LLM retry call failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+
+      // Track cost for the retry call
+      await this.trackCost(projectId, API_COSTS.brollPlanning);
+
+      const retryResult = this.tryParseShots(retryResponse);
+      if (retryResult.ok) {
+        shots = retryResult.shots;
+        this.log('LLM retry succeeded — parsed B-roll shots from retry response');
+      } else {
+        // Both attempts exhausted — log retry response and fail
+        await this.logEvent(projectId, 'json_parse_failure', 'broll_planning', {
+          error: retryResult.error,
+          rawResponse: retryResponse,
+          rawResponseLength: retryResponse.length,
+          attempt: 'retry',
+        });
+        throw new Error(
+          `Failed to parse B-roll LLM response after repair + retry. `
+          + `Initial error: ${parseResult.error}. `
+          + `Retry error: ${retryResult.error}. `
+          + `Full responses logged to generation_log.`
+        );
+      }
     }
 
     this.log(`LLM returned ${shots.length} B-roll shots`);
@@ -315,6 +362,111 @@ export class BRollAgent extends BaseAgent {
       total: shots.length,
     });
     this.log(`B-roll generation complete: ${completedCount}/${shots.length} images generated (${failedCount} failed)`);
+  }
+
+  // ─── JSON Parse + Repair ───────────────────────────────────────────────────
+
+  /**
+   * Attempt to parse the LLM response into a BrollShotFromLLM array.
+   * First tries raw JSON.parse, then applies string-based repair if that fails.
+   */
+  private tryParseShots(
+    raw: string
+  ): { ok: true; shots: BrollShotFromLLM[] } | { ok: false; error: string } {
+    // Step 1: Strip markdown code fences
+    let cleaned = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+
+    // Step 2: Try direct parse
+    try {
+      const parsed = JSON.parse(cleaned);
+      const shots: BrollShotFromLLM[] = Array.isArray(parsed)
+        ? parsed
+        : parsed.shots || parsed.broll_shots || [];
+      return { ok: true, shots };
+    } catch {
+      // Direct parse failed — proceed to repair
+    }
+
+    // Step 3: Apply string-based JSON repair
+    const repaired = this.repairJson(cleaned);
+
+    try {
+      const parsed = JSON.parse(repaired);
+      const shots: BrollShotFromLLM[] = Array.isArray(parsed)
+        ? parsed
+        : parsed.shots || parsed.broll_shots || [];
+      this.log('JSON repair succeeded — parsed B-roll shots from repaired response');
+      return { ok: true, shots };
+    } catch (err) {
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
+  /**
+   * Lightweight string-based JSON repair for common LLM malformations.
+   * - Strips trailing commas before } and ]
+   * - Attempts to close unclosed brackets and strings
+   * - Removes single-line // comments
+   */
+  private repairJson(input: string): string {
+    let s = input;
+
+    // Remove single-line comments (// ...) that aren't inside strings
+    // Simple heuristic: remove lines that start with // after trimming
+    s = s.replace(/^\s*\/\/.*$/gm, '');
+
+    // Remove trailing commas before } or ]
+    s = s.replace(/,\s*([\]}])/g, '$1');
+
+    // Try to fix truncated responses by closing unclosed brackets
+    let openBrackets = 0;
+    let openBraces = 0;
+    let inString = false;
+    let escape = false;
+
+    for (let i = 0; i < s.length; i++) {
+      const ch = s[i];
+      if (escape) {
+        escape = false;
+        continue;
+      }
+      if (ch === '\\' && inString) {
+        escape = true;
+        continue;
+      }
+      if (ch === '"') {
+        inString = !inString;
+        continue;
+      }
+      if (inString) continue;
+      if (ch === '[') openBrackets++;
+      else if (ch === ']') openBrackets--;
+      else if (ch === '{') openBraces++;
+      else if (ch === '}') openBraces--;
+    }
+
+    // If we ended inside a string, close it
+    if (inString) {
+      s += '"';
+    }
+
+    // Close any unclosed braces, then brackets
+    while (openBraces > 0) {
+      s += '}';
+      openBraces--;
+    }
+    while (openBrackets > 0) {
+      s += ']';
+      openBrackets--;
+    }
+
+    // One more pass: trailing commas may have been introduced by closing brackets
+    s = s.replace(/,\s*([\]}])/g, '$1');
+
+    return s;
   }
 
   // ─── LLM Prompt Builders ───────────────────────────────────────────────────
