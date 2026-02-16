@@ -263,16 +263,15 @@ These are blocking items. Nothing else matters until a user can go from product 
 
 Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1). Before optimizing for conversions (Tier 2), harden the UX so the tool is pleasant to use repeatedly.
 
-#### R1.5.1 - Influencer Management Completion 🔧 IN PROGRESS
-**Priority:** P0.5 - High (CRUD is incomplete)
-**Effort:** Small
+#### ~~R1.5.1 - Influencer Management Completion~~ DONE
+**Status:** Complete (2026-02-15)
 **Depends on:** B0.11 (image replacement must be fixed first)
 **Why:** Influencers are a core entity. Basic CRUD gaps remain after partial B0.4 fix. B0.11 covers image replacement; this item covers the remaining UX polish.
 
 - [x] PATCH endpoint for influencers (edit name, persona) — done in B0.4
 - [x] Image re-upload / replacement — moved to B0.11 (Tier 0, higher priority)
-- [ ] Edit mode toggle on influencer detail page (inline editing for name, persona, with save/cancel)
-- [x] Prevent deletion of influencers assigned to active projects (or show warning with project list) — DELETE returns 409 with project list for active (non-completed/failed) projects only
+- [x] Edit mode toggle on influencer detail page (inline editing for name, persona, with save/cancel) — edit/save/cancel buttons in header, name as input, persona as textarea
+- [x] Prevent deletion of influencers assigned to active projects (or show warning with project list) — DELETE returns 409 with project list for active (non-completed/failed) projects only; frontend displays magenta error banner with linked project list
 
 #### R1.5.2 - Project Settings Editing
 **Priority:** P1 - Medium
