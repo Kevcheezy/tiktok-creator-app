@@ -70,6 +70,13 @@ export async function Nav() {
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-gil opacity-60 transition-opacity group-hover:opacity-100 animate-materia-pulse" style={{ animationDelay: '0.9s' }} />
               Roadmap
             </Link>
+            <Link
+              href="/analytics"
+              className="group flex items-center gap-2 font-[family-name:var(--font-display)] text-sm font-medium text-text-secondary transition-colors hover:text-electric"
+            >
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-magenta opacity-60 transition-opacity group-hover:opacity-100 animate-materia-pulse" style={{ animationDelay: '1.2s' }} />
+              Analytics
+            </Link>
 
             {/* Command-style New Project button */}
             <Link

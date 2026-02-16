@@ -465,22 +465,29 @@ These features separate "generates a video" from "generates a video that sells."
 **Effort:** Medium
 **Why:** Without closing the feedback loop, every optimization is guesswork. This connects generated videos to actual TikTok performance and revenue, turning the app from a production tool into a learning system. Also the data foundation that R2.1 (Hook Testing) and R2.2 (Trends) depend on.
 
-**Run-level tracking (per completed video):**
+**Frontend shell (complete — uses mock data, ready to wire to APIs):**
+- [x] `/analytics` page with "Battle Report" header, Analytics link in nav (magenta Materia dot)
+- [x] KPI cards: total runs, total revenue (GilDisplay), avg ROI, avg views, avg CVR, top performer
+- [x] Runs tab: filterable list with search, status pills (All/Viral/Converting/Underperforming/Unlinked), tone/category dropdowns, pagination
+- [x] Run rows: recipe info (product, tone, character, hook score, cost) + metrics (views, sales, revenue, ROI) + TikTok URL input
+- [x] Performance badges: viral (lime), converting (electric), underperforming (magenta), unlinked (muted), pending (amber-hot + pulse)
+- [x] Leaderboard tab: top 5 horizontal bars with toggle (Revenue/Views/ROI)
+- [x] Breakdown tab: dimension selector (Tone/Category/Avatar), grouped MetricBars
+- [x] Empty states: no-runs (archive CTA), no-linked (hint banner)
+- [x] Mock data generator with real tone/category/character data, `USE_MOCK_DATA` flag for backend wiring
+
+**Run-level tracking (per completed video) — needs backend:**
 - [ ] Link completed runs to TikTok post URLs (manual input initially, auto-detect with R4.2)
 - [ ] Pull TikTok engagement metrics via API: views, likes, comments, shares, avg watch time, completion rate
 - [ ] Pull TikTok Shop attribution: units sold, GMV (gross merchandise value), conversion rate, add-to-cart rate
 - [ ] Calculate ROI per run: revenue generated vs. production cost ($5.58)
 - [ ] Run detail page: full recipe snapshot alongside performance metrics over time
-- [ ] Performance status badges: viral (100k+ views), converting (>2% CVR), underperforming
 
-**Aggregate analytics (cross-run intelligence):**
-- [ ] KPI dashboard: total runs, total revenue attributed, avg ROI, best/worst performers
-- [ ] Leaderboard: Top-performing videos ranked by revenue, engagement, or ROI
-- [ ] Breakdown by dimension: performance by tone, avatar, hook template, product category, hook score
+**Aggregate analytics (cross-run intelligence) — needs backend:**
 - [ ] Time-series: Video performance lifecycle curves (day 1, 3, 7, 14, 30)
 - [ ] Insights engine: "Your 'converted-skeptic' tone generates 3.2x more revenue than 'calm-pro' for supplements"
 
-**Feedback loop (feed learnings back into generation):**
+**Feedback loop (feed learnings back into generation) — needs backend:**
 - [ ] Surface top-performing recipe patterns when creating new projects ("For skincare, your best results used: big-sis tone + dermatologist avatar + curiosity gap hook")
 - [ ] Weight script template selection by real-world performance (not just least-used)
 - [ ] Flag underperforming patterns: "The 'quiet-minimalist' tone has 0% conversion rate for fitness products"
