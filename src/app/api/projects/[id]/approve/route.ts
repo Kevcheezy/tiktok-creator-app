@@ -40,6 +40,11 @@ export async function POST(
 
     // script_review -> broll_planning (B-roll planning runs before influencer selection)
     if (proj.status === 'script_review') {
+      await supabase
+        .from('project')
+        .update({ status: 'broll_planning', updated_at: new Date().toISOString() })
+        .eq('id', id);
+
       await getPipelineQueue().add('broll_planning', {
         projectId: id,
         step: 'broll_planning',

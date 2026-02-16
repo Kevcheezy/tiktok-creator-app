@@ -92,7 +92,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   // Poll while in processing state with exponential backoff on failure
   useEffect(() => {
     if (!project) return;
-    const processingStatuses = ['created', 'analyzing', 'scripting', 'casting', 'directing', 'voiceover', 'editing'];
+    const processingStatuses = ['created', 'analyzing', 'scripting', 'broll_planning', 'broll_generation', 'casting', 'directing', 'voiceover', 'editing'];
     if (!processingStatuses.includes(project.status)) return;
 
     let cancelled = false;
@@ -340,6 +340,14 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
             </div>
           </div>
         </>
+      )}
+
+      {/* B-Roll progress indicators */}
+      {project.status === 'broll_planning' && (
+        <StageProgress projectId={projectId} stage="broll_planning" color="electric" />
+      )}
+      {project.status === 'broll_generation' && (
+        <StageProgress projectId={projectId} stage="broll_generation" color="magenta" />
       )}
 
       {/* Asset generation progress indicators */}

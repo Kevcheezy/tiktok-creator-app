@@ -114,6 +114,8 @@ export function StageProgress({ projectId, stage, color = 'magenta' }: StageProg
     : 'shadow-[0_0_12px_rgba(255,0,128,0.4)]';
 
   const stageLabels: Record<string, string> = {
+    broll_planning: 'Planning B-Roll Shots',
+    broll_generation: 'Generating B-Roll Images',
     casting: 'Generating Keyframes',
     directing: 'Generating Videos',
     voiceover: 'Generating Voiceovers',
@@ -174,6 +176,8 @@ export function StageProgress({ projectId, stage, color = 'magenta' }: StageProg
           {(!progress || progress.total === 0) && (
             <p className="mt-1 text-sm text-text-secondary">
               {stage === 'casting' && 'Creating character keyframe images with Nano Banana Pro...'}
+              {stage === 'broll_planning' && 'Analyzing script and generating B-roll shot list...'}
+              {stage === 'broll_generation' && 'Creating B-roll images with Nano Banana Pro...'}
               {stage === 'directing' && 'Creating 15-second video segments with Kling 3.0 Pro...'}
               {stage === 'voiceover' && 'Creating voiceover audio with ElevenLabs...'}
               {stage === 'editing' && 'Composing final video...'}
