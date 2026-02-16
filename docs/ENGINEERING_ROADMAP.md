@@ -124,13 +124,13 @@ Updated `src/db/schema.ts` with `influencer` table, `completed_run` table, and m
 #### ~~B0.13 - Influencer Dropdown Shows Full Persona Text~~ FIXED
 Influencer `<select>` options displayed the entire `persona` field (full appearance description). Truncated to name + first 4 words of persona in both `create-project-form.tsx` and `project-detail.tsx` settings panel.
 
-#### B0.14 - Influencers Without Images Shown in Selection UI
+#### ~~B0.14 - Influencers Without Images Shown in Selection UI~~ FIXED
 **Severity:** Low (UX confusion, not data integrity)
 **Spec:** `docs/plans/2026-02-15-influencer-image-upscale-design.md` (Part 1)
 **Why:** WHO selection grid at `influencer_selection` stage shows influencers without images as disabled cards with "No image" label. If they can't be selected, they shouldn't be shown. Fix: add `?hasImage=true` query param to `GET /api/influencers` and use it in the selection picker.
 
 - [x] `GET /api/influencers?hasImage=true` filters out `image_url IS NULL`
-- [ ] WHO selection grid fetches with `hasImage=true` *(frontend agent task)*
+- [x] WHO selection grid fetches with `hasImage=true`
 - [x] Influencers management page still shows all influencers (no param = no filter)
 
 #### ~~B0.15 - Build-Breaking Type Errors in Analytics & TikTok Routes~~ FIXED
