@@ -26,13 +26,14 @@ export async function GET(
     return NextResponse.json({ error: 'Product not found' }, { status: 404 });
   }
 
-  // Get project count
-  const { count } = await supabase
+  // Get projects using this product
+  const { data: projects, count } = await supabase
     .from('project')
-    .select('id', { count: 'exact', head: true })
-    .eq('product_id', id);
+    .select('id, name, product_name, status, created_at', { count: 'exact' })
+    .eq('product_id', id)
+    .order('created_at', { ascending: false });
 
-  return NextResponse.json({ ...prod, project_count: count || 0 });
+  return NextResponse.json({ ...prod, project_count: count || 0, projects: projects || [] });
 }
 
 export async function PATCH(
