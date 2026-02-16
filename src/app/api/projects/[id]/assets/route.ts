@@ -14,7 +14,7 @@ interface AssetWithScene {
   grade: string | null;
   metadata: Record<string, unknown> | null;
   created_at: string;
-  scene: { segment_index: number; section: string } | null;
+  scene: { segment_index: number; section: string; visual_prompt: { start: string; end: string } | null } | null;
 }
 
 export async function GET(
@@ -36,7 +36,7 @@ export async function GET(
 
     const { data: assets, error } = await supabase
       .from('asset')
-      .select('*, scene:scene(segment_index, section)')
+      .select('*, scene:scene(segment_index, section, visual_prompt)')
       .eq('project_id', id)
       .order('created_at', { ascending: true });
 
