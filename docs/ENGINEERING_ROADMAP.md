@@ -345,7 +345,39 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [ ] "Roadmap" tab in navigation
 - [ ] Smooth animations: card column transitions, progress bar updates, worker avatar pulse
 
-#### R1.5.6 - Direct-to-Storage Image Uploads
+#### R1.5.6 - FF7 Visual Theme
+**Priority:** P1 - High
+**Effort:** Medium
+**Spec:** `docs/plans/2026-02-15-ff7-visual-theme-design.md`
+**Why:** The app has a solid dark cinematic aesthetic but no distinctive identity. The pipeline becomes an Active Time Battle system where AI agents are FF7 party members battling the "Blank Video" boss. Pixel sprites generated via Nano Banana Pro. Purely visual — no workflow, routing, API, or data changes.
+
+**Asset generation:**
+- [ ] Generate ~30 pixel sprite assets via Nano Banana Pro (~$2.10 one-time)
+- [ ] Character sprites: Cloud, Tifa, Aerith, Red XIII, Barret, Cait Sith (idle, attack, ko poses)
+- [ ] Icons: Gil coin, Materia orbs (5 colors), Buster Sword, command cursor
+- [ ] Scenes: battle background, empty field, item shop, party select, victory
+
+**Theme system:**
+- [ ] `ff7-theme.ts` constants: character-agent map, status-effect labels, battle text, Gil formatter
+- [ ] Mako-shifted color palette in globals.css (electric→Mako green, magenta→Ifrit red, lime→Cure green, amber→Chocobo gold)
+- [ ] Battle animations: atb-fill, attack-flash, ko-spin, victory-fanfare, command-cursor, enemy-hp-drain
+
+**New components:**
+- [ ] `atb-bar.tsx` — ATB gauge per pipeline stage (replaces dot-line progress)
+- [ ] `battle-hud.tsx` — Battle HUD overlay on project detail (party lineup, enemy HP, Gil/MP counters)
+- [ ] `ff7-sprite.tsx` — Reusable character sprite (idle/attack/ko state, sizing)
+- [ ] `command-menu.tsx` — FF7-style vertical command menu for review gate actions
+- [ ] `gil-display.tsx` — Cost display with Gil coin icon
+
+**Modified components:**
+- [ ] `nav.tsx` — Buster Sword logo, Materia nav dots, command-style New Project button, Gil counter
+- [ ] `status-badge.tsx` — FF7 status-effect names + icons (Scan, Haste, Wait, Summon, Fury, Victory, KO)
+- [ ] `pipeline-progress.tsx` — Major rewrite: ATB bar system with character sprites
+- [ ] `project-card.tsx` — Active character sprite, HP-bar gauge, Gil cost
+- [ ] `project-detail.tsx` — Battle HUD wrapper, command menu at review gates
+- [ ] Empty states: "No encounters" / "No items in inventory" / "Party not assembled" with pixel scenes
+
+#### R1.5.7 - Direct-to-Storage Image Uploads
 **Priority:** P2 - Medium (backlog)
 **Effort:** Small
 **Why:** Influencer reference photos are currently routed through the Next.js API, which is constrained by Vercel's 4.5 MB body limit. Images are compressed client-side to fit, but the pipeline needs full-resolution photos for high-quality keyframe generation via CastingAgent. Uploading directly to Supabase Storage from the frontend bypasses the API route size limit entirely.
@@ -534,8 +566,12 @@ MVP ──→    Validate: Run real product URLs through full pipeline with B-ro
 
 POLISH     Tier 1.5: UX Hardening
            R1.5.1 Influencer edit ──→ R1.5.2 Project settings ──→ R1.5.3 Navigation ──→ R1.5.4 Error handling (ALL DONE)
-           R1.5.5 Engineering Roadmap Kanban Dashboard + R1.5.6 Direct-to-Storage Uploads (remaining)
-           (markdown parser + FF7 workers + Kanban board)  (bypass Vercel 4.5MB limit)
+           R1.5.5 Engineering Roadmap Kanban Dashboard (can run in parallel — no pipeline dependency)
+           (markdown parser + FF7 workers + live Kanban board)
+           R1.5.6 FF7 Visual Theme (can run in parallel — purely frontend + static assets)
+           (ATB pipeline + battle HUD + character sprites + Mako palette + command menus)
+           R1.5.7 Direct-to-Storage Uploads (backlog)
+           (bypass Vercel 4.5MB limit)
 
 NEXT       Tier 2: Quality & Conversion
            R2.0 Performance Tracking ──→ R2.4 Product Images ──→ R2.5 Reference Video Intel ──→ R2.3 Avatar Consistency ──→ R2.1 Hook Testing ──→ R2.2 Trends
