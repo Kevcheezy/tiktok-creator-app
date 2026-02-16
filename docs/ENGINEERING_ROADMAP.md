@@ -545,18 +545,19 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] Saving indicator per field
 - [ ] Per-field regeneration via LLM (e.g., "regenerate just the selling points") — requires backend endpoint
 
-#### R1.5.15 - Project Sequential Numbering
+#### R1.5.15 - Project Sequential Numbering ~~DONE~~ (backend)
 **Priority:** P1 - Medium
 **Effort:** Small
+**Status:** Backend complete (2026-02-15). Schema + backfill done. Frontend display is a frontend agent task.
 **Why:** Projects only have UUIDs — no human-readable identifier. A sequential number gives each project a short, memorable reference (PROJECT-1, PROJECT-2, ...) visible across all UI surfaces. Useful for conversation ("check PROJECT-14"), search, and future batch/campaign grouping.
 
 **Schema:**
-- [ ] Add `project_number` column to `project` table — PostgreSQL `SERIAL` (auto-incrementing integer, unique, not null)
-- [ ] Backfill existing projects by `created_at` order (PROJECT-1 = oldest)
+- [x] Add `project_number` column to `project` table — PostgreSQL sequence (`project_number_seq`), unique, not null, auto-incrementing
+- [x] Backfill existing projects by `created_at` order (PROJECT-1 = oldest, 4 projects backfilled)
 
 **Backend:**
-- [ ] `POST /api/projects` — `project_number` auto-assigned by PostgreSQL on insert (no application logic needed)
-- [ ] `GET /api/projects` and `GET /api/projects/[id]` — return `project_number` in response (already returned via `select('*')`)
+- [x] `POST /api/projects` — `project_number` auto-assigned by PostgreSQL on insert (no application logic needed)
+- [x] `GET /api/projects` and `GET /api/projects/[id]` — return `project_number` in response (already returned via `select('*')`)
 
 **Frontend:**
 - [ ] Project card (`project-card.tsx`) — display `PROJECT-N` at top of card, above product name
