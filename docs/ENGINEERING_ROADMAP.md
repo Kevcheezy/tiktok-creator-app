@@ -327,12 +327,12 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 **Why:** The engineering roadmap lives in `ENGINEERING_ROADMAP.md` — a long markdown file that's hard to scan for current status. A `/roadmap` page parses the markdown at render time into a live Kanban board (Backlog / In Progress / Done) with FF7 character workers assigned by domain. The markdown remains the single source of truth.
 
 **Backend:**
-- [ ] Markdown parser: extracts task ID, title, status, tier, priority, effort, dependencies, spec path, checkboxes, description, cost impact from ENGINEERING_ROADMAP.md
-- [ ] `GET /api/roadmap` returns parsed tasks + summary statistics + last git commit info
-- [ ] `GET /api/roadmap/workers` returns FF7 worker list with task counts
-- [ ] `PATCH /api/roadmap/assign` stores/updates worker override in `roadmap_worker` table
-- [ ] `roadmap_worker` table created via Supabase migration
-- [ ] Auto-assignment heuristic: domain keywords → FF7 character mapping (Cloud=Backend, Tifa=Frontend, Barret=Infra, Aerith=PM, Red XIII=QA)
+- [x] Markdown parser: extracts task ID, title, status, tier, priority, effort, dependencies, spec path, checkboxes, description, cost impact from ENGINEERING_ROADMAP.md
+- [x] `GET /api/roadmap` returns parsed tasks + summary statistics + last git commit info
+- [x] `GET /api/roadmap/workers` returns FF7 worker list with task counts
+- [x] `PATCH /api/roadmap/assign` stores/updates worker override in `roadmap_worker` table
+- [x] `roadmap_worker` table created via Supabase migration
+- [x] Auto-assignment heuristic: domain keywords → FF7 character mapping (Cloud=Backend, Tifa=Frontend, Barret=Infra, Aerith=PM, Red XIII=QA)
 
 **Frontend:**
 - [ ] `/roadmap` page with Kanban board (3 columns: Backlog, In Progress, Done)
