@@ -17,6 +17,8 @@ Full-stack app for producing 60-second TikTok Shop UGC videos using AI agents.
 1. **Role is locked for the entire session.** Once declared, do not cross role boundaries.
 2. **If work outside your scope is needed**, flag it and suggest the user spawn a separate agent for that domain.
 3. **Invoke your role's required skill** before starting any work.
+4. **Mark roadmap items in progress BEFORE writing any code.** When starting a task, update `docs/ENGINEERING_ROADMAP.md` with `🔧 IN PROGRESS` on the item immediately — before any implementation begins. This is non-negotiable for all roles.
+5. **Mark roadmap items DONE when finished.** After implementation is complete and verified, update `docs/ENGINEERING_ROADMAP.md` — change status to `~~DONE~~`/`~~FIXED~~`, check off completed sub-items `[x]`, and ensure the roadmap accurately reflects what was built. The roadmap MUST stay aligned with the actual architecture and implementation at all times — no drift between what the roadmap says and what the code does.
 
 ## Tech Stack
 - **Framework**: Next.js 16 (App Router)
