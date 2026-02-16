@@ -1,16 +1,22 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { MetricBar } from './metric-bar';
-import type { AnalyticsRun } from './types';
 
 type Metric = 'revenue' | 'views' | 'roi';
 
-const METRIC_TABS: { key: Metric; label: string }[] = [
-  { key: 'revenue', label: 'Revenue' },
-  { key: 'views', label: 'Views' },
-  { key: 'roi', label: 'ROI' },
+const METRIC_TABS: { key: Metric; label: string; sortParam: string }[] = [
+  { key: 'revenue', label: 'Revenue', sortParam: 'gmv' },
+  { key: 'views', label: 'Views', sortParam: 'views' },
+  { key: 'roi', label: 'ROI', sortParam: 'roi' },
 ];
+
+interface LeaderboardRow {
+  id: string;
+  name: string;
+  tone: string | null;
+  value: number;
+}
 
 function formatValue(metric: Metric, value: number): string {
   if (metric === 'revenue') {
@@ -31,29 +37,46 @@ function getBarColor(metric: Metric): string {
   return 'bg-lime';
 }
 
-export function Leaderboard({ runs, loading }: { runs: AnalyticsRun[]; loading: boolean }) {
+function extractValue(row: Record<string, unknown>, metric: Metric): number {
+  if (metric === 'revenue') return (row.gmv_usd as number) || 0;
+  if (metric === 'views') return (row.views as number) || 0;
+  return (row.roi as number) || 0;
+}
+
+function extractName(row: Record<string, unknown>): string {
+  const run = row.completed_run as Record<string, unknown> | null;
+  if (!run) return 'Unknown';
+  const pd = run.product_data as Record<string, string> | null;
+  return pd?.product_name || (run.influencer_name as string) || 'Unknown';
+}
+
+export function Leaderboard() {
   const [metric, setMetric] = useState<Metric>('revenue');
+  const [entries, setEntries] = useState<LeaderboardRow[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const entries = useMemo(() => {
-    const linked = runs.filter((r) => r.views !== null);
-    if (linked.length === 0) return [];
-
-    const getValue = (r: AnalyticsRun): number => {
-      if (metric === 'revenue') return r.gmv_usd || 0;
-      if (metric === 'views') return r.views || 0;
-      return r.roi || 0;
-    };
-
-    return [...linked]
-      .sort((a, b) => getValue(b) - getValue(a))
-      .slice(0, 5)
-      .map((r) => ({
-        id: r.id,
-        name: r.product_data?.product_name || 'Unknown',
-        tone: r.tone,
-        value: getValue(r),
-      }));
-  }, [runs, metric]);
+  useEffect(() => {
+    setLoading(true);
+    const tab = METRIC_TABS.find((t) => t.key === metric)!;
+    fetch(`/api/analytics/leaderboard?sort=${tab.sortParam}&limit=5`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: Record<string, unknown>[]) => {
+        if (Array.isArray(data)) {
+          setEntries(
+            data.map((row) => ({
+              id: row.id as string,
+              name: extractName(row),
+              tone: (row.completed_run as Record<string, unknown> | null)?.tone as string | null,
+              value: extractValue(row, metric),
+            }))
+          );
+        } else {
+          setEntries([]);
+        }
+      })
+      .catch(() => setEntries([]))
+      .finally(() => setLoading(false));
+  }, [metric]);
 
   const maxValue = entries.length > 0 ? entries[0].value : 1;
 

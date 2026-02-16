@@ -573,7 +573,7 @@ These features separate "generates a video" from "generates a video that sells."
 #### R2.0 - Performance Tracking & KPI Dashboard ~~DONE~~ (backend)
 **Priority:** P1 - High (first in Tier 2 - data foundation for everything below)
 **Effort:** Medium
-**Status:** Backend complete (2026-02-15). Frontend shell complete (mock data). Frontend wiring to live APIs is a frontend agent task.
+**Status:** Backend complete (2026-02-15). Frontend wired to live APIs (2026-02-15). RunTable still uses mock data (no `/api/analytics/runs` endpoint yet).
 **Why:** Without closing the feedback loop, every optimization is guesswork. This connects generated videos to actual TikTok performance and revenue, turning the app from a production tool into a learning system. Also the data foundation that R2.1 (Hook Testing) and R2.2 (Trends) depend on.
 
 **Database (3 tables via Supabase migrations):**
@@ -608,16 +608,15 @@ These features separate "generates a video" from "generates a video that sells."
 **TikTok sync route:**
 - [x] `POST /api/tiktok/sync` — batch sync metrics from TikTok Display API, update ROI + badge, create snapshots
 
-**Frontend shell (complete — uses mock data, ready to wire to APIs):**
+**Frontend (wired to live APIs):**
 - [x] `/analytics` page with "Battle Report" header, Analytics link in nav (magenta Materia dot)
-- [x] KPI cards: total runs, total revenue (GilDisplay), avg ROI, avg views, avg CVR, top performer
-- [x] Runs tab: filterable list with search, status pills (All/Viral/Converting/Underperforming/Unlinked), tone/category dropdowns, pagination
+- [x] KPI cards: live from `/api/analytics/dashboard` (camelCase→snake_case mapping)
+- [x] Runs tab: filterable list with search, status pills, tone/category dropdowns, pagination (mock data — no `/api/analytics/runs` endpoint yet)
 - [x] Run rows: recipe info (product, tone, character, hook score, cost) + metrics (views, sales, revenue, ROI) + TikTok URL input
 - [x] Performance badges: viral (lime), converting (electric), underperforming (magenta), unlinked (muted), pending (amber-hot + pulse)
-- [x] Leaderboard tab: top 5 horizontal bars with toggle (Revenue/Views/ROI)
-- [x] Breakdown tab: dimension selector (Tone/Category/Avatar), grouped MetricBars
-- [x] Empty states: no-runs (archive CTA), no-linked (hint banner)
-- [x] Mock data generator with real tone/category/character data, `USE_MOCK_DATA` flag for backend wiring
+- [x] Leaderboard tab: self-fetching from `/api/analytics/leaderboard?sort=X&limit=5`, top 5 horizontal bars with toggle (Revenue/Views/ROI)
+- [x] Breakdown tab: self-fetching from `/api/analytics/breakdown?dimension=X`, dimension selector (Tone/Category/Avatar → maps to `influencer` API param), grouped MetricBars
+- [x] Empty states: no-runs (archive CTA)
 
 **Remaining (deferred — not blocking v1):**
 - [ ] Time-series lifecycle curves (day 1, 3, 7, 14, 30) — snapshots table ready, needs frontend charting
@@ -800,7 +799,7 @@ POLISH     Tier 1.5: UX Hardening
 NEXT       Tier 2: Quality & Conversion
            R2.0 Performance Tracking ✅ DONE (backend) ──→ R2.4 Product Images ──→ R2.3 Avatar Consistency ──→ R2.1 Hook Testing ──→ R2.2 Trends
            (data foundation complete)                        (quick win, big impact)  (builds trust)             (optimizes output)    (stays fresh)
-           ▲ R2.0 backend APIs live. Frontend wiring needed (frontend agent task). R2.5 already done as R1.3.
+           ▲ R2.0 fully wired (KPIs, leaderboard, breakdown live; RunTable still mock). R2.5 already done as R1.3.
 
 THEN       Tier 3: Scale
            R3.2 Script Library ──→ R3.1 Batch Generation ──→ R3.3 Cost Optimization

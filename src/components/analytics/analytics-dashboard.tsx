@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { KPICards } from './kpi-cards';
 import { RunTable } from './run-table';
 import { Leaderboard } from './leaderboard';
 import { DimensionBreakdown } from './dimension-breakdown';
 import { AnalyticsEmpty } from './analytics-empty';
-import { USE_MOCK_DATA, generateMockRuns, computeSummary, EMPTY_SUMMARY } from './mock-data';
-import type { AnalyticsRun, KPISummary, AnalyticsFilters } from './types';
+import { generateMockRuns, computeSummary, EMPTY_SUMMARY } from './mock-data';
+import type { KPISummary, AnalyticsFilters } from './types';
 
 type Tab = 'runs' | 'leaderboard' | 'breakdown';
 
@@ -17,10 +17,31 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'breakdown', label: 'Breakdown' },
 ];
 
+/** Map camelCase dashboard API response to snake_case KPISummary */
+function mapDashboardToSummary(data: Record<string, unknown>): KPISummary {
+  const trackedRuns = (data.trackedRuns as number) || 0;
+  const totalViews = (data.totalViews as number) || 0;
+
+  return {
+    total_runs: (data.totalRuns as number) || 0,
+    total_revenue_usd: (data.totalRevenue as number) || 0,
+    avg_roi: (data.avgRoi as number) || 0,
+    avg_views: trackedRuns > 0 ? Math.round(totalViews / trackedRuns) : 0,
+    avg_conversion_rate: 0, // Dashboard API doesn't return this; computed from breakdown if needed
+    top_performer: data.bestPerformer
+      ? {
+          id: (data.bestPerformer as Record<string, unknown>).id as string,
+          name: `#${((data.bestPerformer as Record<string, unknown>).project_id as string || '').slice(0, 8)}`,
+          revenue: (data.bestPerformer as Record<string, unknown>).roi as number || 0,
+        }
+      : null,
+  };
+}
+
 export function AnalyticsDashboard() {
-  const [runs, setRuns] = useState<AnalyticsRun[]>([]);
   const [summary, setSummary] = useState<KPISummary>(EMPTY_SUMMARY);
-  const [loading, setLoading] = useState(true);
+  const [kpiLoading, setKpiLoading] = useState(true);
+  const [hasData, setHasData] = useState<boolean | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('runs');
   const [filters, setFilters] = useState<AnalyticsFilters>({
     search: '',
@@ -29,69 +50,44 @@ export function AnalyticsDashboard() {
     category: 'all',
   });
 
+  // Fetch KPI summary from dashboard API
   useEffect(() => {
-    if (USE_MOCK_DATA) {
-      const mockRuns = generateMockRuns(24);
-      setRuns(mockRuns);
-      setSummary(computeSummary(mockRuns));
-      setLoading(false);
-      return;
-    }
-
-    fetch('/api/analytics/runs')
-      .then((res) => (res.ok ? res.json() : { runs: [], summary: EMPTY_SUMMARY }))
+    fetch('/api/analytics/dashboard')
+      .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        setRuns(data.runs || []);
-        setSummary(data.summary || computeSummary(data.runs || []));
+        if (data && !data.error) {
+          const mapped = mapDashboardToSummary(data);
+          setSummary(mapped);
+          setHasData(mapped.total_runs > 0);
+        } else {
+          setHasData(false);
+        }
       })
       .catch(() => {
-        setRuns([]);
-        setSummary(EMPTY_SUMMARY);
+        setHasData(false);
       })
-      .finally(() => setLoading(false));
+      .finally(() => setKpiLoading(false));
   }, []);
 
-  const handleLinkTikTok = useCallback((runId: string, url: string) => {
-    // In mock mode, update local state
-    setRuns((prev) =>
-      prev.map((r) =>
-        r.id === runId
-          ? { ...r, tiktok_post_url: url, performance_status: 'pending' as const }
-          : r
-      )
-    );
+  // RunTable still uses mock data (no /api/analytics/runs endpoint yet)
+  const [mockRuns] = useState(() => generateMockRuns(24));
+  const mockSummary = computeSummary(mockRuns);
 
-    if (!USE_MOCK_DATA) {
-      fetch(`/api/analytics/runs/${runId}/link`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tiktok_post_url: url }),
-      }).catch(() => {});
-    }
+  const handleLinkTikTok = useCallback((_runId: string, _url: string) => {
+    // TODO: Wire to POST /api/projects/[id]/performance when runs API exists
   }, []);
 
-  // Recompute summary when runs change (for mock link updates)
-  const liveSummary = useMemo(() => (USE_MOCK_DATA ? computeSummary(runs) : summary), [runs, summary]);
-
-  const hasLinked = runs.some((r) => r.tiktok_post_url);
-
-  if (!loading && runs.length === 0) {
+  if (hasData === false && !kpiLoading) {
     return <AnalyticsEmpty variant="no-runs" />;
   }
 
+  // Use live summary for KPI cards, mock data for runs tab
+  const displaySummary = hasData ? summary : mockSummary;
+
   return (
     <div className="space-y-6">
-      {/* KPI Cards */}
-      <KPICards summary={liveSummary} loading={loading} />
-
-      {/* No linked hint */}
-      {!loading && !hasLinked && runs.length > 0 && (
-        <div className="rounded-lg border border-amber-hot/20 bg-amber-hot/5 px-4 py-3">
-          <p className="font-[family-name:var(--font-display)] text-xs text-amber-hot">
-            Link your TikTok posts to completed runs to unlock performance tracking, leaderboards, and breakdowns.
-          </p>
-        </div>
-      )}
+      {/* KPI Cards — live from /api/analytics/dashboard */}
+      <KPICards summary={displaySummary} loading={kpiLoading} />
 
       {/* Tab bar */}
       <div className="flex items-center gap-0.5 rounded-lg border border-border bg-surface-raised p-0.5 w-fit">
@@ -114,14 +110,14 @@ export function AnalyticsDashboard() {
       {/* Tab content */}
       {activeTab === 'runs' && (
         <RunTable
-          runs={runs}
+          runs={mockRuns}
           filters={filters}
           onFiltersChange={setFilters}
           onLinkTikTok={handleLinkTikTok}
         />
       )}
-      {activeTab === 'leaderboard' && <Leaderboard runs={runs} loading={loading} />}
-      {activeTab === 'breakdown' && <DimensionBreakdown runs={runs} loading={loading} />}
+      {activeTab === 'leaderboard' && <Leaderboard />}
+      {activeTab === 'breakdown' && <DimensionBreakdown />}
     </div>
   );
 }

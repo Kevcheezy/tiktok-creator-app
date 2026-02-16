@@ -27,6 +27,8 @@ interface StageProgressProps {
   projectId: string;
   stage: string;
   color?: 'electric' | 'magenta';
+  onRetry?: () => void;
+  onGoBack?: () => void;
 }
 
 function formatElapsed(seconds: number): string {
@@ -36,7 +38,7 @@ function formatElapsed(seconds: number): string {
   return `${mins}m ${secs.toString().padStart(2, '0')}s`;
 }
 
-export function StageProgress({ projectId, stage, color = 'magenta' }: StageProgressProps) {
+export function StageProgress({ projectId, stage, color = 'magenta', onRetry, onGoBack }: StageProgressProps) {
   const [progress, setProgress] = useState<ProgressData | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [connectionWarning, setConnectionWarning] = useState(false);
@@ -193,16 +195,39 @@ export function StageProgress({ projectId, stage, color = 'magenta' }: StageProg
 
           {/* Timeout warning for stuck pipelines */}
           {elapsed > (STAGE_TIMEOUT[stage] || 600) && (
-            <div className="mt-3 flex items-center gap-2 rounded-lg border border-amber-hot/30 bg-amber-hot/5 px-3 py-2">
-              <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5 flex-shrink-0 text-amber-hot" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round">
-                <circle cx="8" cy="8" r="6.5" />
-                <path d="M8 4.5v4" />
-                <circle cx="8" cy="11" r="0.5" fill="currentColor" />
-              </svg>
-              <p className="text-[11px] text-amber-hot">
-                This stage is taking longer than expected. The worker may have crashed.
-                Use the retry/rollback controls if the project becomes stuck.
-              </p>
+            <div className="mt-3 rounded-lg border border-amber-hot/30 bg-amber-hot/5 px-3 py-2">
+              <div className="flex items-center gap-2">
+                <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5 flex-shrink-0 text-amber-hot" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round">
+                  <circle cx="8" cy="8" r="6.5" />
+                  <path d="M8 4.5v4" />
+                  <circle cx="8" cy="11" r="0.5" fill="currentColor" />
+                </svg>
+                <p className="text-[11px] text-amber-hot">
+                  This stage is taking longer than expected. The worker may have crashed.
+                </p>
+              </div>
+              {(onRetry || onGoBack) && (
+                <div className="mt-2 flex items-center gap-2 pl-5">
+                  {onRetry && (
+                    <button
+                      type="button"
+                      onClick={onRetry}
+                      className="rounded border border-amber-hot/40 bg-amber-hot/10 px-2.5 py-1 font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-amber-hot transition-colors hover:bg-amber-hot/20"
+                    >
+                      Retry Stage
+                    </button>
+                  )}
+                  {onGoBack && (
+                    <button
+                      type="button"
+                      onClick={onGoBack}
+                      className="rounded border border-border px-2.5 py-1 font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted transition-colors hover:border-border-bright hover:text-text-secondary"
+                    >
+                      Go Back
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

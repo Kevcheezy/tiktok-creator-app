@@ -1,29 +1,22 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { MetricBar } from './metric-bar';
-import { SCRIPT_TONES } from '@/lib/constants';
-import type { AnalyticsRun, DimensionRow } from './types';
 
 type Dimension = 'tone' | 'category' | 'character';
 
-const DIM_TABS: { key: Dimension; label: string }[] = [
-  { key: 'tone', label: 'Tone' },
-  { key: 'category', label: 'Category' },
-  { key: 'character', label: 'Avatar' },
+const DIM_TABS: { key: Dimension; label: string; apiParam: string }[] = [
+  { key: 'tone', label: 'Tone', apiParam: 'tone' },
+  { key: 'category', label: 'Category', apiParam: 'category' },
+  { key: 'character', label: 'Avatar', apiParam: 'influencer' },
 ];
 
-function getDimensionValue(run: AnalyticsRun, dim: Dimension): string | null {
-  if (dim === 'tone') return run.tone;
-  if (dim === 'category') return run.product_data?.category || null;
-  return run.character_name;
-}
-
-function getDimensionLabel(dim: Dimension, value: string): string {
-  if (dim === 'tone') {
-    return SCRIPT_TONES[value as keyof typeof SCRIPT_TONES]?.label || value;
-  }
-  return value.charAt(0).toUpperCase() + value.slice(1);
+interface BreakdownRow {
+  label: string;
+  count: number;
+  avg_roi: number;
+  total_revenue: number;
+  avg_views: number;
 }
 
 function formatUsd(n: number): string {
@@ -31,38 +24,34 @@ function formatUsd(n: number): string {
   return `$${n.toFixed(0)}`;
 }
 
-export function DimensionBreakdown({ runs, loading }: { runs: AnalyticsRun[]; loading: boolean }) {
+export function DimensionBreakdown() {
   const [dimension, setDimension] = useState<Dimension>('tone');
+  const [rows, setRows] = useState<BreakdownRow[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const rows = useMemo(() => {
-    const linked = runs.filter((r) => r.views !== null);
-    if (linked.length === 0) return [];
-
-    const groups = new Map<string, AnalyticsRun[]>();
-    for (const run of linked) {
-      const key = getDimensionValue(run, dimension);
-      if (!key) continue;
-      const arr = groups.get(key) || [];
-      arr.push(run);
-      groups.set(key, arr);
-    }
-
-    const result: DimensionRow[] = [];
-    for (const [key, group] of groups) {
-      const totalRev = group.reduce((s, r) => s + (r.gmv_usd || 0), 0);
-      const avgRoi = group.reduce((s, r) => s + (r.roi || 0), 0) / group.length;
-      const avgViews = group.reduce((s, r) => s + (r.views || 0), 0) / group.length;
-      result.push({
-        dimension: getDimensionLabel(dimension, key),
-        count: group.length,
-        avg_roi: parseFloat(avgRoi.toFixed(2)),
-        total_revenue: totalRev,
-        avg_views: Math.round(avgViews),
-      });
-    }
-
-    return result.sort((a, b) => b.total_revenue - a.total_revenue);
-  }, [runs, dimension]);
+  useEffect(() => {
+    setLoading(true);
+    const tab = DIM_TABS.find((t) => t.key === dimension)!;
+    fetch(`/api/analytics/breakdown?dimension=${tab.apiParam}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { groups?: Record<string, unknown>[] } | null) => {
+        if (data && Array.isArray(data.groups)) {
+          setRows(
+            data.groups.map((g) => ({
+              label: (g.key as string) || 'Unknown',
+              count: (g.count as number) || 0,
+              avg_roi: (g.avgRoi as number) || 0,
+              total_revenue: (g.totalGmv as number) || 0,
+              avg_views: Math.round((g.avgViews as number) || 0),
+            }))
+          );
+        } else {
+          setRows([]);
+        }
+      })
+      .catch(() => setRows([]))
+      .finally(() => setLoading(false));
+  }, [dimension]);
 
   const maxRevenue = rows.length > 0 ? Math.max(...rows.map((r) => r.total_revenue)) : 1;
   const maxRoi = rows.length > 0 ? Math.max(...rows.map((r) => r.avg_roi)) : 1;
@@ -110,10 +99,10 @@ export function DimensionBreakdown({ runs, loading }: { runs: AnalyticsRun[]; lo
       {/* Rows */}
       <div className="space-y-4">
         {rows.map((row) => (
-          <div key={row.dimension} className="rounded-xl border border-border bg-surface p-4">
+          <div key={row.label} className="rounded-xl border border-border bg-surface p-4">
             <div className="mb-2 flex items-center justify-between">
               <h4 className="font-[family-name:var(--font-display)] text-xs font-bold text-text-primary">
-                {row.dimension}
+                {row.label}
               </h4>
               <span className="font-[family-name:var(--font-mono)] text-[10px] text-text-muted">
                 {row.count} run{row.count !== 1 ? 's' : ''}
