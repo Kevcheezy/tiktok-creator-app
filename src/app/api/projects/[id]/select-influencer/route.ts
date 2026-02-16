@@ -7,8 +7,11 @@ import { logger } from '@/lib/logger';
 const RECASTABLE_STATUSES = [
   'influencer_selection',
   'casting',
+  'casting_review',
   'directing',
   'voiceover',
+  'broll_generation',
+  'asset_review',
   'editing',
   'completed',
   'failed',
