@@ -115,6 +115,8 @@ export class CastingAgent extends BaseAgent {
     // 7. Sequential chained keyframe generation
     //    Each segment's end frame feeds into the next segment as the primary reference image.
     //    This ensures visual consistency (same person, room, lighting) across all 4 segments.
+    const POLL_MAX_WAIT = 240000; // 4 minutes per image — WaveSpeed edit can be slow under load
+    const POLL_INITIAL_INTERVAL = 5000;
     let segmentsCompleted = 0;
     let previousEndFrameUrl: string | null = null;
 
@@ -196,7 +198,7 @@ export class CastingAgent extends BaseAgent {
             this.log(`Segment ${segIdx}: generating START keyframe with refs [${refLabels}] (attempt ${attempt + 1})`);
             const startResult = await this.wavespeed.editImage(referenceImages, promptPair.start, editOpts);
             await this.createAsset(projectId, scene.id, 'keyframe_start', startResult.taskId, 'nano-banana-pro-edit');
-            const startPoll = await this.wavespeed.pollResult(startResult.taskId, { maxWait: 120000, initialInterval: 5000 });
+            const startPoll = await this.wavespeed.pollResult(startResult.taskId, { maxWait: POLL_MAX_WAIT, initialInterval: POLL_INITIAL_INTERVAL });
             startUrl = startPoll.url || '';
             await this.updateAssetUrl(startResult.taskId, startUrl);
 
@@ -205,7 +207,7 @@ export class CastingAgent extends BaseAgent {
             this.log(`Segment ${segIdx}: generating END keyframe with start frame as primary ref (attempt ${attempt + 1})`);
             const endResult = await this.wavespeed.editImage(endRefs, promptPair.end, editOpts);
             await this.createAsset(projectId, scene.id, 'keyframe_end', endResult.taskId, 'nano-banana-pro-edit');
-            const endPoll = await this.wavespeed.pollResult(endResult.taskId, { maxWait: 120000, initialInterval: 5000 });
+            const endPoll = await this.wavespeed.pollResult(endResult.taskId, { maxWait: POLL_MAX_WAIT, initialInterval: POLL_INITIAL_INTERVAL });
             endUrl = endPoll.url || '';
             await this.updateAssetUrl(endResult.taskId, endUrl);
 
@@ -217,7 +219,7 @@ export class CastingAgent extends BaseAgent {
             this.log(`Segment ${segIdx}: text-to-image START (no references) (attempt ${attempt + 1})`);
             const startResult = await this.wavespeed.generateImage(promptPair.start, imgOpts);
             await this.createAsset(projectId, scene.id, 'keyframe_start', startResult.taskId);
-            const startPoll = await this.wavespeed.pollResult(startResult.taskId, { maxWait: 120000, initialInterval: 5000 });
+            const startPoll = await this.wavespeed.pollResult(startResult.taskId, { maxWait: POLL_MAX_WAIT, initialInterval: POLL_INITIAL_INTERVAL });
             startUrl = startPoll.url || '';
             await this.updateAssetUrl(startResult.taskId, startUrl);
 
@@ -227,7 +229,7 @@ export class CastingAgent extends BaseAgent {
               this.log(`Segment ${segIdx}: generating END keyframe using start frame as ref (attempt ${attempt + 1})`);
               const endResult = await this.wavespeed.editImage([startUrl], promptPair.end, editOpts);
               await this.createAsset(projectId, scene.id, 'keyframe_end', endResult.taskId, 'nano-banana-pro-edit');
-              const endPoll = await this.wavespeed.pollResult(endResult.taskId, { maxWait: 120000, initialInterval: 5000 });
+              const endPoll = await this.wavespeed.pollResult(endResult.taskId, { maxWait: POLL_MAX_WAIT, initialInterval: POLL_INITIAL_INTERVAL });
               endUrl = endPoll.url || '';
               await this.updateAssetUrl(endResult.taskId, endUrl);
               await this.trackCost(projectId, API_COSTS.nanoBananaPro + API_COSTS.nanoBananaProEdit);
@@ -236,7 +238,7 @@ export class CastingAgent extends BaseAgent {
               this.log(`Segment ${segIdx}: text-to-image END (start failed) (attempt ${attempt + 1})`);
               const endResult = await this.wavespeed.generateImage(promptPair.end, imgOpts);
               await this.createAsset(projectId, scene.id, 'keyframe_end', endResult.taskId);
-              const endPoll = await this.wavespeed.pollResult(endResult.taskId, { maxWait: 120000, initialInterval: 5000 });
+              const endPoll = await this.wavespeed.pollResult(endResult.taskId, { maxWait: POLL_MAX_WAIT, initialInterval: POLL_INITIAL_INTERVAL });
               endUrl = endPoll.url || '';
               await this.updateAssetUrl(endResult.taskId, endUrl);
               await this.trackCost(projectId, API_COSTS.nanoBananaPro * 2);
