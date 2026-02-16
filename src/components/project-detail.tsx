@@ -53,6 +53,8 @@ interface ProjectData {
   video_analysis: Record<string, unknown> | null;
   influencer_id: string | null;
   influencer: { id: string; name: string; persona: string | null; image_url: string | null } | null;
+  product_id: string | null;
+  product: { id: string; name: string | null; image_url: string | null } | null;
 }
 
 const NAV_STAGE_LABELS: Record<string, string> = {
@@ -117,7 +119,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   // Poll while in processing state with exponential backoff on failure
   useEffect(() => {
     if (!project) return;
-    const processingStatuses = ['created', 'analyzing', 'scripting', 'broll_planning', 'broll_generation', 'casting', 'directing', 'voiceover', 'editing'];
+    const processingStatuses = ['created', 'analyzing', 'scripting', 'broll_planning', 'broll_generation', 'influencer_selection', 'casting', 'directing', 'voiceover', 'editing'];
     if (!processingStatuses.includes(project.status)) return;
 
     let cancelled = false;
@@ -455,21 +457,31 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       )}
 
       {/* Analysis Review */}
-      {displayStage === 'analysis_review' && data && (
+      {displayStage === 'analysis_review' && data && (() => {
+        // Resolve product image: project field → linked product's 4K image → analysis data
+        const resolvedProductImage = project.product_image_url || project.product?.image_url || data.product_image_url || null;
+        return (
         <>
           {project.video_analysis && (
             <ReferenceVideoAnalysis projectId={project.id} videoAnalysis={project.video_analysis} />
           )}
-          <AnalysisResults data={data} costUsd={project.cost_usd} character={project.character} />
+          <AnalysisResults
+            data={data}
+            costUsd={project.cost_usd}
+            character={project.character}
+            editable={!readOnlyMode}
+            projectId={projectId}
+            onDataUpdated={fetchProject}
+          />
           {!readOnlyMode && (
             <ProductImageSection
               projectId={projectId}
-              productImageUrl={project.product_image_url || data.product_image_url || null}
+              productImageUrl={resolvedProductImage}
               onImageUpdated={fetchProject}
             />
           )}
           {readOnlyMode ? (
-            project.product_image_url || data.product_image_url ? (
+            resolvedProductImage ? (
               <div className="rounded-xl border border-border bg-surface p-5">
                 <h3 className="mb-3 font-[family-name:var(--font-display)] text-xs font-semibold uppercase tracking-wider text-text-muted">
                   Product Image
@@ -477,7 +489,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
                 <div className="h-32 w-32 overflow-hidden rounded-lg border border-border bg-void">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={project.product_image_url || data.product_image_url || ''}
+                    src={resolvedProductImage}
                     alt="Product"
                     className="h-full w-full object-contain"
                   />
@@ -486,7 +498,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
             ) : null
           ) : (
             <div className="flex items-center justify-between gap-4">
-              {!project.product_image_url && !data.product_image_url && (
+              {!resolvedProductImage && (
                 <p className="text-sm text-amber-hot">
                   A product image is required before proceeding.
                 </p>
@@ -497,7 +509,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
                     {
                       label: 'Fight — Generate Script',
                       onClick: handleApproveAnalysis,
-                      disabled: !project.product_image_url && !data.product_image_url,
+                      disabled: !resolvedProductImage,
                       loading: approving,
                       variant: 'primary',
                     },
@@ -507,7 +519,8 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
             </div>
           )}
         </>
-      )}
+        );
+      })()}
 
       {/* B-Roll progress indicators */}
       {!isViewingPast && project.status === 'broll_planning' && (
@@ -1064,16 +1077,81 @@ interface AnalysisResultsProps {
   data: NonNullable<ProjectData['product_data']>;
   costUsd: string | null;
   character: { name: string; avatar_persona: string | null } | null;
+  editable?: boolean;
+  projectId?: string;
+  onDataUpdated?: () => void;
 }
 
-function AnalysisResults({ data, costUsd, character }: AnalysisResultsProps) {
+const ANALYSIS_TEXT_FIELDS: Array<{ key: string; label: string; multiline?: boolean }> = [
+  { key: 'usage', label: 'Usage', multiline: true },
+  { key: 'hook_angle', label: 'Hook Angle', multiline: true },
+  { key: 'avatar_description', label: 'Avatar Description', multiline: true },
+];
+
+const ANALYSIS_ARRAY_FIELDS: Array<{ key: string; label: string; dotColor: string }> = [
+  { key: 'selling_points', label: 'Selling Points', dotColor: 'bg-magenta' },
+  { key: 'key_claims', label: 'Key Claims', dotColor: 'bg-lime' },
+  { key: 'benefits', label: 'Benefits', dotColor: 'bg-amber-hot' },
+];
+
+function AnalysisResults({ data, costUsd, character, editable = false, projectId, onDataUpdated }: AnalysisResultsProps) {
+  const [editMode, setEditMode] = useState(false);
+  const [saving, setSaving] = useState<string | null>(null);
+  const [editValues, setEditValues] = useState<Record<string, string>>({});
+  const [editArrays, setEditArrays] = useState<Record<string, string[]>>({});
+
+  // Sync edit state when data changes
+  useEffect(() => {
+    setEditValues({
+      usage: data.usage || '',
+      hook_angle: data.hook_angle || '',
+      avatar_description: data.avatar_description || '',
+    });
+    setEditArrays({
+      selling_points: data.selling_points || [],
+      key_claims: data.key_claims || [],
+      benefits: data.benefits || [],
+    });
+  }, [data]);
+
+  async function saveField(field: string, value: string | string[]) {
+    if (!projectId) return;
+    setSaving(field);
+    try {
+      const updatedData = { ...data, [field]: value };
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ product_data: updatedData }),
+      });
+      if (res.ok) onDataUpdated?.();
+    } finally {
+      setSaving(null);
+    }
+  }
+
   return (
     <div className="stagger-children space-y-5">
       {/* Product Info Grid */}
       <div className="rounded-xl border border-border bg-surface p-5">
-        <h2 className="mb-4 font-[family-name:var(--font-display)] text-sm font-semibold uppercase tracking-wider text-text-muted">
-          Product Analysis
-        </h2>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="font-[family-name:var(--font-display)] text-sm font-semibold uppercase tracking-wider text-text-muted">
+            Product Analysis
+          </h2>
+          {editable && (
+            <button
+              type="button"
+              onClick={() => setEditMode(!editMode)}
+              className={`rounded-lg px-3 py-1.5 font-[family-name:var(--font-display)] text-xs font-medium transition-all ${
+                editMode
+                  ? 'bg-electric font-semibold text-void'
+                  : 'border border-border text-text-secondary hover:text-electric hover:border-electric/30'
+              }`}
+            >
+              {editMode ? 'Done Editing' : 'Edit Analysis'}
+            </button>
+          )}
+        </div>
         <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
           {data.brand && (
             <div>
@@ -1140,83 +1218,163 @@ function AnalysisResults({ data, costUsd, character }: AnalysisResultsProps) {
         </dl>
       </div>
 
-      {/* Lists Section */}
+      {/* Array fields (Selling Points, Key Claims, Benefits) */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {data.selling_points && data.selling_points.length > 0 && (
-          <div className="rounded-xl border border-border bg-surface p-5">
-            <h3 className="mb-3 font-[family-name:var(--font-display)] text-xs font-semibold uppercase tracking-wider text-text-muted">
-              Selling Points
-            </h3>
-            <ul className="space-y-2">
-              {data.selling_points.map((point, i) => (
-                <li key={i} className="flex items-start gap-2.5 text-sm text-text-secondary">
-                  <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-magenta" />
-                  {point}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+        {ANALYSIS_ARRAY_FIELDS.map((field) => {
+          const items = editMode ? (editArrays[field.key] || []) : ((data as unknown as Record<string, string[]>)[field.key] || []);
+          if (!editMode && items.length === 0) return null;
 
-        {data.key_claims && data.key_claims.length > 0 && (
-          <div className="rounded-xl border border-border bg-surface p-5">
-            <h3 className="mb-3 font-[family-name:var(--font-display)] text-xs font-semibold uppercase tracking-wider text-text-muted">
-              Key Claims
-            </h3>
-            <ul className="space-y-2">
-              {data.key_claims.map((claim, i) => (
-                <li key={i} className="flex items-start gap-2.5 text-sm text-text-secondary">
-                  <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-lime" />
-                  {claim}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+          return (
+            <div key={field.key} className="rounded-xl border border-border bg-surface p-5">
+              <div className="mb-3 flex items-center gap-2">
+                <h3 className="font-[family-name:var(--font-display)] text-xs font-semibold uppercase tracking-wider text-text-muted">
+                  {field.label}
+                </h3>
+                {saving === field.key && (
+                  <span className="font-[family-name:var(--font-mono)] text-[10px] text-electric">Saving...</span>
+                )}
+              </div>
 
-        {data.benefits && data.benefits.length > 0 && (
-          <div className="rounded-xl border border-border bg-surface p-5">
-            <h3 className="mb-3 font-[family-name:var(--font-display)] text-xs font-semibold uppercase tracking-wider text-text-muted">
-              Benefits
-            </h3>
-            <ul className="space-y-2">
-              {data.benefits.map((benefit, i) => (
-                <li key={i} className="flex items-start gap-2.5 text-sm text-text-secondary">
-                  <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-amber-hot" />
-                  {benefit}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+              {editMode ? (
+                <div className="space-y-2">
+                  {(editArrays[field.key] || []).map((item, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <span className={`mt-0.5 h-1.5 w-1.5 flex-shrink-0 rounded-full ${field.dotColor}`} />
+                      <input
+                        type="text"
+                        value={item}
+                        onChange={(e) => {
+                          const updated = [...(editArrays[field.key] || [])];
+                          updated[i] = e.target.value;
+                          setEditArrays((v) => ({ ...v, [field.key]: updated }));
+                        }}
+                        onBlur={() => saveField(field.key, editArrays[field.key] || [])}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            saveField(field.key, editArrays[field.key] || []);
+                          }
+                        }}
+                        className="flex-1 rounded-lg border border-border bg-surface-raised px-3 py-2 text-sm text-text-primary transition-all focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = (editArrays[field.key] || []).filter((_, idx) => idx !== i);
+                          setEditArrays((v) => ({ ...v, [field.key]: updated }));
+                          saveField(field.key, updated);
+                        }}
+                        className="rounded p-1 text-text-muted transition-colors hover:text-magenta"
+                      >
+                        <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+                          <line x1="4" y1="4" x2="12" y2="12" />
+                          <line x1="12" y1="4" x2="4" y2="12" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const updated = [...(editArrays[field.key] || []), ''];
+                      setEditArrays((v) => ({ ...v, [field.key]: updated }));
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-border px-3 py-1.5 font-[family-name:var(--font-display)] text-xs font-medium text-text-muted transition-colors hover:border-electric/30 hover:text-electric"
+                  >
+                    <svg viewBox="0 0 16 16" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+                      <line x1="8" y1="3" x2="8" y2="13" />
+                      <line x1="3" y1="8" x2="13" y2="8" />
+                    </svg>
+                    Add item
+                  </button>
+                </div>
+              ) : (
+                <ul className="space-y-2">
+                  {items.map((item, i) => (
+                    <li key={i} className="flex items-start gap-2.5 text-sm text-text-secondary">
+                      <span className={`mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full ${field.dotColor}`} />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          );
+        })}
 
-        {data.usage && (
+        {/* Usage (text field in grid) */}
+        {(editMode || data.usage) && (
           <div className="rounded-xl border border-border bg-surface p-5">
-            <h3 className="mb-3 font-[family-name:var(--font-display)] text-xs font-semibold uppercase tracking-wider text-text-muted">
-              Usage
-            </h3>
-            <p className="text-sm leading-relaxed text-text-secondary">{data.usage}</p>
+            <div className="mb-3 flex items-center gap-2">
+              <h3 className="font-[family-name:var(--font-display)] text-xs font-semibold uppercase tracking-wider text-text-muted">
+                Usage
+              </h3>
+              {saving === 'usage' && (
+                <span className="font-[family-name:var(--font-mono)] text-[10px] text-electric">Saving...</span>
+              )}
+            </div>
+            {editMode ? (
+              <textarea
+                value={editValues.usage || ''}
+                onChange={(e) => setEditValues((v) => ({ ...v, usage: e.target.value }))}
+                onBlur={() => saveField('usage', editValues.usage || '')}
+                rows={3}
+                className="w-full rounded-lg border border-border bg-surface-raised px-4 py-3 text-sm text-text-primary transition-all focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric resize-none"
+              />
+            ) : (
+              <p className="text-sm leading-relaxed text-text-secondary">{data.usage}</p>
+            )}
           </div>
         )}
       </div>
 
       {/* Hook Angle */}
-      {data.hook_angle && (
+      {(editMode || data.hook_angle) && (
         <div className="rounded-xl border border-border bg-surface p-5">
-          <h3 className="mb-2 font-[family-name:var(--font-display)] text-xs font-semibold uppercase tracking-wider text-text-muted">
-            Hook Angle
-          </h3>
-          <p className="text-sm leading-relaxed text-text-secondary">{data.hook_angle}</p>
+          <div className="mb-2 flex items-center gap-2">
+            <h3 className="font-[family-name:var(--font-display)] text-xs font-semibold uppercase tracking-wider text-text-muted">
+              Hook Angle
+            </h3>
+            {saving === 'hook_angle' && (
+              <span className="font-[family-name:var(--font-mono)] text-[10px] text-electric">Saving...</span>
+            )}
+          </div>
+          {editMode ? (
+            <textarea
+              value={editValues.hook_angle || ''}
+              onChange={(e) => setEditValues((v) => ({ ...v, hook_angle: e.target.value }))}
+              onBlur={() => saveField('hook_angle', editValues.hook_angle || '')}
+              rows={2}
+              className="w-full rounded-lg border border-border bg-surface-raised px-4 py-3 text-sm text-text-primary transition-all focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric resize-none"
+            />
+          ) : (
+            <p className="text-sm leading-relaxed text-text-secondary">{data.hook_angle}</p>
+          )}
         </div>
       )}
 
       {/* Avatar Description */}
-      {data.avatar_description && (
+      {(editMode || data.avatar_description) && (
         <div className="rounded-xl border border-border bg-surface p-5">
-          <h3 className="mb-2 font-[family-name:var(--font-display)] text-xs font-semibold uppercase tracking-wider text-text-muted">
-            Avatar Description
-          </h3>
-          <p className="text-sm leading-relaxed text-text-secondary">{data.avatar_description}</p>
+          <div className="mb-2 flex items-center gap-2">
+            <h3 className="font-[family-name:var(--font-display)] text-xs font-semibold uppercase tracking-wider text-text-muted">
+              Avatar Description
+            </h3>
+            {saving === 'avatar_description' && (
+              <span className="font-[family-name:var(--font-mono)] text-[10px] text-electric">Saving...</span>
+            )}
+          </div>
+          {editMode ? (
+            <textarea
+              value={editValues.avatar_description || ''}
+              onChange={(e) => setEditValues((v) => ({ ...v, avatar_description: e.target.value }))}
+              onBlur={() => saveField('avatar_description', editValues.avatar_description || '')}
+              rows={3}
+              className="w-full rounded-lg border border-border bg-surface-raised px-4 py-3 text-sm text-text-primary transition-all focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric resize-none"
+            />
+          ) : (
+            <p className="text-sm leading-relaxed text-text-secondary">{data.avatar_description}</p>
+          )}
         </div>
       )}
     </div>
