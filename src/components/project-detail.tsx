@@ -16,6 +16,7 @@ import { BattleHUD } from './battle-hud';
 import { uploadToStorage } from './direct-upload';
 import { CommandMenu } from './command-menu';
 import { GilDisplay } from './gil-display';
+import { PresetSelector, type Preset } from './preset-selector';
 
 interface ProjectData {
   id: string;
@@ -537,6 +538,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
         <InfluencerSelection
           projectId={projectId}
           currentInfluencerId={project.influencer_id}
+          productCategory={project.product_category}
           onSelected={fetchProject}
           readOnly={readOnlyMode}
         />
@@ -1357,11 +1359,12 @@ interface InfluencerOption {
 interface InfluencerSelectionProps {
   projectId: string;
   currentInfluencerId: string | null;
+  productCategory: string | null;
   onSelected: () => void;
   readOnly?: boolean;
 }
 
-function InfluencerSelection({ projectId, currentInfluencerId, onSelected, readOnly }: InfluencerSelectionProps) {
+function InfluencerSelection({ projectId, currentInfluencerId, productCategory, onSelected, readOnly }: InfluencerSelectionProps) {
   const [influencers, setInfluencers] = useState<InfluencerOption[]>([]);
   const [selectedId, setSelectedId] = useState(currentInfluencerId || '');
   const [loadingList, setLoadingList] = useState(true);
@@ -1373,6 +1376,12 @@ function InfluencerSelection({ projectId, currentInfluencerId, onSelected, readO
     { segment: 2, visibility: 'hero', notes: '' },
     { segment: 3, visibility: 'set_down', notes: '' },
   ]);
+  const [scenePresets, setScenePresets] = useState<Preset[]>([]);
+  const [interactionPresets, setInteractionPresets] = useState<Preset[]>([]);
+  const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
+  const [sceneOverride, setSceneOverride] = useState('');
+  const [selectedInteractionId, setSelectedInteractionId] = useState<string | null>(null);
+  const [interactionOverride, setInteractionOverride] = useState('');
 
   useEffect(() => {
     fetch('/api/influencers')
@@ -1387,7 +1396,27 @@ function InfluencerSelection({ projectId, currentInfluencerId, onSelected, readO
       })
       .catch(() => setInfluencers([]))
       .finally(() => setLoadingList(false));
-  }, [currentInfluencerId]);
+
+    // Fetch scene + interaction presets
+    const catParam = productCategory ? `?category=${encodeURIComponent(productCategory)}` : '';
+    Promise.all([
+      fetch(`/api/scene-presets${catParam}`),
+      fetch(`/api/interaction-presets${catParam}`),
+    ]).then(async ([sRes, iRes]) => {
+      if (sRes.ok) {
+        const d = await sRes.json();
+        setScenePresets(d.presets || []);
+        const def = (d.presets || []).find((p: Preset) => p.is_default);
+        if (def) setSelectedSceneId(def.id);
+      }
+      if (iRes.ok) {
+        const d = await iRes.json();
+        setInteractionPresets(d.presets || []);
+        const def = (d.presets || []).find((p: Preset) => p.is_default);
+        if (def) setSelectedInteractionId(def.id);
+      }
+    }).catch(() => {});
+  }, [currentInfluencerId, productCategory]);
 
   async function handleConfirm() {
     if (!selectedId) return;
@@ -1397,7 +1426,14 @@ function InfluencerSelection({ projectId, currentInfluencerId, onSelected, readO
       const res = await fetch(`/api/projects/${projectId}/select-influencer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ influencerId: selectedId, productPlacement }),
+        body: JSON.stringify({
+          influencerId: selectedId,
+          productPlacement,
+          scenePresetId: sceneOverride ? undefined : selectedSceneId || undefined,
+          sceneOverride: sceneOverride || undefined,
+          interactionPresetId: interactionOverride ? undefined : selectedInteractionId || undefined,
+          interactionOverride: interactionOverride || undefined,
+        }),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -1445,13 +1481,13 @@ function InfluencerSelection({ projectId, currentInfluencerId, onSelected, readO
 
   return (
     <div className="space-y-5">
+      {/* Step 1: WHO */}
       <div className="rounded-xl border border-electric/20 bg-surface p-5">
-        <h2 className="mb-1 font-[family-name:var(--font-display)] text-sm font-semibold uppercase tracking-wider text-electric">
-          Select Influencer for Keyframes
-        </h2>
-        <p className="mb-5 text-sm text-text-secondary">
-          Choose the AI influencer whose likeness will be used to generate keyframe images. Their reference photo will be edited into each scene.
-        </p>
+        <div className="mb-4 flex items-center gap-2">
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-electric/15 font-[family-name:var(--font-mono)] text-xs font-bold text-electric">1</span>
+          <h2 className="font-[family-name:var(--font-display)] text-sm font-semibold uppercase tracking-wider text-electric">Who</h2>
+          <span className="text-xs text-text-muted">&mdash; Select Influencer</span>
+        </div>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {influencers.map((inf) => {
@@ -1514,14 +1550,44 @@ function InfluencerSelection({ projectId, currentInfluencerId, onSelected, readO
         </div>
       </div>
 
-      {/* Product Placement Per Segment */}
+      {/* Step 2: WHERE — Scene Preset */}
+      {scenePresets.length > 0 && (
+        <PresetSelector
+          step={2}
+          title="Where"
+          subtitle="Choose Scene"
+          presets={scenePresets}
+          selectedId={selectedSceneId}
+          onSelect={setSelectedSceneId}
+          customText={sceneOverride}
+          onCustomTextChange={setSceneOverride}
+          productCategory={productCategory}
+          readOnly={readOnly}
+        />
+      )}
+
+      {/* Step 3: HOW — Interaction Preset */}
+      {interactionPresets.length > 0 && (
+        <PresetSelector
+          step={3}
+          title="How"
+          subtitle="Choose Interaction"
+          presets={interactionPresets}
+          selectedId={selectedInteractionId}
+          onSelect={setSelectedInteractionId}
+          customText={interactionOverride}
+          onCustomTextChange={setInteractionOverride}
+          productCategory={productCategory}
+          readOnly={readOnly}
+        />
+      )}
+
+      {/* Step 4: Product Placement Per Segment */}
       <div className="rounded-xl border border-border bg-surface p-5">
-        <h2 className="mb-1 font-[family-name:var(--font-display)] text-sm font-semibold uppercase tracking-wider text-text-muted">
-          Product Placement
-        </h2>
-        <p className="mb-4 text-xs text-text-muted">
-          Control how the product appears in each segment&apos;s keyframes. Add notes for specific instructions.
-        </p>
+        <div className="mb-4 flex items-center gap-2">
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-electric/15 font-[family-name:var(--font-mono)] text-xs font-bold text-electric">4</span>
+          <h2 className="font-[family-name:var(--font-display)] text-sm font-semibold uppercase tracking-wider text-text-muted">Product Placement</h2>
+        </div>
         <div className="space-y-3">
           {productPlacement.map((seg, i) => {
             const sectionLabels = ['Hook', 'Problem', 'Solution + Product', 'CTA'];
