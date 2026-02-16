@@ -484,6 +484,29 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 **Assets:**
 - [ ] 6 pixel location icons via Nano Banana Pro (~$0.42): Midgar reactor, Kalm village, Cosmo Canyon observatory, Junon cannon, Gold Saucer dome, Northern Crater
 
+#### R1.5.13 - Auto-Upscale Influencer Images to 4K
+**Priority:** P1 - High
+**Effort:** Small
+**Spec:** `docs/plans/2026-02-15-influencer-image-upscale-design.md`
+**Depends on:** B0.14 (image filtering bug)
+**Why:** Influencer reference images are stored at whatever resolution the user uploads. Low-res images degrade CastingAgent keyframe quality since the AI uses the reference for face/appearance matching. Auto-upscaling to 4K via WaveSpeed ($0.01/image) on every upload ensures the pipeline always works from high-quality references.
+
+**Schema:**
+- [ ] Add `image_url_4k`, `upscale_status`, `upscale_task_id` columns to `influencer` table
+
+**Backend:**
+- [ ] `GET /api/influencers?hasImage=true` filter (fixes B0.14)
+- [ ] POST/PATCH influencer: enqueue BullMQ `upscale-influencer-image` job on image change
+- [ ] Worker job: call `WaveSpeedClient.upscaleImage()` with `targetResolution: '4k'`, poll, save result
+- [ ] CastingAgent: use `image_url_4k ?? image_url` for reference image
+
+**Frontend:**
+- [ ] WHO selection grid: fetch with `hasImage=true`, show 4K image when available
+- [ ] Influencer detail: "4K" badge when upscaled, spinner when processing
+- [ ] All image references: `image_url_4k || image_url` pattern
+
+**Cost:** $0.01 per upload. ~$0.20 for 20 influencers.
+
 ---
 
 ### Tier 2: Make It Actually Convert (Quality & conversion optimization)
@@ -714,6 +737,7 @@ POLISH     Tier 1.5: UX Hardening
            R1.5.10 Visual Script Breakdown 🔧 IN PROGRESS (frontend done, backend tagging remaining)
            R1.5.11 Keyframe Consistency Validation (backlog — depends on R1.5.9 ✅)
            R1.5.12 Projects Quest Board (FF7 World Map Kanban — depends on R1.5.6 ✅)
+           B0.14 + R1.5.13 Influencer image filtering + auto-upscale to 4K
 
 NEXT       Tier 2: Quality & Conversion
            R2.0 Performance Tracking ✅ DONE (backend) ──→ R2.4 Product Images ──→ R2.3 Avatar Consistency ──→ R2.1 Hook Testing ──→ R2.2 Trends
