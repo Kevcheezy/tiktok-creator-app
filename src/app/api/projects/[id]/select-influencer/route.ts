@@ -3,11 +3,22 @@ import { supabase } from '@/db';
 import { getPipelineQueue } from '@/lib/queue';
 import { logger } from '@/lib/logger';
 
+// Stages that allow re-selecting influencer / scene / interaction and re-casting
+const RECASTABLE_STATUSES = [
+  'influencer_selection',
+  'casting',
+  'directing',
+  'voiceover',
+  'editing',
+  'completed',
+  'failed',
+];
+
 /**
  * POST /api/projects/[id]/select-influencer
  *
  * Confirms the influencer selection and enqueues casting.
- * Only valid when project status is 'influencer_selection'.
+ * Allowed from influencer_selection or any downstream stage (re-cast).
  */
 export async function POST(
   request: NextRequest,
@@ -37,9 +48,9 @@ export async function POST(
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
-    if (proj.status !== 'influencer_selection') {
+    if (!RECASTABLE_STATUSES.includes(proj.status)) {
       return NextResponse.json(
-        { error: `Project is not awaiting influencer selection (current: ${proj.status})` },
+        { error: `Cannot re-cast from status "${proj.status}". Project must be past influencer selection.` },
         { status: 400 }
       );
     }
@@ -116,6 +127,13 @@ export async function POST(
       if (defaultInteraction) {
         updateData.interaction_preset_id = defaultInteraction.id;
       }
+    }
+
+    // Reset status to casting when re-casting from a downstream stage
+    if (proj.status !== 'influencer_selection') {
+      updateData.status = 'casting';
+      updateData.error_message = null;
+      updateData.failed_at_status = null;
     }
 
     await supabase
