@@ -7,6 +7,9 @@ import {
   numeric,
   jsonb,
   timestamp,
+  date,
+  bigint,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
@@ -302,5 +305,88 @@ export const completedRunRelations = relations(completedRun, ({ one }) => ({
   project: one(project, {
     fields: [completedRun.projectId],
     references: [project.id],
+  }),
+}));
+
+// ─── TikTok Connection ────────────────────────────────────────────────────────
+
+export const tiktokConnection = pgTable('tiktok_connection', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  accessToken: text('access_token').notNull(),
+  refreshToken: text('refresh_token'),
+  tiktokOpenId: text('tiktok_open_id').notNull(),
+  tiktokUsername: text('tiktok_username'),
+  tiktokAvatarUrl: text('tiktok_avatar_url'),
+  scopes: text('scopes').default('user.info.basic,video.list'),
+  tokenExpiresAt: timestamp('token_expires_at').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// ─── Video Performance ────────────────────────────────────────────────────────
+
+export const videoPerformance = pgTable('video_performance', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  completedRunId: uuid('completed_run_id')
+    .notNull()
+    .unique()
+    .references(() => completedRun.id, { onDelete: 'cascade' }),
+  projectId: uuid('project_id')
+    .notNull()
+    .references(() => project.id, { onDelete: 'cascade' }),
+  tiktokPostUrl: text('tiktok_post_url'),
+  tiktokVideoId: text('tiktok_video_id'),
+  views: bigint('views', { mode: 'number' }).default(0),
+  likes: integer('likes').default(0),
+  comments: integer('comments').default(0),
+  shares: integer('shares').default(0),
+  avgWatchTimeSeconds: numeric('avg_watch_time_seconds', { precision: 8, scale: 2 }),
+  completionRatePct: numeric('completion_rate_pct', { precision: 5, scale: 2 }),
+  unitsSold: integer('units_sold').default(0),
+  gmvUsd: numeric('gmv_usd', { precision: 12, scale: 2 }).default('0'),
+  conversionRatePct: numeric('conversion_rate_pct', { precision: 5, scale: 2 }),
+  addToCartRatePct: numeric('add_to_cart_rate_pct', { precision: 5, scale: 2 }),
+  roi: numeric('roi', { precision: 8, scale: 2 }),
+  performanceBadge: text('performance_badge'),
+  dataSource: text('data_source').notNull().default('manual'),
+  lastSyncedAt: timestamp('last_synced_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const videoPerformanceRelations = relations(videoPerformance, ({ one, many }) => ({
+  completedRun: one(completedRun, {
+    fields: [videoPerformance.completedRunId],
+    references: [completedRun.id],
+  }),
+  project: one(project, {
+    fields: [videoPerformance.projectId],
+    references: [project.id],
+  }),
+  snapshots: many(performanceSnapshot),
+}));
+
+// ─── Performance Snapshot ─────────────────────────────────────────────────────
+
+export const performanceSnapshot = pgTable('performance_snapshot', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  videoPerformanceId: uuid('video_performance_id')
+    .notNull()
+    .references(() => videoPerformance.id, { onDelete: 'cascade' }),
+  snapshotDate: date('snapshot_date').notNull(),
+  daysSincePost: integer('days_since_post').notNull(),
+  views: bigint('views', { mode: 'number' }).default(0),
+  likes: integer('likes').default(0),
+  comments: integer('comments').default(0),
+  shares: integer('shares').default(0),
+  unitsSold: integer('units_sold').default(0),
+  gmvUsd: numeric('gmv_usd', { precision: 12, scale: 2 }).default('0'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const performanceSnapshotRelations = relations(performanceSnapshot, ({ one }) => ({
+  videoPerformance: one(videoPerformance, {
+    fields: [performanceSnapshot.videoPerformanceId],
+    references: [videoPerformance.id],
   }),
 }));

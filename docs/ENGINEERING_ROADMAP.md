@@ -124,6 +124,15 @@ Updated `src/db/schema.ts` with `influencer` table, `completed_run` table, and m
 #### ~~B0.13 - Influencer Dropdown Shows Full Persona Text~~ FIXED
 Influencer `<select>` options displayed the entire `persona` field (full appearance description). Truncated to name + first 4 words of persona in both `create-project-form.tsx` and `project-detail.tsx` settings panel.
 
+#### B0.14 - Influencers Without Images Shown in Selection UI
+**Severity:** Low (UX confusion, not data integrity)
+**Spec:** `docs/plans/2026-02-15-influencer-image-upscale-design.md` (Part 1)
+**Why:** WHO selection grid at `influencer_selection` stage shows influencers without images as disabled cards with "No image" label. If they can't be selected, they shouldn't be shown. Fix: add `?hasImage=true` query param to `GET /api/influencers` and use it in the selection picker.
+
+- [ ] `GET /api/influencers?hasImage=true` filters out `image_url IS NULL`
+- [ ] WHO selection grid fetches with `hasImage=true`
+- [ ] Influencers management page still shows all influencers
+
 ---
 
 ### Tier 1: Complete the Core Pipeline (Ship a working end-to-end product)
@@ -481,10 +490,43 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 
 These features separate "generates a video" from "generates a video that sells."
 
-#### R2.0 - Performance Tracking & KPI Dashboard 🔧 IN PROGRESS
+#### R2.0 - Performance Tracking & KPI Dashboard ~~DONE~~ (backend)
 **Priority:** P1 - High (first in Tier 2 - data foundation for everything below)
 **Effort:** Medium
+**Status:** Backend complete (2026-02-15). Frontend shell complete (mock data). Frontend wiring to live APIs is a frontend agent task.
 **Why:** Without closing the feedback loop, every optimization is guesswork. This connects generated videos to actual TikTok performance and revenue, turning the app from a production tool into a learning system. Also the data foundation that R2.1 (Hook Testing) and R2.2 (Trends) depend on.
+
+**Database (3 tables via Supabase migrations):**
+- [x] `tiktok_connection` — OAuth token storage (singleton constraint)
+- [x] `video_performance` — Core metrics per completed video (ROI, badge, data_source)
+- [x] `performance_snapshot` — Daily time-series snapshots (unique date constraint)
+
+**TikTok API client (`src/lib/tiktok.ts`):**
+- [x] `extractVideoId()`, `buildAuthUrl()`, `exchangeCodeForTokens()`, `refreshAccessToken()`
+- [x] `fetchVideoMetrics()` (batch 20 IDs), `fetchUserInfo()`, `getValidAccessToken()` (auto-refresh)
+
+**Performance business logic (`src/lib/performance.ts`):**
+- [x] `computePerformanceBadge()` — viral/converting/underperforming/null
+- [x] `computeRoi()`, `shouldCreateSnapshot()`, `computeDaysSincePost()`
+
+**Performance CRUD (`/api/projects/[id]/performance`):**
+- [x] POST — create performance record with ROI + badge computation
+- [x] GET — read performance + snapshots + completedRun
+- [x] PATCH — update metrics, recompute ROI + badge, auto-create daily snapshot
+
+**Analytics aggregate routes:**
+- [x] `GET /api/analytics/dashboard` — KPIs: totalRuns, trackedRuns, totalRevenue, avgRoi, bestPerformer, badgeCounts
+- [x] `GET /api/analytics/leaderboard?sort=views|gmv|roi&limit=N` — sorted video_performance
+- [x] `GET /api/analytics/breakdown?dimension=tone|category|influencer|hook_score` — grouped aggregates
+
+**TikTok OAuth routes:**
+- [x] `GET /api/tiktok/auth` — generate OAuth URL + CSRF state
+- [x] `GET /api/tiktok/callback` — exchange code, fetch user info, upsert connection
+- [x] `GET /api/tiktok/status` — check connection, auto-refresh expired tokens
+- [x] `DELETE /api/tiktok/disconnect` — remove connection
+
+**TikTok sync route:**
+- [x] `POST /api/tiktok/sync` — batch sync metrics from TikTok Display API, update ROI + badge, create snapshots
 
 **Frontend shell (complete — uses mock data, ready to wire to APIs):**
 - [x] `/analytics` page with "Battle Report" header, Analytics link in nav (magenta Materia dot)
@@ -497,21 +539,10 @@ These features separate "generates a video" from "generates a video that sells."
 - [x] Empty states: no-runs (archive CTA), no-linked (hint banner)
 - [x] Mock data generator with real tone/category/character data, `USE_MOCK_DATA` flag for backend wiring
 
-**Run-level tracking (per completed video) — needs backend:**
-- [ ] Link completed runs to TikTok post URLs (manual input initially, auto-detect with R4.2)
-- [ ] Pull TikTok engagement metrics via API: views, likes, comments, shares, avg watch time, completion rate
-- [ ] Pull TikTok Shop attribution: units sold, GMV (gross merchandise value), conversion rate, add-to-cart rate
-- [ ] Calculate ROI per run: revenue generated vs. production cost ($5.58)
-- [ ] Run detail page: full recipe snapshot alongside performance metrics over time
-
-**Aggregate analytics (cross-run intelligence) — needs backend:**
-- [ ] Time-series: Video performance lifecycle curves (day 1, 3, 7, 14, 30)
-- [ ] Insights engine: "Your 'converted-skeptic' tone generates 3.2x more revenue than 'calm-pro' for supplements"
-
-**Feedback loop (feed learnings back into generation) — needs backend:**
-- [ ] Surface top-performing recipe patterns when creating new projects ("For skincare, your best results used: big-sis tone + dermatologist avatar + curiosity gap hook")
-- [ ] Weight script template selection by real-world performance (not just least-used)
-- [ ] Flag underperforming patterns: "The 'quiet-minimalist' tone has 0% conversion rate for fitness products"
+**Remaining (deferred — not blocking v1):**
+- [ ] Time-series lifecycle curves (day 1, 3, 7, 14, 30) — snapshots table ready, needs frontend charting
+- [ ] Insights engine — "Your best tone for supplements is..." (needs enough data to be meaningful)
+- [ ] Feedback loop into generation — surface top patterns, weight template selection (R2.1+ scope)
 
 #### R2.1 - Hook A/B Testing & Analytics
 **Priority:** P1 - High
@@ -685,9 +716,9 @@ POLISH     Tier 1.5: UX Hardening
            R1.5.12 Projects Quest Board (FF7 World Map Kanban — depends on R1.5.6 ✅)
 
 NEXT       Tier 2: Quality & Conversion
-           R2.0 Performance Tracking ──→ R2.4 Product Images ──→ R2.5 Reference Video Intel ──→ R2.3 Avatar Consistency ──→ R2.1 Hook Testing ──→ R2.2 Trends
-           (close the feedback loop)     (quick win, big impact)  (core differentiator)         (builds trust)             (optimizes output)    (stays fresh)
-           ▲ R2.0 is data foundation for R2.1, R2.2, R2.5, and Tier 3 decisions
+           R2.0 Performance Tracking ✅ DONE (backend) ──→ R2.4 Product Images ──→ R2.3 Avatar Consistency ──→ R2.1 Hook Testing ──→ R2.2 Trends
+           (data foundation complete)                        (quick win, big impact)  (builds trust)             (optimizes output)    (stays fresh)
+           ▲ R2.0 backend APIs live. Frontend wiring needed (frontend agent task). R2.5 already done as R1.3.
 
 THEN       Tier 3: Scale
            R3.2 Script Library ──→ R3.1 Batch Generation ──→ R3.3 Cost Optimization
