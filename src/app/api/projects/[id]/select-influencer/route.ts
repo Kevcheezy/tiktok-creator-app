@@ -68,7 +68,7 @@ export async function POST(
     // Verify the influencer exists and has a reference image + voice
     const { data: influencer, error: infError } = await supabase
       .from('influencer')
-      .select('id, name, image_url, voice_id')
+      .select('id, name, image_url')
       .eq('id', influencerId)
       .single();
 
@@ -79,13 +79,6 @@ export async function POST(
     if (!influencer.image_url) {
       return NextResponse.json(
         { error: `Influencer "${influencer.name}" has no reference image. Upload one before casting.` },
-        { status: 400 }
-      );
-    }
-
-    if (!influencer.voice_id) {
-      return NextResponse.json(
-        { error: 'Influencer has no designed voice. Design a voice from the Influencer page first.' },
         { status: 400 }
       );
     }

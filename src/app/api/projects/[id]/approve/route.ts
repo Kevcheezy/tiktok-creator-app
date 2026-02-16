@@ -73,6 +73,30 @@ export async function POST(
       });
     }
 
+    // Gate: require influencer voice before directing (voice needed for voiceover stage)
+    if (proj.status === 'casting_review') {
+      const { data: project } = await supabase
+        .from('project')
+        .select('influencer_id')
+        .eq('id', id)
+        .single();
+
+      if (project?.influencer_id) {
+        const { data: influencer } = await supabase
+          .from('influencer')
+          .select('id, name, voice_id')
+          .eq('id', project.influencer_id)
+          .single();
+
+        if (influencer && !influencer.voice_id) {
+          return NextResponse.json(
+            { error: `Influencer "${influencer.name}" has no designed voice. Design a voice from the Influencer page before directing.` },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
     // Map review status to next pipeline step
     const nextStepMap: Record<string, { step: string; jobName: string }> = {
       analysis_review: { step: 'scripting', jobName: 'scripting' },
