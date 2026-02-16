@@ -32,6 +32,7 @@ interface SegmentInfo {
 interface StoryboardViewProps {
   projectId: string;
   onStatusChange?: () => void;
+  readOnly?: boolean;
 }
 
 // =============================================
@@ -91,7 +92,7 @@ function getCategoryColorClasses(category: string): { bg: string; text: string; 
 // Main Component
 // =============================================
 
-export function StoryboardView({ projectId, onStatusChange }: StoryboardViewProps) {
+export function StoryboardView({ projectId, onStatusChange, readOnly }: StoryboardViewProps) {
   const [segments, setSegments] = useState<SegmentInfo[]>([]);
   const [shots, setShots] = useState<BrollShot[]>([]);
   const [loading, setLoading] = useState(true);
@@ -468,28 +469,30 @@ export function StoryboardView({ projectId, onStatusChange }: StoryboardViewProp
           </div>
 
           {/* Approve button */}
-          <button
-            type="button"
-            onClick={handleApprove}
-            disabled={approving || activeShots.length === 0}
-            className="inline-flex items-center gap-2 rounded-lg bg-lime px-5 py-2.5 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:shadow-[0_0_32px_rgba(184,255,0,0.25)] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {approving ? (
-              <>
-                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="60" strokeDashoffset="15" strokeLinecap="round" />
-                </svg>
-                Approving...
-              </>
-            ) : (
-              <>
-                <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="3.5 8 6.5 11 12.5 5" />
-                </svg>
-                Approve &amp; Continue
-              </>
-            )}
-          </button>
+          {!readOnly && (
+            <button
+              type="button"
+              onClick={handleApprove}
+              disabled={approving || activeShots.length === 0}
+              className="inline-flex items-center gap-2 rounded-lg bg-lime px-5 py-2.5 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:shadow-[0_0_32px_rgba(184,255,0,0.25)] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {approving ? (
+                <>
+                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="60" strokeDashoffset="15" strokeLinecap="round" />
+                  </svg>
+                  Approving...
+                </>
+              ) : (
+                <>
+                  <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3.5 8 6.5 11 12.5 5" />
+                  </svg>
+                  Approve &amp; Continue
+                </>
+              )}
+            </button>
+          )}
         </div>
 
         {approveError && (
@@ -576,30 +579,32 @@ export function StoryboardView({ projectId, onStatusChange }: StoryboardViewProp
                           <BrollCard
                             key={shot.id}
                             shot={shot}
-                            isEditing={editingId === shot.id}
-                            editDraft={editingId === shot.id ? editDraft : undefined}
-                            onStartEdit={() => startEdit(shot)}
+                            isEditing={!readOnly && editingId === shot.id}
+                            editDraft={!readOnly && editingId === shot.id ? editDraft : undefined}
+                            onStartEdit={readOnly ? undefined : () => startEdit(shot)}
                             onCancelEdit={cancelEdit}
                             onSaveEdit={saveEdit}
                             onEditDraftChange={setEditDraft}
-                            onRemove={() => removeShot(shot.id)}
-                            onReplace={() => handleReplace(shot.id)}
+                            onRemove={readOnly ? undefined : () => removeShot(shot.id)}
+                            onReplace={readOnly ? undefined : () => handleReplace(shot.id)}
                           />
                         ))}
                       </div>
 
                       {/* Add B-Roll button */}
-                      <button
-                        type="button"
-                        onClick={() => addShot(segment.index, shotScript.index)}
-                        className="ml-2 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-border px-3 py-1.5 text-xs text-text-muted transition-all hover:border-electric/40 hover:text-electric"
-                      >
-                        <svg viewBox="0 0 16 16" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
-                          <line x1="8" y1="3" x2="8" y2="13" />
-                          <line x1="3" y1="8" x2="13" y2="8" />
-                        </svg>
-                        Add B-roll
-                      </button>
+                      {!readOnly && (
+                        <button
+                          type="button"
+                          onClick={() => addShot(segment.index, shotScript.index)}
+                          className="ml-2 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-border px-3 py-1.5 text-xs text-text-muted transition-all hover:border-electric/40 hover:text-electric"
+                        >
+                          <svg viewBox="0 0 16 16" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+                            <line x1="8" y1="3" x2="8" y2="13" />
+                            <line x1="3" y1="8" x2="13" y2="8" />
+                          </svg>
+                          Add B-roll
+                        </button>
+                      )}
                     </div>
                   );
                 })}
@@ -620,12 +625,12 @@ interface BrollCardProps {
   shot: BrollShot;
   isEditing: boolean;
   editDraft?: Partial<BrollShot>;
-  onStartEdit: () => void;
+  onStartEdit?: () => void;
   onCancelEdit: () => void;
   onSaveEdit: () => void;
   onEditDraftChange: (draft: Partial<BrollShot>) => void;
-  onRemove: () => void;
-  onReplace: () => void;
+  onRemove?: () => void;
+  onReplace?: () => void;
 }
 
 function BrollCard({
@@ -791,39 +796,45 @@ function BrollCard({
               </>
             ) : (
               <div className={`flex items-center gap-2 ${isRemoved ? '' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}>
-                {!isRemoved && (
+                {!isRemoved && (onStartEdit || onReplace || onRemove) && (
                   <>
-                    <button
-                      type="button"
-                      onClick={onStartEdit}
-                      className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-[11px] text-text-muted transition-all hover:border-electric/30 hover:text-electric"
-                    >
-                      <svg viewBox="0 0 12 12" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M7 2l3 3L4 11H1V8L7 2z" />
-                      </svg>
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={onReplace}
-                      className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-[11px] text-text-muted transition-all hover:border-electric/30 hover:text-electric"
-                    >
-                      <svg viewBox="0 0 12 12" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round">
-                        <path d="M6 8V3M4 5l2-2 2 2M2 10h8" />
-                      </svg>
-                      Replace
-                    </button>
-                    <button
-                      type="button"
-                      onClick={onRemove}
-                      className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-[11px] text-text-muted transition-all hover:border-magenta/30 hover:text-magenta"
-                    >
-                      <svg viewBox="0 0 12 12" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round">
-                        <line x1="3" y1="3" x2="9" y2="9" />
-                        <line x1="9" y1="3" x2="3" y2="9" />
-                      </svg>
-                      Remove
-                    </button>
+                    {onStartEdit && (
+                      <button
+                        type="button"
+                        onClick={onStartEdit}
+                        className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-[11px] text-text-muted transition-all hover:border-electric/30 hover:text-electric"
+                      >
+                        <svg viewBox="0 0 12 12" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M7 2l3 3L4 11H1V8L7 2z" />
+                        </svg>
+                        Edit
+                      </button>
+                    )}
+                    {onReplace && (
+                      <button
+                        type="button"
+                        onClick={onReplace}
+                        className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-[11px] text-text-muted transition-all hover:border-electric/30 hover:text-electric"
+                      >
+                        <svg viewBox="0 0 12 12" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round">
+                          <path d="M6 8V3M4 5l2-2 2 2M2 10h8" />
+                        </svg>
+                        Replace
+                      </button>
+                    )}
+                    {onRemove && (
+                      <button
+                        type="button"
+                        onClick={onRemove}
+                        className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-[11px] text-text-muted transition-all hover:border-magenta/30 hover:text-magenta"
+                      >
+                        <svg viewBox="0 0 12 12" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round">
+                          <line x1="3" y1="3" x2="9" y2="9" />
+                          <line x1="9" y1="3" x2="3" y2="9" />
+                        </svg>
+                        Remove
+                      </button>
+                    )}
                   </>
                 )}
               </div>

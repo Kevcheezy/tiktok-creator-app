@@ -22,6 +22,7 @@ interface AssetReviewProps {
   projectId: string;
   onStatusChange?: () => void;
   confirmBeforeApprove?: { title: string; description: string; cost: string };
+  readOnly?: boolean;
 }
 
 const SECTION_LABELS: Record<string, string> = {
@@ -31,7 +32,7 @@ const SECTION_LABELS: Record<string, string> = {
   cta: 'CTA',
 };
 
-export function AssetReview({ projectId, onStatusChange, confirmBeforeApprove }: AssetReviewProps) {
+export function AssetReview({ projectId, onStatusChange, confirmBeforeApprove, readOnly }: AssetReviewProps) {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [bySegment, setBySegment] = useState<Record<number, Asset[]>>({});
   const [loading, setLoading] = useState(true);
@@ -347,21 +348,21 @@ export function AssetReview({ projectId, onStatusChange, confirmBeforeApprove }:
                     {keyframeStart && (
                       <AssetCard
                         asset={keyframeStart}
-                        showGrade={true}
-                        onGrade={handleGrade}
-                        onReject={handleReject}
-                        onRegenerate={handleRegenerate}
-                        onEdit={confirmBeforeApprove ? openEditModal : undefined}
+                        showGrade={!readOnly}
+                        onGrade={readOnly ? undefined : handleGrade}
+                        onReject={readOnly ? undefined : handleReject}
+                        onRegenerate={readOnly ? undefined : handleRegenerate}
+                        onEdit={!readOnly && confirmBeforeApprove ? openEditModal : undefined}
                       />
                     )}
                     {keyframeEnd && (
                       <AssetCard
                         asset={keyframeEnd}
-                        showGrade={true}
-                        onGrade={handleGrade}
-                        onReject={handleReject}
-                        onRegenerate={handleRegenerate}
-                        onEdit={confirmBeforeApprove ? openEditModal : undefined}
+                        showGrade={!readOnly}
+                        onGrade={readOnly ? undefined : handleGrade}
+                        onReject={readOnly ? undefined : handleReject}
+                        onRegenerate={readOnly ? undefined : handleRegenerate}
+                        onEdit={!readOnly && confirmBeforeApprove ? openEditModal : undefined}
                       />
                     )}
                   </div>
@@ -377,10 +378,10 @@ export function AssetReview({ projectId, onStatusChange, confirmBeforeApprove }:
                   <div className="max-w-sm">
                     <AssetCard
                       asset={video}
-                      showGrade={true}
-                      onGrade={handleGrade}
-                      onReject={handleReject}
-                      onRegenerate={handleRegenerate}
+                      showGrade={!readOnly}
+                      onGrade={readOnly ? undefined : handleGrade}
+                      onReject={readOnly ? undefined : handleReject}
+                      onRegenerate={readOnly ? undefined : handleRegenerate}
                     />
                   </div>
                 </div>
@@ -394,10 +395,10 @@ export function AssetReview({ projectId, onStatusChange, confirmBeforeApprove }:
                   </h4>
                   <AssetCard
                     asset={audio}
-                    showGrade={true}
-                    onGrade={handleGrade}
-                    onReject={handleReject}
-                    onRegenerate={handleRegenerate}
+                    showGrade={!readOnly}
+                    onGrade={readOnly ? undefined : handleGrade}
+                    onReject={readOnly ? undefined : handleReject}
+                    onRegenerate={readOnly ? undefined : handleRegenerate}
                   />
                 </div>
               )}
@@ -407,37 +408,39 @@ export function AssetReview({ projectId, onStatusChange, confirmBeforeApprove }:
       </div>
 
       {/* Approve button */}
-      <div className="flex items-center justify-between gap-4">
-        {hasIssues && (
-          <p className="text-xs text-amber-hot">
-            {failedAssets + rejectedAssets} asset{failedAssets + rejectedAssets > 1 ? 's' : ''} need attention. Regenerate or approve to continue.
-          </p>
-        )}
-        <div className="ml-auto">
-          <button
-            type="button"
-            onClick={() => confirmBeforeApprove ? setShowConfirm(true) : handleApprove()}
-            disabled={approving || generatingAssets > 0 || editingAssets > 0}
-            className="inline-flex items-center gap-2 rounded-lg bg-lime px-6 py-3 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:shadow-[0_0_32px_rgba(184,255,0,0.25)] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {approving ? (
-              <>
-                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="60" strokeDashoffset="15" strokeLinecap="round" />
-                </svg>
-                Approving...
-              </>
-            ) : (
-              <>
-                <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="3.5 8 6.5 11 12.5 5" />
-                </svg>
-                Approve &amp; Continue
-              </>
-            )}
-          </button>
+      {!readOnly && (
+        <div className="flex items-center justify-between gap-4">
+          {hasIssues && (
+            <p className="text-xs text-amber-hot">
+              {failedAssets + rejectedAssets} asset{failedAssets + rejectedAssets > 1 ? 's' : ''} need attention. Regenerate or approve to continue.
+            </p>
+          )}
+          <div className="ml-auto">
+            <button
+              type="button"
+              onClick={() => confirmBeforeApprove ? setShowConfirm(true) : handleApprove()}
+              disabled={approving || generatingAssets > 0 || editingAssets > 0}
+              className="inline-flex items-center gap-2 rounded-lg bg-lime px-6 py-3 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:shadow-[0_0_32px_rgba(184,255,0,0.25)] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {approving ? (
+                <>
+                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="60" strokeDashoffset="15" strokeLinecap="round" />
+                  </svg>
+                  Approving...
+                </>
+              ) : (
+                <>
+                  <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3.5 8 6.5 11 12.5 5" />
+                  </svg>
+                  Approve &amp; Continue
+                </>
+              )}
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Cost confirmation dialog */}
       {showConfirm && confirmBeforeApprove && (

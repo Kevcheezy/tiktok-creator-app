@@ -40,9 +40,11 @@ interface Script {
 export function ScriptReview({
   projectId,
   onStatusChange,
+  readOnly,
 }: {
   projectId: string;
   onStatusChange?: () => void;
+  readOnly?: boolean;
 }) {
   const [scripts, setScripts] = useState<Script[]>([]);
   const [loading, setLoading] = useState(true);
@@ -179,16 +181,18 @@ export function ScriptReview({
             )}
           </>
         )}
-        <button
-          type="button"
-          onClick={() => setShowUpload(true)}
-          className="ml-auto inline-flex items-center rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-text-muted transition-all hover:border-electric/30 hover:text-electric"
-        >
-          <svg viewBox="0 0 16 16" className="mr-1.5 h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-            <path d="M8 11V3M4.5 5.5L8 2l3.5 3.5M2 14h12" />
-          </svg>
-          Upload Script
-        </button>
+        {!readOnly && (
+          <button
+            type="button"
+            onClick={() => setShowUpload(true)}
+            className="ml-auto inline-flex items-center rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-text-muted transition-all hover:border-electric/30 hover:text-electric"
+          >
+            <svg viewBox="0 0 16 16" className="mr-1.5 h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M8 11V3M4.5 5.5L8 2l3.5 3.5M2 14h12" />
+            </svg>
+            Upload Script
+          </button>
+        )}
       </div>
 
       {/* Full script text */}
@@ -209,7 +213,7 @@ export function ScriptReview({
           <SegmentCard
             key={scene.id}
             scene={scene}
-            editable={true}
+            editable={!readOnly}
             projectId={projectId}
             scriptId={script.id}
             onSegmentUpdate={() => fetchScripts()}
@@ -218,18 +222,20 @@ export function ScriptReview({
       </div>
 
       {/* Approve / Regenerate controls */}
-      <div className="rounded-xl border border-border bg-surface p-5">
-        <ApproveControls
-          projectId={projectId}
-          scriptId={script.id}
-          currentGrade={script.grade}
-          currentFeedback={script.feedback}
-          currentTone={script.tone || 'reluctant-insider'}
-          onGradeChange={() => fetchScripts()}
-          onApprove={() => onStatusChange?.()}
-          onRegenerate={() => onStatusChange?.()}
-        />
-      </div>
+      {!readOnly && (
+        <div className="rounded-xl border border-border bg-surface p-5">
+          <ApproveControls
+            projectId={projectId}
+            scriptId={script.id}
+            currentGrade={script.grade}
+            currentFeedback={script.feedback}
+            currentTone={script.tone || 'reluctant-insider'}
+            onGradeChange={() => fetchScripts()}
+            onApprove={() => onStatusChange?.()}
+            onRegenerate={() => onStatusChange?.()}
+          />
+        </div>
+      )}
 
       {/* Upload Script Modal */}
       {showUpload && (

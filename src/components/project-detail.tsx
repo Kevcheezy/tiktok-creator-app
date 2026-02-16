@@ -53,6 +53,15 @@ interface ProjectData {
   influencer: { id: string; name: string; persona: string | null; image_url: string | null } | null;
 }
 
+const NAV_STAGE_LABELS: Record<string, string> = {
+  analysis_review: 'Analysis Review',
+  script_review: 'Script Review',
+  broll_review: 'B-Roll Review',
+  influencer_selection: 'Influencer Selection',
+  casting_review: 'Casting Review',
+  asset_review: 'Asset Review',
+};
+
 export function ProjectDetail({ projectId }: { projectId: string }) {
   const router = useRouter();
   const [project, setProject] = useState<ProjectData | null>(null);
@@ -66,6 +75,17 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   const [connectionWarning, setConnectionWarning] = useState(false);
   const failCountRef = useRef(0);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Navigation state for viewing past stages
+  const [viewingStage, setViewingStage] = useState<string | null>(null);
+  const [editMode, setEditMode] = useState(false);
+  const [impactData, setImpactData] = useState<{
+    warning: string;
+    estimatedCost: number;
+    restartFrom: string | null;
+    allAffectedStages: string[];
+  } | null>(null);
+  const [impactLoading, setImpactLoading] = useState(false);
 
   const fetchProject = useCallback(async () => {
     try {
@@ -115,6 +135,60 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
   }, [project?.status, fetchProject]);
+
+  // Clear viewingStage when pipeline advances
+  const prevStatusRef = useRef(project?.status);
+  useEffect(() => {
+    if (project?.status && project.status !== prevStatusRef.current) {
+      prevStatusRef.current = project.status;
+      setViewingStage(null);
+      setEditMode(false);
+    }
+  }, [project?.status]);
+
+  // Derived navigation state
+  const displayStage = viewingStage || project?.status || '';
+  const isViewingPast = viewingStage !== null;
+  const readOnlyMode = isViewingPast && !editMode;
+
+  function handleStageClick(stageKey: string) {
+    setViewingStage(stageKey);
+    setEditMode(false);
+  }
+
+  async function handleEditClick() {
+    if (!viewingStage) return;
+    setImpactLoading(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/impact`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stage: viewingStage, changes: ['all'] }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.destructive && data.destructive.length > 0) {
+          setImpactData({
+            warning: data.warning || 'Editing this stage may require regenerating downstream content.',
+            estimatedCost: data.estimatedCost || 0,
+            restartFrom: data.restartFrom || null,
+            allAffectedStages: data.allAffectedStages || [],
+          });
+        } else {
+          // No destructive impact — enter edit mode directly
+          setEditMode(true);
+        }
+      } else {
+        // API error — allow editing anyway
+        setEditMode(true);
+      }
+    } catch {
+      // Network error — allow editing anyway
+      setEditMode(true);
+    } finally {
+      setImpactLoading(false);
+    }
+  }
 
   // Fetch final video URL when project is completed
   useEffect(() => {
@@ -250,8 +324,78 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
 
       {/* Pipeline Progress */}
       <div className="rounded-xl border border-border bg-surface p-5">
-        <PipelineProgress status={project.status} failedAtStatus={project.failed_at_status} />
+        <PipelineProgress
+          status={project.status}
+          failedAtStatus={project.failed_at_status}
+          onStageClick={handleStageClick}
+          viewingStage={viewingStage}
+        />
       </div>
+
+      {/* Navigation banner when viewing a past stage */}
+      {isViewingPast && (
+        <div className={`rounded-xl border px-5 py-3 ${editMode ? 'border-amber-hot/30 bg-amber-hot/5' : 'border-electric/30 bg-electric/5'}`}>
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <svg viewBox="0 0 16 16" fill="none" className={`h-4 w-4 ${editMode ? 'text-amber-hot' : 'text-electric'}`} stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M1 8h14M8 1l7 7-7 7" />
+              </svg>
+              <div className="text-sm">
+                <span className="font-[family-name:var(--font-display)] font-semibold text-text-primary">
+                  Viewing: {NAV_STAGE_LABELS[viewingStage!] || viewingStage}
+                </span>
+                <span className="mx-2 text-text-muted">&middot;</span>
+                <span className="text-text-secondary">
+                  Current: {NAV_STAGE_LABELS[project.status] || project.status}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {editMode ? (
+                <span className="inline-flex items-center gap-1.5 rounded-lg border border-amber-hot/30 bg-amber-hot/10 px-3 py-1.5 font-[family-name:var(--font-display)] text-xs font-semibold text-amber-hot">
+                  <svg viewBox="0 0 12 12" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M7 2l3 3L4 11H1V8L7 2z" />
+                  </svg>
+                  Editing
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleEditClick}
+                  disabled={impactLoading}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 font-[family-name:var(--font-display)] text-xs font-semibold text-text-muted transition-all hover:border-electric/30 hover:text-electric disabled:opacity-50"
+                >
+                  {impactLoading ? (
+                    <>
+                      <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="60" strokeDashoffset="15" strokeLinecap="round" />
+                      </svg>
+                      Checking...
+                    </>
+                  ) : (
+                    <>
+                      <svg viewBox="0 0 12 12" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M7 2l3 3L4 11H1V8L7 2z" />
+                      </svg>
+                      Edit
+                    </>
+                  )}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => { setViewingStage(null); setEditMode(false); }}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-electric px-3 py-1.5 font-[family-name:var(--font-display)] text-xs font-semibold text-void transition-all hover:shadow-[0_0_16px_rgba(0,240,255,0.3)]"
+              >
+                Back to Current
+                <svg viewBox="0 0 12 12" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M2 6h8M7 3l3 3-3 3" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Project Settings */}
       <ProjectSettings project={project} onUpdated={fetchProject} />
@@ -274,7 +418,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       )}
 
       {/* Processing indicator for created/analyzing */}
-      {(project.status === 'created' || project.status === 'analyzing') && (
+      {!isViewingPast && (project.status === 'created' || project.status === 'analyzing') && (
         <div className="rounded-xl border border-electric/20 bg-electric/5 p-6">
           <div className="flex items-center gap-4">
             <div className="relative h-8 w-8 flex-shrink-0">
@@ -296,88 +440,109 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       )}
 
       {/* Scripting processing indicator */}
-      {project.status === 'scripting' && (
+      {!isViewingPast && project.status === 'scripting' && (
         <ScriptingProgress startedAt={project.updated_at} />
       )}
 
       {/* Analysis Review */}
-      {project.status === 'analysis_review' && data && (
+      {displayStage === 'analysis_review' && data && (
         <>
           {project.video_analysis && (
             <ReferenceVideoAnalysis projectId={project.id} videoAnalysis={project.video_analysis} />
           )}
           <AnalysisResults data={data} costUsd={project.cost_usd} character={project.character} />
-          <ProductImageSection
-            projectId={projectId}
-            productImageUrl={project.product_image_url || data.product_image_url || null}
-            onImageUpdated={fetchProject}
-          />
-          <div className="flex items-center justify-between gap-4">
-            {!project.product_image_url && !data.product_image_url && (
-              <p className="text-sm text-amber-hot">
-                A product image is required before proceeding.
-              </p>
-            )}
-            <div className="ml-auto">
-              <CommandMenu
-                actions={[
-                  {
-                    label: 'Fight — Generate Script',
-                    onClick: handleApproveAnalysis,
-                    disabled: !project.product_image_url && !data.product_image_url,
-                    loading: approving,
-                    variant: 'primary',
-                  },
-                ]}
-              />
+          {!readOnlyMode && (
+            <ProductImageSection
+              projectId={projectId}
+              productImageUrl={project.product_image_url || data.product_image_url || null}
+              onImageUpdated={fetchProject}
+            />
+          )}
+          {readOnlyMode ? (
+            project.product_image_url || data.product_image_url ? (
+              <div className="rounded-xl border border-border bg-surface p-5">
+                <h3 className="mb-3 font-[family-name:var(--font-display)] text-xs font-semibold uppercase tracking-wider text-text-muted">
+                  Product Image
+                </h3>
+                <div className="h-32 w-32 overflow-hidden rounded-lg border border-border bg-void">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={project.product_image_url || data.product_image_url || ''}
+                    alt="Product"
+                    className="h-full w-full object-contain"
+                  />
+                </div>
+              </div>
+            ) : null
+          ) : (
+            <div className="flex items-center justify-between gap-4">
+              {!project.product_image_url && !data.product_image_url && (
+                <p className="text-sm text-amber-hot">
+                  A product image is required before proceeding.
+                </p>
+              )}
+              <div className="ml-auto">
+                <CommandMenu
+                  actions={[
+                    {
+                      label: 'Fight — Generate Script',
+                      onClick: handleApproveAnalysis,
+                      disabled: !project.product_image_url && !data.product_image_url,
+                      loading: approving,
+                      variant: 'primary',
+                    },
+                  ]}
+                />
+              </div>
             </div>
-          </div>
+          )}
         </>
       )}
 
       {/* B-Roll progress indicators */}
-      {project.status === 'broll_planning' && (
+      {!isViewingPast && project.status === 'broll_planning' && (
         <StageProgress projectId={projectId} stage="broll_planning" color="electric" />
       )}
-      {project.status === 'broll_generation' && (
+      {!isViewingPast && project.status === 'broll_generation' && (
         <StageProgress projectId={projectId} stage="broll_generation" color="magenta" />
       )}
 
       {/* Asset generation progress indicators */}
-      {project.status === 'casting' && (
+      {!isViewingPast && project.status === 'casting' && (
         <StageProgress projectId={projectId} stage="casting" color="magenta" />
       )}
-      {project.status === 'directing' && (
+      {!isViewingPast && project.status === 'directing' && (
         <StageProgress projectId={projectId} stage="directing" color="magenta" />
       )}
-      {project.status === 'voiceover' && (
+      {!isViewingPast && project.status === 'voiceover' && (
         <StageProgress projectId={projectId} stage="voiceover" color="magenta" />
       )}
-      {project.status === 'editing' && (
+      {!isViewingPast && project.status === 'editing' && (
         <StageProgress projectId={projectId} stage="editing" color="electric" />
       )}
 
       {/* Script Review */}
-      {project.status === 'script_review' && (
-        <ScriptReview projectId={projectId} onStatusChange={fetchProject} />
+      {displayStage === 'script_review' && (
+        <ScriptReview projectId={projectId} onStatusChange={fetchProject} readOnly={readOnlyMode} />
       )}
 
       {/* B-Roll Storyboard Review */}
-      {project.status === 'broll_review' && (
-        <StoryboardView projectId={projectId} onStatusChange={fetchProject} />
+      {displayStage === 'broll_review' && (
+        <StoryboardView projectId={projectId} onStatusChange={fetchProject} readOnly={readOnlyMode} />
       )}
 
       {/* Influencer Selection Gate */}
-      {project.status === 'influencer_selection' && (
+      {displayStage === 'influencer_selection' && (
         <InfluencerSelection
           projectId={projectId}
           currentInfluencerId={project.influencer_id}
           onSelected={fetchProject}
+          readOnly={readOnlyMode}
         />
       )}
 
       {/* Casting Review */}
-      {project.status === 'casting_review' && (
+      {displayStage === 'casting_review' && (
         <AssetReview
           projectId={projectId}
           onStatusChange={fetchProject}
@@ -386,12 +551,13 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
             description: 'This will generate video segments using Kling 3.0 Pro and voiceover audio using ElevenLabs. Video generation takes 2-5 minutes per segment.',
             cost: '~$1.25',
           }}
+          readOnly={readOnlyMode}
         />
       )}
 
       {/* Asset Review */}
-      {project.status === 'asset_review' && (
-        <AssetReview projectId={projectId} onStatusChange={fetchProject} />
+      {displayStage === 'asset_review' && (
+        <AssetReview projectId={projectId} onStatusChange={fetchProject} readOnly={readOnlyMode} />
       )}
 
       {/* Completed - Final Review */}
@@ -546,6 +712,69 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
                 <dd className="font-medium"><GilDisplay amount={project.cost_usd} /></dd>
               </div>
             </dl>
+          </div>
+        </div>
+      )}
+
+      {/* Impact confirmation dialog for editing past stages */}
+      {impactData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-void/80 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-md animate-fade-in-up rounded-xl border border-amber-hot/30 bg-surface p-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-hot/10">
+                <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4 text-amber-hot" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M8 1L1 14h14L8 1z" />
+                  <path d="M8 6v4" />
+                  <circle cx="8" cy="12" r="0.5" fill="currentColor" />
+                </svg>
+              </div>
+              <h3 className="font-[family-name:var(--font-display)] text-lg font-bold text-text-primary">
+                Changes May Require Regeneration
+              </h3>
+            </div>
+            <p className="mt-3 text-sm leading-relaxed text-text-secondary">
+              {impactData.warning}
+            </p>
+            {impactData.estimatedCost > 0 && (
+              <div className="mt-3 rounded-lg bg-surface-overlay px-3 py-2">
+                <span className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                  Estimated Cost
+                </span>
+                <p className="font-[family-name:var(--font-mono)] text-lg font-bold text-amber-hot">
+                  ~{impactData.estimatedCost.toFixed(2)} Gil
+                </p>
+              </div>
+            )}
+            {impactData.allAffectedStages.length > 0 && (
+              <div className="mt-3">
+                <span className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                  Affected Stages
+                </span>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {impactData.allAffectedStages.map((s) => (
+                    <span key={s} className="rounded-md bg-amber-hot/10 px-2 py-0.5 font-[family-name:var(--font-display)] text-[10px] font-medium text-amber-hot">
+                      {NAV_STAGE_LABELS[s] || STAGE_LABELS[s] || s}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="mt-5 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setImpactData(null)}
+                className="flex-1 rounded-lg border border-border bg-surface px-4 py-2.5 font-[family-name:var(--font-display)] text-sm font-semibold text-text-secondary transition-all hover:bg-surface-raised"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => { setImpactData(null); setEditMode(true); }}
+                className="flex-1 rounded-lg bg-amber-hot px-4 py-2.5 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:shadow-[0_0_24px_rgba(255,171,0,0.25)]"
+              >
+                I Understand, Edit
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1126,9 +1355,10 @@ interface InfluencerSelectionProps {
   projectId: string;
   currentInfluencerId: string | null;
   onSelected: () => void;
+  readOnly?: boolean;
 }
 
-function InfluencerSelection({ projectId, currentInfluencerId, onSelected }: InfluencerSelectionProps) {
+function InfluencerSelection({ projectId, currentInfluencerId, onSelected, readOnly }: InfluencerSelectionProps) {
   const [influencers, setInfluencers] = useState<InfluencerOption[]>([]);
   const [selectedId, setSelectedId] = useState(currentInfluencerId || '');
   const [loadingList, setLoadingList] = useState(true);
@@ -1228,12 +1458,12 @@ function InfluencerSelection({ projectId, currentInfluencerId, onSelected }: Inf
               <button
                 key={inf.id}
                 type="button"
-                onClick={() => hasImage && setSelectedId(inf.id)}
-                disabled={!hasImage}
+                onClick={() => !readOnly && hasImage && setSelectedId(inf.id)}
+                disabled={!hasImage || readOnly}
                 className={`group relative overflow-hidden rounded-xl border-2 transition-all text-left ${
                   isSelected
                     ? 'border-electric bg-electric/5 ring-1 ring-electric/30'
-                    : hasImage
+                    : hasImage && !readOnly
                       ? 'border-border bg-surface-raised hover:border-border-bright'
                       : 'border-border/50 bg-surface-raised opacity-50 cursor-not-allowed'
                 }`}
@@ -1308,7 +1538,8 @@ function InfluencerSelection({ projectId, currentInfluencerId, onSelected }: Inf
                       updated[i] = { ...updated[i], visibility: e.target.value };
                       setProductPlacement(updated);
                     }}
-                    className="ml-auto appearance-none rounded-md border border-border bg-surface px-2.5 py-1 font-[family-name:var(--font-mono)] text-[11px] text-text-secondary transition-all focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric"
+                    disabled={readOnly}
+                    className="ml-auto appearance-none rounded-md border border-border bg-surface px-2.5 py-1 font-[family-name:var(--font-mono)] text-[11px] text-text-secondary transition-all focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric disabled:opacity-50"
                   >
                     <option value="none">Not visible</option>
                     <option value="subtle">Subtle / Background</option>
@@ -1324,8 +1555,9 @@ function InfluencerSelection({ projectId, currentInfluencerId, onSelected }: Inf
                     updated[i] = { ...updated[i], notes: e.target.value };
                     setProductPlacement(updated);
                   }}
+                  disabled={readOnly}
                   placeholder="Optional: e.g. 'holds bottle at eye level'"
-                  className="mt-2 block w-full rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text-primary placeholder:text-text-muted/60 transition-all focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric"
+                  className="mt-2 block w-full rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text-primary placeholder:text-text-muted/60 transition-all focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric disabled:opacity-50"
                 />
               </div>
             );
@@ -1344,28 +1576,30 @@ function InfluencerSelection({ projectId, currentInfluencerId, onSelected }: Inf
             </span>
           )}
         </div>
-        <button
-          type="button"
-          onClick={handleConfirm}
-          disabled={!selectedId || confirming}
-          className="inline-flex items-center gap-2 rounded-lg bg-lime px-6 py-3 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:shadow-[0_0_32px_rgba(184,255,0,0.25)] disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {confirming ? (
-            <>
-              <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="60" strokeDashoffset="15" strokeLinecap="round" />
-              </svg>
-              Confirming...
-            </>
-          ) : (
-            <>
-              <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="3.5 8 6.5 11 12.5 5" />
-              </svg>
-              Confirm &amp; Generate Keyframes
-            </>
-          )}
-        </button>
+        {!readOnly && (
+          <button
+            type="button"
+            onClick={handleConfirm}
+            disabled={!selectedId || confirming}
+            className="inline-flex items-center gap-2 rounded-lg bg-lime px-6 py-3 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:shadow-[0_0_32px_rgba(184,255,0,0.25)] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {confirming ? (
+              <>
+                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="60" strokeDashoffset="15" strokeLinecap="round" />
+                </svg>
+                Confirming...
+              </>
+            ) : (
+              <>
+                <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3.5 8 6.5 11 12.5 5" />
+                </svg>
+                Confirm &amp; Generate Keyframes
+              </>
+            )}
+          </button>
+        )}
       </div>
 
       {error && (
