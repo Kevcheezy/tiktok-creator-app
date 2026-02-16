@@ -13,10 +13,12 @@ export type PipelineJobData = {
     | 'voiceover'
     | 'editing'
     | 'regenerate_asset'
+    | 'regenerate_asset_cascade'
     | 'keyframe_edit';
   assetId?: string;
   editPrompt?: string;
   propagate?: boolean;
+  cascade?: boolean;
 };
 
 function parseRedisUrl(url: string) {

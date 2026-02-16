@@ -14,7 +14,7 @@ import { BRollAgent } from '../agents/broll-agent';
 import { VideoAnalysisAgent } from '../agents/video-analysis-agent';
 import { WaveSpeedClient } from '../lib/api-clients/wavespeed';
 import { ElevenLabsClient } from '../lib/api-clients/elevenlabs';
-import { FALLBACK_VOICES, API_COSTS, VideoModelConfig, getFallbackVideoModel } from '../lib/constants';
+import { FALLBACK_VOICES, API_COSTS, VideoModelConfig, getFallbackVideoModel, PRODUCT_PLACEMENT_ARC, VISIBILITY_ANGLE_MAP, RESOLUTION } from '../lib/constants';
 import { getPipelineQueue } from '../lib/queue';
 import { APP_VERSION, GIT_COMMIT } from '../lib/version';
 import { createLogger, logToGenerationLog } from '../lib/logger';
@@ -91,6 +91,8 @@ const worker = new Worker(
       await handleEditing(projectId, correlationId, jobLog);
     } else if (step === 'regenerate_asset') {
       await handleAssetRegeneration(projectId, job.data.assetId, correlationId, jobLog);
+    } else if (step === 'regenerate_asset_cascade') {
+      await handleCascadeRegeneration(projectId, job.data.assetId, correlationId, jobLog);
     } else if (step === 'keyframe_edit') {
       await handleKeyframeEdit(projectId!, job.data.assetId!, job.data.editPrompt!, job.data.propagate || false, correlationId, jobLog);
     } else {
@@ -811,9 +813,16 @@ async function handleAssetRegeneration(
     const errorMessage = error instanceof Error ? error.message : String(error);
     jobLog.error({ assetId, err: error }, 'Asset regeneration failed');
 
+    // Store error message in metadata for frontend display
+    const { data: failedAsset } = await supabase
+      .from('asset').select('metadata').eq('id', assetId).single();
     await supabase
       .from('asset')
-      .update({ status: 'failed', updated_at: new Date().toISOString() })
+      .update({
+        status: 'failed',
+        metadata: { ...(failedAsset?.metadata || {}), lastRegenError: errorMessage },
+        updated_at: new Date().toISOString(),
+      })
       .eq('id', assetId);
 
     await logToGenerationLog(supabase, {
@@ -831,9 +840,10 @@ async function regenerateKeyframe(
   projectId: string,
   assetId: string,
   asset: any,
-  jobLog: ReturnType<typeof createLogger>
-) {
-  const scene = asset.scene;
+  jobLog: ReturnType<typeof createLogger>,
+  previousFrameUrl?: string | null,
+): Promise<string> {
+  const scene = Array.isArray(asset.scene) ? asset.scene[0] : asset.scene;
   const visualPrompt = scene?.visual_prompt as { start: string; end: string } | null;
   const promptText = asset.type === 'keyframe_start'
     ? visualPrompt?.start
@@ -841,40 +851,109 @@ async function regenerateKeyframe(
 
   if (!promptText) throw new Error('No visual prompt found on scene for regeneration');
 
-  // Check if project uses influencer (image-to-image) or text-to-image
+  // Fetch project with influencer + product for reference images
   const { data: project } = await supabase
     .from('project')
-    .select('*, influencer:influencer(*)')
+    .select('*, influencer:influencer(*), product:product(*)')
     .eq('id', projectId)
     .single();
+
+  // Build reference images matching CastingAgent pattern:
+  // [previousEndFrame, influencerImage, productImage]
+  const referenceImages: string[] = [];
+
+  // 1. Previous frame in chain (passed from cascade, or fetched for single regen)
+  if (previousFrameUrl) {
+    referenceImages.push(previousFrameUrl);
+  } else if (asset.type === 'keyframe_end' && scene) {
+    // For END keyframe: use same segment's START as reference
+    const { data: startAsset } = await supabase
+      .from('asset')
+      .select('url')
+      .eq('scene_id', scene.id)
+      .eq('type', 'keyframe_start')
+      .eq('status', 'completed')
+      .single();
+    if (startAsset?.url) referenceImages.push(startAsset.url);
+  } else if (asset.type === 'keyframe_start' && scene) {
+    // For START keyframe: use previous segment's END as reference (chaining)
+    const segmentIndex = scene.segment_index ?? 0;
+    if (segmentIndex > 0) {
+      const { data: prevEndAsset } = await supabase
+        .from('asset')
+        .select('url, scene:scene(segment_index)')
+        .eq('project_id', projectId)
+        .eq('type', 'keyframe_end')
+        .eq('status', 'completed');
+      const prevEnd = (prevEndAsset || []).find((a: any) => {
+        const s = Array.isArray(a.scene) ? a.scene[0] : a.scene;
+        return s?.segment_index === segmentIndex - 1;
+      });
+      if (prevEnd?.url) referenceImages.push(prevEnd.url);
+    }
+  }
+
+  // 2. Influencer image
+  if (project?.influencer?.image_url) {
+    referenceImages.push(project.influencer.image_url);
+  }
+
+  // 3. Product image (angle-aware, matching CastingAgent pattern)
+  const productId = project?.product_id || project?.product?.id;
+  if (productId) {
+    const segmentIndex = scene?.segment_index ?? 0;
+    const placement = PRODUCT_PLACEMENT_ARC[segmentIndex];
+    if (placement && placement.visibility !== 'none') {
+      const { data: productImages } = await supabase
+        .from('product_image')
+        .select('url, url_clean, angle, is_primary')
+        .eq('product_id', productId)
+        .order('sort_order');
+      const imgs = productImages || [];
+      if (imgs.length > 0) {
+        const preferredAngles = VISIBILITY_ANGLE_MAP[placement.visibility] || ['front'];
+        let productUrl: string | null = null;
+        for (const angle of preferredAngles) {
+          const match = imgs.find((i: any) => i.angle === angle);
+          if (match) { productUrl = match.url_clean || match.url; break; }
+        }
+        if (!productUrl) {
+          const primary = imgs.find((i: any) => i.is_primary);
+          productUrl = primary ? (primary.url_clean || primary.url) : (imgs[0].url_clean || imgs[0].url);
+        }
+        if (productUrl) referenceImages.push(productUrl);
+      } else if (project?.product?.image_url) {
+        referenceImages.push(project.product.image_url);
+      }
+    }
+  }
 
   const wavespeed = new WaveSpeedClient();
   let taskId: string;
   let cost: number;
+  const editOpts = { aspectRatio: RESOLUTION.aspectRatio, resolution: '1k' as const };
 
-  if (project?.influencer?.image_url) {
-    jobLog.info('Regenerating keyframe via image edit (influencer)');
-    const result = await wavespeed.editImage(
-      [project.influencer.image_url],
-      promptText,
-      { aspectRatio: '9:16' }
-    );
+  if (referenceImages.length > 0) {
+    const refLabels = referenceImages.map((_, i) => i === 0 ? 'primary_ref' : `ref_${i}`).join('+');
+    jobLog.info({ refs: refLabels, refCount: referenceImages.length }, 'Regenerating keyframe via image edit');
+    const result = await wavespeed.editImage(referenceImages, promptText, editOpts);
     taskId = result.taskId;
     cost = API_COSTS.nanoBananaProEdit;
   } else {
-    jobLog.info('Regenerating keyframe via text-to-image');
+    jobLog.info('Regenerating keyframe via text-to-image (no references)');
     const result = await wavespeed.generateImage(promptText);
     taskId = result.taskId;
     cost = API_COSTS.nanoBananaPro;
   }
 
   jobLog.info({ taskId }, 'Polling keyframe result');
-  const pollResult = await wavespeed.pollResult(taskId, { maxWait: 120000, initialInterval: 5000 });
+  const pollResult = await wavespeed.pollResult(taskId, { maxWait: 240000, initialInterval: 5000 });
+  const newUrl = pollResult.url || '';
 
   await supabase
     .from('asset')
     .update({
-      url: pollResult.url || '',
+      url: newUrl,
       status: 'completed',
       provider_task_id: taskId,
       cost_usd: cost,
@@ -893,6 +972,136 @@ async function regenerateKeyframe(
     .from('project')
     .update({ cost_usd: (currentCost + cost).toFixed(4), updated_at: new Date().toISOString() })
     .eq('id', projectId);
+
+  return newUrl;
+}
+
+/**
+ * Cascade keyframe regeneration: regenerates the target keyframe, then walks
+ * forward through all subsequent keyframes in chain order, passing each
+ * newly generated frame as the primary reference to the next.
+ *
+ * Chain order: Seg0 START → Seg0 END → Seg1 START → Seg1 END → ...
+ */
+async function handleCascadeRegeneration(
+  projectId: string,
+  sourceAssetId: string,
+  correlationId: string,
+  jobLog: ReturnType<typeof createLogger>
+) {
+  const cascadeStart = Date.now();
+  jobLog.info({ sourceAssetId }, 'Starting cascade keyframe regeneration');
+
+  try {
+    // Fetch the source asset with scene
+    const { data: sourceAsset, error: sourceErr } = await supabase
+      .from('asset')
+      .select('*, scene:scene(*)')
+      .eq('id', sourceAssetId)
+      .single();
+
+    if (sourceErr || !sourceAsset) throw new Error(`Source asset ${sourceAssetId} not found`);
+
+    const sourceScene = Array.isArray(sourceAsset.scene) ? sourceAsset.scene[0] : sourceAsset.scene;
+    const sourceSegment = sourceScene?.segment_index ?? 0;
+    const sourceIsStart = sourceAsset.type === 'keyframe_start';
+
+    await logToGenerationLog(supabase, {
+      project_id: projectId, correlation_id: correlationId,
+      event_type: 'cascade_regen_start', agent_name: 'PipelineWorker',
+      stage: 'regeneration',
+      detail: { sourceAssetId, sourceSegment, sourceType: sourceAsset.type },
+    });
+
+    // Fetch ALL keyframe assets for this project, ordered by segment + type
+    const { data: allKeyframes } = await supabase
+      .from('asset')
+      .select('*, scene:scene(id, segment_index)')
+      .eq('project_id', projectId)
+      .in('type', ['keyframe_start', 'keyframe_end']);
+
+    // Build ordered chain: [seg0_start, seg0_end, seg1_start, seg1_end, ...]
+    const ordered = (allKeyframes || [])
+      .map((kf: any) => {
+        const s = Array.isArray(kf.scene) ? kf.scene[0] : kf.scene;
+        return { ...kf, _seg: s?.segment_index ?? 0, _ord: kf.type === 'keyframe_start' ? 0 : 1 };
+      })
+      .sort((a: any, b: any) => a._seg - b._seg || a._ord - b._ord);
+
+    // Find the source asset's position in the chain
+    const sourceIdx = ordered.findIndex((kf: any) => kf.id === sourceAssetId);
+    if (sourceIdx === -1) throw new Error('Source asset not found in keyframe chain');
+
+    // The cascade includes the source and everything after it
+    const cascadeChain = ordered.slice(sourceIdx);
+
+    jobLog.info({ chainLength: cascadeChain.length, sourceSegment, sourceIsStart }, 'Cascade chain built');
+
+    // Walk the chain: each frame uses the previous output as primary reference
+    let previousUrl: string | null = null;
+
+    // If source is an END keyframe, get same segment's START as initial reference
+    // If source is a START keyframe of seg > 0, get previous segment's END
+    if (!sourceIsStart) {
+      const sameSegStart = ordered.find((kf: any) => kf._seg === sourceSegment && kf.type === 'keyframe_start');
+      previousUrl = sameSegStart?.url || null;
+    } else if (sourceSegment > 0) {
+      const prevSegEnd = ordered.find((kf: any) => kf._seg === sourceSegment - 1 && kf.type === 'keyframe_end');
+      previousUrl = prevSegEnd?.url || null;
+    }
+
+    let regeneratedCount = 0;
+
+    for (const kf of cascadeChain) {
+      try {
+        jobLog.info({ assetId: kf.id, segment: kf._seg, type: kf.type, previousUrl: !!previousUrl }, 'Cascade: regenerating keyframe');
+
+        const newUrl = await regenerateKeyframe(projectId, kf.id, kf, jobLog, previousUrl);
+        previousUrl = newUrl;
+        regeneratedCount++;
+
+        jobLog.info({ assetId: kf.id, segment: kf._seg, type: kf.type }, 'Cascade: keyframe regenerated');
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        jobLog.error({ assetId: kf.id, err }, 'Cascade: keyframe regeneration failed, marking failed');
+
+        await supabase
+          .from('asset')
+          .update({
+            status: 'failed',
+            metadata: { ...(kf.metadata || {}), lastRegenError: errorMessage },
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', kf.id);
+
+        // Continue cascade — don't break the whole chain for one failure
+        // But clear previousUrl so next frame doesn't reference a missing image
+        previousUrl = null;
+      }
+    }
+
+    const durationMs = Date.now() - cascadeStart;
+    await logToGenerationLog(supabase, {
+      project_id: projectId, correlation_id: correlationId,
+      event_type: 'cascade_regen_complete', agent_name: 'PipelineWorker',
+      stage: 'regeneration',
+      detail: { sourceAssetId, regeneratedCount, totalInChain: cascadeChain.length, durationMs },
+    });
+
+    jobLog.info({ regeneratedCount, totalInChain: cascadeChain.length, durationMs }, 'Cascade regeneration complete');
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    jobLog.error({ sourceAssetId, err: error }, 'Cascade regeneration failed');
+
+    await logToGenerationLog(supabase, {
+      project_id: projectId, correlation_id: correlationId,
+      event_type: 'cascade_regen_error', agent_name: 'PipelineWorker',
+      stage: 'regeneration',
+      detail: { sourceAssetId, error: errorMessage },
+    });
+
+    throw error;
+  }
 }
 
 async function regenerateVideo(
