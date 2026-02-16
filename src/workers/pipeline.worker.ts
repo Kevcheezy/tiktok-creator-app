@@ -1056,9 +1056,20 @@ async function handleKeyframeEdit(
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : String(err);
           jobLog.error({ assetId: kf.id, err }, 'Failed to edit subsequent keyframe');
+          // Fetch existing metadata to preserve, then store error for frontend display
+          const { data: failedKf } = await supabase
+            .from('asset')
+            .select('metadata')
+            .eq('id', kf.id)
+            .single();
+          const kfMeta = (failedKf?.metadata || {}) as Record<string, unknown>;
           await supabase
             .from('asset')
-            .update({ status: 'failed', updated_at: new Date().toISOString() })
+            .update({
+              status: 'failed',
+              metadata: { ...kfMeta, lastEditError: errMsg },
+              updated_at: new Date().toISOString(),
+            })
             .eq('id', kf.id);
           await logToGenerationLog(supabase, {
             project_id: projectId,
@@ -1086,9 +1097,21 @@ async function handleKeyframeEdit(
     const errorMessage = error instanceof Error ? error.message : String(error);
     jobLog.error({ assetId, err: error }, 'Keyframe edit failed');
 
+    // Fetch existing metadata to preserve edit history, then store the error
+    const { data: failedAsset } = await supabase
+      .from('asset')
+      .select('metadata')
+      .eq('id', assetId)
+      .single();
+    const existingMeta = (failedAsset?.metadata || {}) as Record<string, unknown>;
+
     await supabase
       .from('asset')
-      .update({ status: 'failed', updated_at: new Date().toISOString() })
+      .update({
+        status: 'failed',
+        metadata: { ...existingMeta, lastEditError: errorMessage },
+        updated_at: new Date().toISOString(),
+      })
       .eq('id', assetId);
 
     await logToGenerationLog(supabase, {
@@ -1129,7 +1152,7 @@ async function editSingleKeyframe(
 
   jobLog.info({ assetId, taskId: result.taskId }, 'Polling keyframe edit result');
   const pollResult = await wavespeed.pollResult(result.taskId, {
-    maxWait: 120000,
+    maxWait: 240000,
     initialInterval: 5000,
   });
 

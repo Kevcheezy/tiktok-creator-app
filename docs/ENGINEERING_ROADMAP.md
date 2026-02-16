@@ -163,9 +163,10 @@ Influencer `<select>` options displayed the entire `persona` field (full appeara
 **Scope:** Frontend + Backend
 **Why:** When a user submits a keyframe edit via the "Edit Keyframe" dialog at casting_review, the edit is enqueued as a `keyframe_edit` BullMQ job. If the WaveSpeed Nano Banana Pro Edit API call fails (timeout, API error, or invalid image URL), the worker sets the asset to `failed` status but the user sees no error message — the dialog just closes. The user discovers the failure only by noticing the asset card shows a failed state.
 
-**Root causes (needs investigation by backend agent):**
-- Worker `editSingleKeyframe()` calls `wavespeed.editImage()` → if WaveSpeed returns an error or `pollResult` times out after 120s, the catch block sets asset to `failed` but no error detail is surfaced to the frontend
-- The API route (`POST /api/projects/[id]/keyframes/edit`) only enqueues the job — there's no mechanism to relay worker-side failures back to the polling frontend
+**Root causes (investigated):**
+- Worker `editSingleKeyframe()` had `pollResult` timeout at 120s (too short) — increased to 240s
+- Error handler set asset to `failed` but didn't store error message in metadata — now writes `metadata.lastEditError`
+- Extra `segIdx` argument to `generateVisualPrompts()` caused build break (14 args, max 13) — removed
 
 **Frontend issues:**
 - `handleEditSubmit()` in `asset-review.tsx:185` doesn't check `res.ok` — a 400/500 response is silently ignored
@@ -174,10 +175,11 @@ Influencer `<select>` options displayed the entire `persona` field (full appeara
 
 **Fix checklist:**
 - [ ] Frontend: Check `res.ok` in `handleEditSubmit()`, show error toast on API failure
-- [ ] Frontend: Show error reason on asset card when edit fails (read from asset metadata or error field)
+- [ ] Frontend: Show error reason on asset card when edit fails (read from `asset.metadata.lastEditError`)
 - [ ] Frontend: Add "Retry Edit" action on failed-after-edit assets
-- [ ] Backend: Investigate why WaveSpeed edit API is failing (check generation_log for `keyframe_edit_error` events)
-- [ ] Backend: Store error message in asset `metadata.lastEditError` so frontend can display it
+- [x] Backend: Increase `pollResult` timeout from 120s to 240s in `editSingleKeyframe()` (matching CastingAgent fix)
+- [x] Backend: Store error message in `asset.metadata.lastEditError` on edit failure (both single and propagation handlers)
+- [x] Backend: Fix build break — remove extra `segIdx` arg from `generateVisualPrompts()` call
 
 ---
 

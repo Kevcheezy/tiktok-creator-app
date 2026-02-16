@@ -1,6 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { BaseAgent } from './base-agent';
-import { AVATAR_MAPPING, PRODUCT_PLACEMENT_ARC, ENERGY_ARC, API_COSTS, RESOLUTION, VISIBILITY_ANGLE_MAP } from '@/lib/constants';
+import { AVATAR_MAPPING, PRODUCT_PLACEMENT_ARC, ENERGY_ARC, API_COSTS, RESOLUTION, VISIBILITY_ANGLE_MAP, FRAME_ACTIONS } from '@/lib/constants';
 
 const NEGATIVE_PROMPT = 'watermark, text, logo, blurry, deformed, ugly, duplicate, extra limbs, poorly drawn';
 
@@ -166,6 +166,7 @@ export class CastingAgent extends BaseAgent {
             interactionDescription,
             hasProductRef,
             isContinuation,
+            segIdx,
           );
 
           // Save visual prompts to scene
