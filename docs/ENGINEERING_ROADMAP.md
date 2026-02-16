@@ -193,14 +193,14 @@ Influencer `<select>` options displayed the entire `persona` field (full appeara
 - Injected concrete pose cues into user prompt for both edit and text-to-image paths
 - Each segment now gets distinct start/end pose directions regardless of energy arc values
 
-#### B0.19 - Per-Segment Keyframe Regeneration Broken (Missing Endpoint)
+#### ~~B0.19 - Per-Segment Keyframe Regeneration Broken (Missing Endpoint)~~ FIXED
 **Severity:** High (user-facing button does nothing)
 **Scope:** Backend
-**Why:** The "Regenerate" button on failed/rejected keyframe assets calls `POST /api/projects/[id]/assets/regenerate` with `{ assetId }`, but **this API route does not exist** — there is no `src/app/api/projects/[id]/assets/regenerate/route.ts` file. The request silently 404s. The frontend already handles the UI correctly (shows button, calls endpoint, re-fetches assets), so only the backend needs to be built.
+**Why:** The "Regenerate" button on failed/rejected keyframe assets calls `POST /api/projects/[id]/assets/regenerate` with `{ assetId }`. Route and worker handler already exist and are fully functional.
 
-**Backend (needs implementation):**
-- [ ] Create `src/app/api/projects/[id]/assets/regenerate/route.ts` — POST handler that accepts `{ assetId }`, validates asset belongs to project, enqueues a BullMQ job to regenerate that single keyframe (start or end) for the given scene
-- [ ] Worker handler for single-keyframe regeneration — reuses CastingAgent's per-segment generation logic for one asset, sets status back to `generating`, replaces URL on completion
+**Backend (already implemented):**
+- [x] `src/app/api/projects/[id]/assets/regenerate/route.ts` — POST handler validates asset belongs to project, checks status, marks as `generating`, enqueues `regenerate_asset` BullMQ job
+- [x] Worker `handleAssetRegeneration()` routes to `regenerateKeyframe()`/`regenerateVideo()`/`regenerateAudio()` based on asset type
 
 **Frontend:** No changes needed — `asset-review.tsx` already calls the endpoint correctly.
 
