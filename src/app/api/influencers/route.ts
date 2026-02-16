@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/db';
 import { logger } from '@/lib/logger';
+import { getPublicUrl } from '@/lib/storage';
 
 export async function GET() {
   const { data: influencers, error } = await supabase
@@ -19,18 +20,35 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const formData = await request.formData();
+    const contentType = request.headers.get('content-type') || '';
+    let name: string | null = null;
+    let persona: string | null = null;
+    let image: File | null = null;
+    let storagePath: string | null = null;
 
-    const name = formData.get('name');
+    if (contentType.includes('application/json')) {
+      // JSON body: direct-to-storage flow (storagePath already uploaded)
+      const body = await request.json();
+      name = body.name || null;
+      persona = body.persona || null;
+      storagePath = body.storagePath || null;
+    } else {
+      // FormData: legacy server-side upload flow
+      const formData = await request.formData();
+      name = formData.get('name') as string | null;
+      persona = formData.get('persona') as string | null;
+      const imageField = formData.get('image');
+      if (imageField && imageField instanceof File && imageField.size > 0) {
+        image = imageField;
+      }
+    }
+
     if (!name || typeof name !== 'string') {
       return NextResponse.json(
         { error: 'Validation failed', details: 'name is required' },
         { status: 400 }
       );
     }
-
-    const persona = formData.get('persona');
-    const image = formData.get('image');
 
     // Insert the influencer row
     const { data: influencer, error: insertError } = await supabase
@@ -47,25 +65,42 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to create influencer' }, { status: 500 });
     }
 
-    // If an image file was provided, upload to Supabase Storage
-    if (image && image instanceof File && image.size > 0) {
+    // Direct-to-storage: file already uploaded, just resolve public URL
+    if (storagePath) {
+      const publicUrl = getPublicUrl(storagePath);
+      const { data: updated, error: updateError } = await supabase
+        .from('influencer')
+        .update({ image_url: publicUrl })
+        .eq('id', influencer.id)
+        .select()
+        .single();
+
+      if (updateError) {
+        logger.error({ err: updateError, route: '/api/influencers' }, 'Error updating influencer image_url');
+        return NextResponse.json(influencer, { status: 201 });
+      }
+
+      return NextResponse.json(updated, { status: 201 });
+    }
+
+    // Legacy: server-side upload via FormData
+    if (image) {
       const ext = image.name.split('.').pop() || 'png';
-      const storagePath = `influencers/${influencer.id}/reference.${ext}`;
+      const legacyPath = `influencers/${influencer.id}/reference.${ext}`;
       const buffer = Buffer.from(await image.arrayBuffer());
 
       const { error: uploadError } = await supabase.storage
         .from('assets')
-        .upload(storagePath, buffer, { contentType: image.type, upsert: true });
+        .upload(legacyPath, buffer, { contentType: image.type, upsert: true });
 
       if (uploadError) {
         logger.error({ err: uploadError, route: '/api/influencers' }, 'Error uploading influencer image');
-        // Still return the influencer, but without the image
         return NextResponse.json(influencer, { status: 201 });
       }
 
       const { data: publicUrlData } = supabase.storage
         .from('assets')
-        .getPublicUrl(storagePath);
+        .getPublicUrl(legacyPath);
 
       const { data: updated, error: updateError } = await supabase
         .from('influencer')

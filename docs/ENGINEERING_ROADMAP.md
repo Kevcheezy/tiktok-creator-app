@@ -375,15 +375,16 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] Empty states: "No encounters" / "No items in inventory" / "Party not assembled"
 - [x] `approve-controls.tsx` — Materia orb grade buttons, CommandMenu for approve/regenerate
 
-#### R1.5.7 - Direct-to-Storage Image Uploads
+#### ~~R1.5.7 - Direct-to-Storage Image Uploads~~ DONE
 **Priority:** P2 - Medium (backlog)
 **Effort:** Small
 **Why:** Influencer reference photos are currently routed through the Next.js API, which is constrained by Vercel's 4.5 MB body limit. Images are compressed client-side to fit, but the pipeline needs full-resolution photos for high-quality keyframe generation via CastingAgent. Uploading directly to Supabase Storage from the frontend bypasses the API route size limit entirely.
 
-- [ ] Frontend uploads images directly to Supabase Storage (signed upload URL or anon key with Storage RLS)
-- [ ] API route receives the storage path/URL instead of the file blob
-- [ ] Apply same pattern to product image upload (`/api/products/[id]/image`) and project product image (`/api/projects/[id]/product-image`)
-- [ ] Remove client-side compression workaround once direct uploads are in place
+- [x] `POST /api/storage/upload-url` — generates signed upload URLs (2-hour expiry, upsert enabled)
+- [x] `src/lib/storage.ts` — shared helpers: `generateUploadPath()`, `createSignedUploadUrl()`, `getPublicUrl()`, `deleteStorageFile()`, `extractStoragePath()`
+- [x] API routes accept `storagePath` (JSON body) as alternative to FormData file blob: influencers POST/PATCH, product image, project product-image
+- [x] Legacy FormData upload path preserved for backward compatibility
+- [ ] Frontend uses signed upload URL flow (frontend agent task — remove client-side compression)
 
 #### R1.5.8 - Navigable Pipeline Stages
 **Priority:** P1 - Medium
@@ -587,8 +588,8 @@ POLISH     Tier 1.5: UX Hardening
            (markdown parser + FF7 workers + live Kanban board)
            R1.5.6 FF7 Visual Theme (can run in parallel — purely frontend + static assets)
            (ATB pipeline + battle HUD + character sprites + Mako palette + command menus)
-           R1.5.7 Direct-to-Storage Uploads (backlog)
-           (bypass Vercel 4.5MB limit)
+           R1.5.7 Direct-to-Storage Uploads ✅ DONE (backend)
+           (bypass Vercel 4.5MB limit — frontend pending)
 
 NEXT       Tier 2: Quality & Conversion
            R2.0 Performance Tracking ──→ R2.4 Product Images ──→ R2.5 Reference Video Intel ──→ R2.3 Avatar Consistency ──→ R2.1 Hook Testing ──→ R2.2 Trends

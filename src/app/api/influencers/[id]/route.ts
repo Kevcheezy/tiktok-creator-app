@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/db';
 import { logger } from '@/lib/logger';
+import { getPublicUrl, extractStoragePath, deleteStorageFile } from '@/lib/storage';
 
 export async function GET(
   _request: NextRequest,
@@ -31,52 +32,69 @@ export async function PATCH(
   const { id } = await params;
 
   try {
-    const formData = await request.formData();
-    const name = formData.get('name');
-    const persona = formData.get('persona');
-    const image = formData.get('image');
+    const contentType = request.headers.get('content-type') || '';
+    let name: string | null = null;
+    let persona: string | null = null;
+    let image: File | null = null;
+    let storagePath: string | null = null;
+
+    if (contentType.includes('application/json')) {
+      const body = await request.json();
+      name = body.name ?? null;
+      persona = body.persona ?? null;
+      storagePath = body.storagePath ?? null;
+    } else {
+      const formData = await request.formData();
+      name = formData.get('name') as string | null;
+      persona = formData.get('persona') as string | null;
+      const imageField = formData.get('image');
+      if (imageField && imageField instanceof File && imageField.size > 0) {
+        image = imageField;
+      }
+    }
 
     const updates: Record<string, string | null> = {};
     if (name !== null && typeof name === 'string') updates.name = name;
     if (persona !== null && typeof persona === 'string') updates.persona = persona;
 
-    const hasImage = image && image instanceof File && image.size > 0;
+    const hasNewImage = !!storagePath || !!image;
 
-    if (Object.keys(updates).length === 0 && !hasImage) {
+    if (Object.keys(updates).length === 0 && !hasNewImage) {
       return NextResponse.json(
-        { error: 'No valid fields to update (name, persona, image)' },
+        { error: 'No valid fields to update (name, persona, image/storagePath)' },
         { status: 400 }
       );
     }
 
-    // Handle image replacement
-    if (hasImage) {
-      // Fetch existing influencer to find old image path for cleanup
+    // Clean up old image when replacing
+    if (hasNewImage) {
       const { data: existing } = await supabase
         .from('influencer')
         .select('image_url')
         .eq('id', id)
         .single();
 
-      // Delete old image from Storage if it exists
       if (existing?.image_url) {
-        const oldUrl = existing.image_url as string;
-        // Extract storage path from public URL: .../storage/v1/object/public/assets/influencers/...
-        const storageMarker = '/storage/v1/object/public/assets/';
-        const markerIndex = oldUrl.indexOf(storageMarker);
-        if (markerIndex !== -1) {
-          const oldPath = oldUrl.substring(markerIndex + storageMarker.length);
-          await supabase.storage.from('assets').remove([oldPath]);
+        const oldPath = extractStoragePath(existing.image_url as string);
+        if (oldPath) {
+          await deleteStorageFile(oldPath);
         }
       }
+    }
 
-      // Upload new image
-      const ext = (image as File).name.split('.').pop() || 'png';
-      const storagePath = `influencers/${id}/reference.${ext}`;
-      const buffer = Buffer.from(await (image as File).arrayBuffer());
+    // Direct-to-storage: file already uploaded, just resolve public URL
+    if (storagePath) {
+      updates.image_url = getPublicUrl(storagePath);
+    }
+
+    // Legacy: server-side upload via FormData
+    if (image) {
+      const ext = image.name.split('.').pop() || 'png';
+      const legacyPath = `influencers/${id}/reference.${ext}`;
+      const buffer = Buffer.from(await image.arrayBuffer());
       const { error: uploadError } = await supabase.storage
         .from('assets')
-        .upload(storagePath, buffer, { contentType: (image as File).type, upsert: true });
+        .upload(legacyPath, buffer, { contentType: image.type, upsert: true });
 
       if (uploadError) {
         logger.error({ err: uploadError, route: `/api/influencers/${id}` }, 'Error uploading influencer image');
@@ -88,7 +106,7 @@ export async function PATCH(
 
       const { data: publicUrlData } = supabase.storage
         .from('assets')
-        .getPublicUrl(storagePath);
+        .getPublicUrl(legacyPath);
       updates.image_url = publicUrlData.publicUrl;
     }
 
