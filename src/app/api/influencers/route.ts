@@ -48,13 +48,14 @@ export async function POST(request: NextRequest) {
     }
 
     // If an image file was provided, upload to Supabase Storage
-    if (image && image instanceof File) {
+    if (image && image instanceof File && image.size > 0) {
       const ext = image.name.split('.').pop() || 'png';
       const storagePath = `influencers/${influencer.id}/reference.${ext}`;
+      const buffer = Buffer.from(await image.arrayBuffer());
 
       const { error: uploadError } = await supabase.storage
         .from('assets')
-        .upload(storagePath, image, { upsert: true });
+        .upload(storagePath, buffer, { contentType: image.type, upsert: true });
 
       if (uploadError) {
         logger.error({ err: uploadError, route: '/api/influencers' }, 'Error uploading influencer image');

@@ -281,16 +281,15 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] Editable project settings on detail page (tone, character, influencer) — PATCH whitelists `EDITABLE_PROJECT_FIELDS`, gated behind `REVIEW_GATE_STATUSES`; validates tone against `TONE_IDS`
 - [x] "Restart pipeline" option: `POST /api/projects/[id]/retry` with `{ stage }` body restarts from review gate using `RESTART_STAGE_MAP`; also supports legacy failed retry via `failed_at_status`
 
-#### R1.5.3 - Navigation & State Consistency
-**Priority:** P1 - Medium
-**Effort:** Small
+#### ~~R1.5.3 - Navigation & State Consistency~~ DONE
+**Status:** Complete (2026-02-15)
 **Why:** Several small UX gaps that create friction across pages.
 
-- [ ] Back links on creation pages (`/projects/new`, `/influencers/new`)
-- [ ] Link from project detail to assigned influencer (clickable, not just text)
-- [ ] Pagination or virtual scroll on project/influencer lists (breaks at 50+ items)
-- [ ] Search/filter on project list (by status, category, name)
-- [ ] Consistent empty states across all list views
+- [x] Back links on creation pages (`/projects/new`, `/influencers/new`) — arrow + text links to parent page
+- [x] Link from project detail to assigned influencer (clickable, not just text) — thumbnail + name link in project header
+- [x] Pagination or virtual scroll on project/influencer lists (breaks at 50+ items) — client-side 12-per-page pagination on project list
+- [x] Search/filter on project list (by status, category, name) — search input + status filter pills (All/Active/Review/Completed/Failed) with count badge
+- [x] Consistent empty states across all list views — all three lists (project/product/influencer) use same pattern: glow, icon, heading, description, CTA
 
 #### R1.5.4 - Error Handling & Recovery
 **Priority:** P1 - Medium

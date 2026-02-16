@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { StatusBadge } from './status-badge';
 import { PipelineProgress } from './pipeline-progress';
 import { ScriptReview } from './script-review';
@@ -170,6 +171,24 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
           <p className="mt-1 truncate font-[family-name:var(--font-mono)] text-xs text-text-muted">
             {project.product_url}
           </p>
+          {project.influencer && (
+            <Link
+              href={`/influencers/${project.influencer.id}`}
+              className="mt-2 inline-flex items-center gap-2 text-sm text-text-secondary transition-colors hover:text-electric"
+            >
+              {project.influencer.image_url && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={project.influencer.image_url}
+                  alt={project.influencer.name}
+                  className="h-6 w-6 rounded-full object-cover border border-border"
+                />
+              )}
+              <span className="font-[family-name:var(--font-display)] text-xs font-medium">
+                {project.influencer.name}
+              </span>
+            </Link>
+          )}
         </div>
         <div className="flex flex-shrink-0 items-center gap-3">
           <StatusBadge status={project.status} />
