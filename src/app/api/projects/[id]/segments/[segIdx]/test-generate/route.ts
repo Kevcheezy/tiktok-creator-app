@@ -6,6 +6,8 @@ import { serializeForVideo } from '@/lib/prompt-serializer';
 import { WaveSpeedClient } from '@/lib/api-clients/wavespeed';
 import { VideoModelConfig, getFallbackVideoModel, API_COSTS } from '@/lib/constants';
 
+export const maxDuration = 30;
+
 /**
  * Fetch the video model config for a project.
  */
@@ -200,7 +202,7 @@ export async function POST(
           multiPrompt: vm.supports_multi_prompt ? multiPrompt : [],
           duration: vm.segment_duration,
           cfgScale: 0.5,
-        });
+        }, { projectId: id, supabase });
 
         // Create asset record
         const { data: asset } = await supabase.from('asset').insert({
@@ -250,7 +252,7 @@ export async function POST(
       multiPrompt: vm.supports_multi_prompt ? serialized.multiPrompt : [],
       duration: vm.segment_duration,
       cfgScale: 0.5,
-    });
+    }, { projectId: id, supabase });
 
     // Create asset record
     const { data: asset } = await supabase.from('asset').insert({
@@ -284,9 +286,10 @@ export async function POST(
       cost: vm.cost_per_segment,
     });
   } catch (error) {
+    const errMsg = error instanceof Error ? error.message : 'Unknown error';
     logger.error({ err: error, route: '/api/projects/[id]/segments/[segIdx]/test-generate' }, 'Error generating test video');
     return NextResponse.json(
-      { error: 'Failed to generate test video' },
+      { error: `Failed to generate test video: ${errMsg}` },
       { status: 500 }
     );
   }

@@ -351,6 +351,20 @@ Influencer `<select>` options displayed the entire `persona` field (full appeara
 - [x] `regenerateKeyframe()` in pipeline worker updated with same ordering + user override support
 - [x] `CONTINUITY_PROMPT` and `continuityNote` updated to reflect new reference ordering
 
+#### ~~B0.31 - VideoPreviewPanel Retry Button Calls Wrong Handler~~ FIXED
+**Severity:** Low (UX bug — retry after test-generate failure re-fetches preview instead of re-attempting generation)
+**Scope:** Frontend
+**Discovered:** 2026-02-16
+
+**Why:** `loadError` state is shared between preview fetch errors and test-generate errors, but the Retry button always calls `fetchPreview`. When a test-generate fails, clicking Retry loads the prompt preview instead of re-attempting video generation.
+
+**Fix checklist:**
+- [x] Add `errorSource` state to track which operation failed (`'preview' | 'test-generate'`)
+- [x] Set `errorSource` in each catch block (`fetchPreview`, `handleRefine`, `handleTestGenerate`)
+- [x] Clear `errorSource` when `loadError` is cleared
+- [x] Retry button dispatches to correct handler based on `errorSource`
+- [x] Retry button label reflects which operation will be retried
+
 ---
 
 ### Tier 1: Complete the Core Pipeline (Ship a working end-to-end product)

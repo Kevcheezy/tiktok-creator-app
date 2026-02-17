@@ -60,6 +60,7 @@ export function VideoPreviewPanel({ projectId, segmentIndex, onTestApproved }: V
   const [previewData, setPreviewData] = useState<PreviewData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [errorSource, setErrorSource] = useState<'preview' | 'test-generate' | null>(null);
 
   // Feedback / refine state
   const [showFeedback, setShowFeedback] = useState(false);
@@ -90,6 +91,7 @@ export function VideoPreviewPanel({ projectId, segmentIndex, onTestApproved }: V
   const fetchPreview = useCallback(async () => {
     setIsLoading(true);
     setLoadError(null);
+    setErrorSource(null);
     try {
       const res = await fetch(`/api/projects/${projectId}/segments/${segmentIndex}/preview`, {
         method: 'POST',
@@ -102,6 +104,7 @@ export function VideoPreviewPanel({ projectId, segmentIndex, onTestApproved }: V
       setPreviewData(data);
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Failed to load preview');
+      setErrorSource('preview');
     } finally {
       setIsLoading(false);
     }
@@ -118,6 +121,8 @@ export function VideoPreviewPanel({ projectId, segmentIndex, onTestApproved }: V
   async function handleRefine() {
     if (!feedback.trim()) return;
     setIsRefining(true);
+    setLoadError(null);
+    setErrorSource(null);
     try {
       const res = await fetch(`/api/projects/${projectId}/segments/${segmentIndex}/refine`, {
         method: 'POST',
@@ -134,6 +139,7 @@ export function VideoPreviewPanel({ projectId, segmentIndex, onTestApproved }: V
       setFeedback('');
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Failed to refine prompt');
+      setErrorSource('preview');
     } finally {
       setIsRefining(false);
     }
@@ -142,6 +148,8 @@ export function VideoPreviewPanel({ projectId, segmentIndex, onTestApproved }: V
   async function handleTestGenerate() {
     setIsTestGenerating(true);
     setTestVideoAsset(null);
+    setLoadError(null);
+    setErrorSource(null);
     try {
       const res = await fetch(`/api/projects/${projectId}/segments/${segmentIndex}/test-generate`, {
         method: 'POST',
@@ -185,6 +193,7 @@ export function VideoPreviewPanel({ projectId, segmentIndex, onTestApproved }: V
       }, 3000);
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Failed to start test generation');
+      setErrorSource('test-generate');
       setIsTestGenerating(false);
     }
   }
@@ -255,10 +264,10 @@ export function VideoPreviewPanel({ projectId, segmentIndex, onTestApproved }: V
               <p className="text-xs text-magenta">{loadError}</p>
               <button
                 type="button"
-                onClick={fetchPreview}
+                onClick={errorSource === 'test-generate' ? handleTestGenerate : fetchPreview}
                 className="mt-2 rounded-md border border-magenta/30 bg-magenta/10 px-3 py-1 font-[family-name:var(--font-display)] text-xs font-medium text-magenta transition-colors hover:bg-magenta/20"
               >
-                Retry
+                {errorSource === 'test-generate' ? 'Retry Generate' : 'Retry Preview'}
               </button>
             </div>
           )}
