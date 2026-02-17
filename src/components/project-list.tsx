@@ -16,6 +16,7 @@ interface Project {
   created_at: string | null;
   cost_usd: string | null;
   error_message: string | null;
+  fast_mode?: boolean | null;
 }
 
 const STATUS_FILTERS: { label: string; key: string; statuses: string[] }[] = [

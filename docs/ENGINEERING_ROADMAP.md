@@ -1035,7 +1035,7 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [ ] Log rate limit events to `generation_log` (event_type: `rate_limited`, detail: `{ provider: 'elevenlabs', retryAfterMs }`)
 - [ ] Add retry on Supabase Storage upload failure (1 retry with 2s delay — currently no retry on upload)
 
-#### R1.5.29 - Video Generation Preview & Test Mode
+#### R1.5.29 - Video Generation Preview & Test Mode 🔧 IN PROGRESS
 **Priority:** P0 - Critical
 **Effort:** Medium
 **Spec:** `docs/plans/2026-02-16-video-generation-preview-design.md`
@@ -1043,25 +1043,25 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 **Why:** Video generation is the most expensive pipeline stage ($4.80 for 4 segments). Currently the user approves blind at casting_review with no visibility into what prompts will be sent to Kling 3.0. Bad prompts waste $4.80 + require a full retry ($9.60 total). A per-segment preview panel shows the exact Kling payload before committing, lets users iteratively refine prompts via LLM feedback, and test-generate a single segment ($1.20) before approving the rest. Pre-tested segments are skipped by DirectorAgent, saving cost. A per-project Fast Mode toggle auto-advances through review gates for trusted/repeat products.
 
 **Schema:**
-- [ ] Add `video_prompt_override` JSONB column to `scene` table
-- [ ] Add `fast_mode` boolean column to `project` table (default false)
+- [x] Add `video_prompt_override` JSONB column to `scene` table
+- [x] Add `fast_mode` boolean column to `project` table (default false)
 
 **Backend:**
-- [ ] `POST /api/projects/[id]/segments/[segIdx]/preview` — build StructuredPrompt + serialize, return full payload preview (no Kling call, $0)
-- [ ] `POST /api/projects/[id]/segments/[segIdx]/refine` — re-run LLM with user feedback, save to `scene.video_prompt_override` ($0.01)
-- [ ] `POST /api/projects/[id]/segments/[segIdx]/test-generate` — generate single segment video via Kling ($1.20), create asset record, poll for completion
-- [ ] DirectorAgent: skip segments with existing completed video asset; use `video_prompt_override` when present
-- [ ] Pipeline worker: check `project.fast_mode` at review gates, auto-advance if enabled (never skip `influencer_selection` or `asset_review`)
-- [ ] Add `fast_mode` to `ALWAYS_ALLOWED` fields in PATCH `/api/projects/[id]`
+- [x] `POST /api/projects/[id]/segments/[segIdx]/preview` — build StructuredPrompt + serialize, return full payload preview (no Kling call, $0)
+- [x] `POST /api/projects/[id]/segments/[segIdx]/refine` — re-run LLM with user feedback, save to `scene.video_prompt_override` ($0.01)
+- [x] `POST /api/projects/[id]/segments/[segIdx]/test-generate` — generate single segment video via Kling ($1.20), create asset record, poll for completion
+- [x] DirectorAgent: skip segments with existing completed video asset; use `video_prompt_override` when present
+- [x] Pipeline worker: check `project.fast_mode` at review gates, auto-advance if enabled (never skip `influencer_selection` or `asset_review`)
+- [x] Add `fast_mode` to `ALWAYS_ALLOWED` fields in PATCH `/api/projects/[id]`
 
 **Frontend:**
-- [ ] Per-segment "Preview Video Prompt" expandable panel on casting review asset cards
-- [ ] Preview shows: keyframe thumbnails, main prompt, shot timeline (3 shots with energy badges), negative prompt (collapsible), config bar (duration, cfg_scale, cost)
-- [ ] "Adjust Prompt" feedback textarea → calls `/refine` → updates preview (iterative loop)
-- [ ] "Test Generate ($1.20)" button → generates single segment → inline video player on completion
-- [ ] "Approve Test" / "Regenerate" buttons after test video completes
-- [ ] "Approve & Continue" button shows dynamic cost (subtracts pre-tested segments)
-- [ ] Fast Mode toggle in project settings panel + amber badge on project card/header
+- [x] Per-segment "Preview Video Prompt" expandable panel on casting review asset cards
+- [x] Preview shows: keyframe thumbnails, main prompt, shot timeline (3 shots with energy badges), negative prompt (collapsible), config bar (duration, cfg_scale, cost)
+- [x] "Adjust Prompt" feedback textarea → calls `/refine` → updates preview (iterative loop)
+- [x] "Test Generate ($1.20)" button → generates single segment → inline video player on completion
+- [x] "Approve Test" / "Regenerate" buttons after test video completes
+- [x] "Approve & Continue" button shows dynamic cost (subtracts pre-tested segments)
+- [x] Fast Mode toggle in project settings panel + amber badge on project card/header
 
 ---
 

@@ -17,7 +17,7 @@ import { ElevenLabsClient } from '../lib/api-clients/elevenlabs';
 import { FALLBACK_VOICES, API_COSTS, VideoModelConfig, getFallbackVideoModel, PRODUCT_PLACEMENT_ARC, VISIBILITY_ANGLE_MAP, RESOLUTION } from '../lib/constants';
 import { isStructuredPrompt, resolveNegativePrompt } from '../lib/prompt-schema';
 import { serializeForImage, serializeForVideo } from '../lib/prompt-serializer';
-import { getPipelineQueue } from '../lib/queue';
+import { getPipelineQueue, type PipelineJobData } from '../lib/queue';
 import { APP_VERSION, GIT_COMMIT } from '../lib/version';
 import { createLogger, logToGenerationLog } from '../lib/logger';
 import crypto from 'crypto';
@@ -62,6 +62,47 @@ async function getVideoModelForProject(projectId: string): Promise<VideoModelCon
   }
 
   return getFallbackVideoModel();
+}
+
+// ─── Fast Mode Auto-Advance ──────────────────────────────────────────────────
+// R1.5.29: When project.fast_mode is true, auto-advance through skippable review gates.
+// Never skips: broll_review (needs influencer selection), influencer_selection (needs user input), asset_review (final deliverable).
+
+const FAST_MODE_SKIPPABLE_GATES: Record<string, { step: string; jobName: string }> = {
+  analysis_review: { step: 'scripting', jobName: 'scripting' },
+  script_review: { step: 'broll_planning', jobName: 'broll_planning' },
+  casting_review: { step: 'directing', jobName: 'directing' },
+};
+
+async function maybeAutoAdvance(projectId: string, newStatus: string, correlationId: string): Promise<boolean> {
+  const gate = FAST_MODE_SKIPPABLE_GATES[newStatus];
+  if (!gate) return false;
+
+  const { data: project } = await supabase
+    .from('project')
+    .select('fast_mode')
+    .eq('id', projectId)
+    .single();
+
+  if (!project?.fast_mode) return false;
+
+  await logToGenerationLog(supabase, {
+    project_id: projectId,
+    correlation_id: correlationId,
+    event_type: 'fast_mode_skip',
+    agent_name: 'PipelineWorker',
+    stage: newStatus,
+    detail: { skippedGate: newStatus, autoAdvanceTo: gate.step },
+  });
+
+  // Enqueue next step immediately
+  await getPipelineQueue().add(gate.jobName, {
+    projectId,
+    step: gate.step as PipelineJobData['step'],
+  });
+
+  log.info({ projectId, skippedGate: newStatus, nextStep: gate.step }, 'Fast mode: auto-advanced past review gate');
+  return true;
 }
 
 log.info({ version: APP_VERSION, commit: GIT_COMMIT }, 'Pipeline worker starting');
@@ -260,6 +301,9 @@ async function handleProductAnalysis(projectId: string | undefined, correlationI
       detail: { durationMs },
     });
     jobLog.info({ durationMs }, 'Product analysis complete');
+
+    // R1.5.29: Fast mode auto-advance past analysis_review
+    await maybeAutoAdvance(projectId!, 'analysis_review', correlationId);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     const durationMs = Date.now() - stageStart;
@@ -404,6 +448,9 @@ async function handleScripting(projectId: string, correlationId: string, jobLog:
       detail: { durationMs },
     });
     jobLog.info({ durationMs }, 'Scripting complete');
+
+    // R1.5.29: Fast mode auto-advance past script_review
+    await maybeAutoAdvance(projectId, 'script_review', correlationId);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     const durationMs = Date.now() - stageStart;
@@ -460,6 +507,9 @@ async function handleCasting(projectId: string, correlationId: string, jobLog: R
       detail: { durationMs },
     });
     jobLog.info({ durationMs }, 'Casting complete');
+
+    // R1.5.29: Fast mode auto-advance past casting_review
+    await maybeAutoAdvance(projectId, 'casting_review', correlationId);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     const durationMs = Date.now() - stageStart;

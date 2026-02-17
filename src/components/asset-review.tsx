@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { AssetCard } from './asset-card';
 import { DownloadAllButton } from './download-button';
+import { VideoPreviewPanel } from './video-preview-panel';
 import { keyframeFilename, videoFilename, voiceFilename } from '@/lib/download-utils';
 
 interface Asset {
@@ -27,6 +28,8 @@ interface AssetReviewProps {
   confirmBeforeApprove?: { title: string; description: string; cost: string };
   onRegenerateAll?: () => Promise<void>;
   readOnly?: boolean;
+  stage?: string;
+  costPerSegment?: number;
 }
 
 const SECTION_LABELS: Record<string, string> = {
@@ -36,7 +39,7 @@ const SECTION_LABELS: Record<string, string> = {
   cta: 'CTA',
 };
 
-export function AssetReview({ projectId, projectNumber, onStatusChange, confirmBeforeApprove, onRegenerateAll, readOnly }: AssetReviewProps) {
+export function AssetReview({ projectId, projectNumber, onStatusChange, confirmBeforeApprove, onRegenerateAll, readOnly, stage, costPerSegment: costPerSegmentProp }: AssetReviewProps) {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [bySegment, setBySegment] = useState<Record<number, Asset[]>>({});
   const [loading, setLoading] = useState(true);
@@ -46,6 +49,7 @@ export function AssetReview({ projectId, projectNumber, onStatusChange, confirmB
   const [showRegenConfirm, setShowRegenConfirm] = useState(false);
   const [regeneratingAll, setRegeneratingAll] = useState(false);
   const [cascadeTarget, setCascadeTarget] = useState<{ assetId: string; cascadeCount: number } | null>(null);
+  const [preTestedSegments, setPreTestedSegments] = useState<Set<number>>(new Set());
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Keyframe editing state
@@ -95,6 +99,19 @@ export function AssetReview({ projectId, projectNumber, onStatusChange, confirmB
       }
     };
   }, [assets, fetchAssets]);
+
+  // Hydrate preTestedSegments from existing completed video assets on load
+  useEffect(() => {
+    if (stage !== 'casting_review' || Object.keys(bySegment).length === 0) return;
+    const testedSegs = new Set<number>();
+    for (const [idxStr, segAssets] of Object.entries(bySegment)) {
+      const idx = Number(idxStr);
+      if (segAssets.some((a) => a.type === 'video' && a.status === 'completed')) {
+        testedSegs.add(idx);
+      }
+    }
+    if (testedSegs.size > 0) setPreTestedSegments(testedSegs);
+  }, [bySegment, stage]);
 
   // Detect edit completion and offer propagation
   useEffect(() => {
@@ -433,6 +450,21 @@ export function AssetReview({ projectId, projectNumber, onStatusChange, confirmB
                       />
                     )}
                   </div>
+
+                  {/* Video Preview Panel — only shown at casting_review */}
+                  {stage === 'casting_review' && !readOnly && (
+                    <VideoPreviewPanel
+                      projectId={projectId}
+                      segmentIndex={idx}
+                      onTestApproved={() => {
+                        setPreTestedSegments((prev) => {
+                          const next = new Set(prev);
+                          next.add(idx);
+                          return next;
+                        });
+                      }}
+                    />
+                  )}
                 </div>
               )}
 
@@ -478,55 +510,70 @@ export function AssetReview({ projectId, projectNumber, onStatusChange, confirmB
       </div>
 
       {/* Action buttons */}
-      {!readOnly && (
-        <div className="flex items-center justify-between gap-4">
-          {hasIssues && (
-            <p className="text-xs text-amber-hot">
-              {failedAssets + rejectedAssets} asset{failedAssets + rejectedAssets > 1 ? 's' : ''} need attention. Regenerate or approve to continue.
-            </p>
-          )}
-          <div className="ml-auto flex items-center gap-3">
-            {onRegenerateAll && (
+      {!readOnly && (() => {
+        const totalSegments = segmentIndices.length;
+        const costPerSegment = costPerSegmentProp ?? 1.20;
+        const remainingSegments = totalSegments - preTestedSegments.size;
+        const remainingCost = remainingSegments * costPerSegment;
+        const hasPretested = preTestedSegments.size > 0 && stage === 'casting_review';
+
+        return (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-4">
+            {hasIssues && (
+              <p className="text-xs text-amber-hot">
+                {failedAssets + rejectedAssets} asset{failedAssets + rejectedAssets > 1 ? 's' : ''} need attention. Regenerate or approve to continue.
+              </p>
+            )}
+            <div className="ml-auto flex items-center gap-3">
+              {onRegenerateAll && (
+                <button
+                  type="button"
+                  onClick={() => setShowRegenConfirm(true)}
+                  disabled={regeneratingAll || generatingAssets > 0 || editingAssets > 0}
+                  className="inline-flex items-center gap-2 rounded-lg border border-phoenix/30 bg-phoenix/10 px-5 py-3 font-[family-name:var(--font-display)] text-sm font-semibold text-phoenix transition-all hover:bg-phoenix/20 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1.5 8a6.5 6.5 0 0111.48-4.16" />
+                    <path d="M14.5 8a6.5 6.5 0 01-11.48 4.16" />
+                    <polyline points="13 1.5 13 4.5 10 4.5" />
+                    <polyline points="3 14.5 3 11.5 6 11.5" />
+                  </svg>
+                  Regenerate All
+                </button>
+              )}
               <button
                 type="button"
-                onClick={() => setShowRegenConfirm(true)}
-                disabled={regeneratingAll || generatingAssets > 0 || editingAssets > 0}
-                className="inline-flex items-center gap-2 rounded-lg border border-phoenix/30 bg-phoenix/10 px-5 py-3 font-[family-name:var(--font-display)] text-sm font-semibold text-phoenix transition-all hover:bg-phoenix/20 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => confirmBeforeApprove ? setShowConfirm(true) : handleApprove()}
+                disabled={approving || generatingAssets > 0 || editingAssets > 0}
+                className="inline-flex items-center gap-2 rounded-lg bg-lime px-6 py-3 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:shadow-[0_0_32px_rgba(184,255,0,0.25)] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M1.5 8a6.5 6.5 0 0111.48-4.16" />
-                  <path d="M14.5 8a6.5 6.5 0 01-11.48 4.16" />
-                  <polyline points="13 1.5 13 4.5 10 4.5" />
-                  <polyline points="3 14.5 3 11.5 6 11.5" />
-                </svg>
-                Regenerate All
+                {approving ? (
+                  <>
+                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="60" strokeDashoffset="15" strokeLinecap="round" />
+                    </svg>
+                    Approving...
+                  </>
+                ) : (
+                  <>
+                    <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="3.5 8 6.5 11 12.5 5" />
+                    </svg>
+                    Approve &amp; Continue{hasPretested ? ` ($${remainingCost.toFixed(2)})` : ''}
+                  </>
+                )}
               </button>
-            )}
-            <button
-              type="button"
-              onClick={() => confirmBeforeApprove ? setShowConfirm(true) : handleApprove()}
-              disabled={approving || generatingAssets > 0 || editingAssets > 0}
-              className="inline-flex items-center gap-2 rounded-lg bg-lime px-6 py-3 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:shadow-[0_0_32px_rgba(184,255,0,0.25)] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {approving ? (
-                <>
-                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="60" strokeDashoffset="15" strokeLinecap="round" />
-                  </svg>
-                  Approving...
-                </>
-              ) : (
-                <>
-                  <svg viewBox="0 0 16 16" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="3.5 8 6.5 11 12.5 5" />
-                  </svg>
-                  Approve &amp; Continue
-                </>
-              )}
-            </button>
+            </div>
           </div>
+          {hasPretested && (
+            <p className="text-right font-[family-name:var(--font-mono)] text-[11px] text-text-muted">
+              {preTestedSegments.size} of {totalSegments} segments already tested
+            </p>
+          )}
         </div>
-      )}
+        );
+      })()}
 
       {/* Cost confirmation dialog */}
       {showConfirm && confirmBeforeApprove && (

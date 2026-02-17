@@ -18,6 +18,7 @@ interface ProjectCardProps {
     created_at: string | null;
     cost_usd: string | null;
     error_message: string | null;
+    fast_mode?: boolean | null;
   };
   onDelete?: (id: string) => void;
 }
@@ -88,9 +89,19 @@ export function ProjectCard({ project, onDelete }: ProjectCardProps) {
             )}
             <div className="min-w-0">
               {project.project_number != null && (
-                <p className="font-[family-name:var(--font-mono)] text-[10px] font-bold uppercase tracking-wider text-electric/70">
-                  PROJECT-{project.project_number}
-                </p>
+                <div className="flex items-center gap-1.5">
+                  <p className="font-[family-name:var(--font-mono)] text-[10px] font-bold uppercase tracking-wider text-electric/70">
+                    PROJECT-{project.project_number}
+                  </p>
+                  {project.fast_mode && (
+                    <span className="inline-flex items-center gap-0.5 rounded-sm border border-amber-hot/30 bg-amber-hot/10 px-1 py-px font-[family-name:var(--font-mono)] text-[8px] font-bold uppercase tracking-wider text-amber-hot">
+                      <svg viewBox="0 0 12 12" fill="none" className="h-2 w-2" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M6.5 1L3 7h3l-.5 4L9 5H6l.5-4z" />
+                      </svg>
+                      FAST
+                    </span>
+                  )}
+                </div>
               )}
               <h3 className="font-[family-name:var(--font-display)] text-sm font-semibold leading-tight text-text-primary line-clamp-2">
                 {displayName}

@@ -59,8 +59,9 @@ interface ProjectData {
   product_id: string | null;
   product: { id: string; name: string | null; image_url: string | null } | null;
   video_model_id: string | null;
-  video_model: { id: string; name: string; slug: string; resolution: string; total_duration: number; segment_count: number; provider: string } | null;
+  video_model: { id: string; name: string; slug: string; resolution: string; total_duration: number; segment_count: number; provider: string; cost_per_segment: number } | null;
   negative_prompt_override: unknown;
+  fast_mode: boolean | null;
 }
 
 // Client-side rollback map (mirrors backend cancel endpoint)
@@ -369,9 +370,19 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           {project.project_number != null && (
-            <p className="mb-1 font-[family-name:var(--font-mono)] text-xs font-bold uppercase tracking-wider text-electric/70">
-              PROJECT-{project.project_number}
-            </p>
+            <div className="mb-1 flex items-center gap-2">
+              <p className="font-[family-name:var(--font-mono)] text-xs font-bold uppercase tracking-wider text-electric/70">
+                PROJECT-{project.project_number}
+              </p>
+              {project.fast_mode && (
+                <span className="inline-flex items-center gap-1 rounded-md border border-amber-hot/30 bg-amber-hot/10 px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-[9px] font-bold uppercase tracking-wider text-amber-hot" title="Review gates auto-approved. Pipeline runs without pausing for review.">
+                  <svg viewBox="0 0 12 12" fill="none" className="h-2.5 w-2.5" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M6.5 1L3 7h3l-.5 4L9 5H6l.5-4z" />
+                  </svg>
+                  FAST
+                </span>
+              )}
+            </div>
           )}
           <h1 className="font-[family-name:var(--font-display)] text-2xl font-bold text-text-primary">
             {project.product_name || project.name || 'Untitled Project'}
@@ -673,6 +684,8 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
             }}
             onRegenerateAll={handleRegenerateAllKeyframes}
             readOnly={readOnlyMode}
+            stage="casting_review"
+            costPerSegment={project.video_model?.cost_per_segment}
           />
         </>
       )}
@@ -2337,6 +2350,28 @@ function ProjectSettings({ project, onUpdated }: { project: ProjectData; onUpdat
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [togglingFastMode, setTogglingFastMode] = useState(false);
+
+  async function handleToggleFastMode() {
+    setTogglingFastMode(true);
+    try {
+      const res = await fetch(`/api/projects/${project.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fast_mode: !project.fast_mode }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || 'Failed to toggle fast mode');
+        return;
+      }
+      onUpdated();
+    } catch {
+      setError('Failed to toggle fast mode');
+    } finally {
+      setTogglingFastMode(false);
+    }
+  }
 
   const isReviewGate = SETTINGS_REVIEW_GATES.includes(project.status);
 
@@ -2603,6 +2638,22 @@ function ProjectSettings({ project, onUpdated }: { project: ProjectData; onUpdat
             {project.video_model.name}
           </span>
         )}
+
+        {/* Fast Mode toggle */}
+        <button
+          type="button"
+          onClick={handleToggleFastMode}
+          disabled={togglingFastMode}
+          className="group inline-flex items-center gap-1.5"
+          title="Auto-approve review gates. Pipeline runs without pausing for review."
+        >
+          <div className={`relative h-4 w-7 rounded-full transition-colors duration-200 ${project.fast_mode ? 'bg-amber-hot' : 'bg-surface-overlay'}`}>
+            <div className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow-sm transition-all duration-200 ${project.fast_mode ? 'left-3.5' : 'left-0.5'}`} />
+          </div>
+          <span className={`font-[family-name:var(--font-display)] text-[11px] font-medium transition-colors ${project.fast_mode ? 'text-amber-hot' : 'text-text-muted group-hover:text-text-secondary'}`}>
+            Fast Mode
+          </span>
+        </button>
 
         {/* Success feedback */}
         {success && (
