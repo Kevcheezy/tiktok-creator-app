@@ -509,6 +509,7 @@ async function handleScripting(projectId: string, correlationId: string, jobLog:
     // R1.5.29: Fast mode auto-advance past script_review
     await maybeAutoAdvance(projectId, 'script_review', correlationId);
   } catch (error) {
+    if (error instanceof CancellationError) throw error;
     const errorMessage = error instanceof Error ? error.message : String(error);
     const durationMs = Date.now() - stageStart;
     jobLog.error({ err: error, durationMs }, 'Scripting failed');
@@ -573,6 +574,7 @@ async function handleCasting(projectId: string, correlationId: string, jobLog: R
     // R1.5.29: Fast mode auto-advance past casting_review
     await maybeAutoAdvance(projectId, 'casting_review', correlationId);
   } catch (error) {
+    if (error instanceof CancellationError) throw error;
     const errorMessage = error instanceof Error ? error.message : String(error);
     const durationMs = Date.now() - stageStart;
     jobLog.error({ err: error, durationMs }, 'Casting failed');
@@ -639,6 +641,7 @@ async function handleDirecting(projectId: string, correlationId: string, jobLog:
     });
     jobLog.info({ durationMs }, 'Directing complete, voiceover enqueued');
   } catch (error) {
+    if (error instanceof CancellationError) throw error;
     const errorMessage = error instanceof Error ? error.message : String(error);
     const durationMs = Date.now() - stageStart;
     jobLog.error({ err: error, durationMs }, 'Directing failed');
@@ -704,6 +707,7 @@ async function handleVoiceover(projectId: string, correlationId: string, jobLog:
     });
     jobLog.info({ durationMs }, 'Voiceover complete, B-roll generation enqueued');
   } catch (error) {
+    if (error instanceof CancellationError) throw error;
     const errorMessage = error instanceof Error ? error.message : String(error);
     const durationMs = Date.now() - stageStart;
     jobLog.error({ err: error, durationMs }, 'Voiceover failed');
@@ -764,6 +768,7 @@ async function handleEditing(projectId: string, correlationId: string, jobLog: R
     });
     jobLog.info({ durationMs }, 'Editing complete');
   } catch (error) {
+    if (error instanceof CancellationError) throw error;
     const errorMessage = error instanceof Error ? error.message : String(error);
     const durationMs = Date.now() - stageStart;
     jobLog.error({ err: error, durationMs }, 'Editing failed');
@@ -820,6 +825,7 @@ async function handleBrollPlanning(projectId: string, correlationId: string, job
     });
     jobLog.info({ durationMs }, 'B-roll planning complete');
   } catch (error) {
+    if (error instanceof CancellationError) throw error;
     const errorMessage = error instanceof Error ? error.message : String(error);
     const durationMs = Date.now() - stageStart;
     jobLog.error({ err: error, durationMs }, 'B-roll planning failed');
@@ -881,6 +887,7 @@ async function handleBrollGeneration(projectId: string, correlationId: string, j
     });
     jobLog.info({ durationMs }, 'B-roll generation complete');
   } catch (error) {
+    if (error instanceof CancellationError) throw error;
     const errorMessage = error instanceof Error ? error.message : String(error);
     const durationMs = Date.now() - stageStart;
     jobLog.error({ err: error, durationMs }, 'B-roll generation failed');

@@ -58,6 +58,7 @@ export async function POST(
           status: mapping.targetStatus,
           failed_at_status: null,
           error_message: null,
+          cancel_requested_at: null,
           updated_at: new Date().toISOString(),
         })
         .eq('id', id);
@@ -111,6 +112,7 @@ export async function POST(
         status: failedStep,
         failed_at_status: null,
         error_message: null,
+        cancel_requested_at: null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', id);

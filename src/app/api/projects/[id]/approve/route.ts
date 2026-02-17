@@ -42,7 +42,7 @@ export async function POST(
     if (proj.status === 'script_review') {
       await supabase
         .from('project')
-        .update({ status: 'broll_planning', updated_at: new Date().toISOString() })
+        .update({ status: 'broll_planning', cancel_requested_at: null, updated_at: new Date().toISOString() })
         .eq('id', id);
 
       await getPipelineQueue().add('broll_planning', {
@@ -62,7 +62,7 @@ export async function POST(
     if (proj.status === 'broll_review') {
       await supabase
         .from('project')
-        .update({ status: 'influencer_selection', updated_at: new Date().toISOString() })
+        .update({ status: 'influencer_selection', cancel_requested_at: null, updated_at: new Date().toISOString() })
         .eq('id', id);
 
       return NextResponse.json({
@@ -106,6 +106,12 @@ export async function POST(
     const next = nextStepMap[proj.status];
 
     if (proj.status === 'asset_review') {
+      // Clear any stale cancel flag before enqueuing new work
+      await supabase
+        .from('project')
+        .update({ cancel_requested_at: null, updated_at: new Date().toISOString() })
+        .eq('id', id);
+
       await getPipelineQueue().add('editing', {
         projectId: id,
         step: 'editing',
@@ -125,6 +131,12 @@ export async function POST(
         { status: 400 }
       );
     }
+
+    // Clear any stale cancel flag before enqueuing new work
+    await supabase
+      .from('project')
+      .update({ cancel_requested_at: null, updated_at: new Date().toISOString() })
+      .eq('id', id);
 
     // Enqueue next pipeline step
     await getPipelineQueue().add(next.jobName, {
