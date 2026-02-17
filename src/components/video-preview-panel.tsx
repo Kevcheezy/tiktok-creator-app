@@ -76,14 +76,22 @@ export function VideoPreviewPanel({ projectId, segmentIndex, onTestApproved }: V
   // Negative prompt collapsible
   const [showNegativePrompt, setShowNegativePrompt] = useState(false);
 
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Elapsed time tracking for generation
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
-  // Clean up polling on unmount
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Clean up polling + timer on unmount
   useEffect(() => {
     return () => {
       if (pollRef.current) {
         clearInterval(pollRef.current);
         pollRef.current = null;
+      }
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
       }
     };
   }, []);
@@ -145,11 +153,27 @@ export function VideoPreviewPanel({ projectId, segmentIndex, onTestApproved }: V
     }
   }
 
+  function stopTimer() {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  }
+
+  function startTimer() {
+    stopTimer();
+    setElapsedSeconds(0);
+    timerRef.current = setInterval(() => {
+      setElapsedSeconds((s) => s + 1);
+    }, 1000);
+  }
+
   async function handleTestGenerate() {
     setIsTestGenerating(true);
     setTestVideoAsset(null);
     setLoadError(null);
     setErrorSource(null);
+    startTimer();
     try {
       const res = await fetch(`/api/projects/${projectId}/segments/${segmentIndex}/test-generate`, {
         method: 'POST',
@@ -174,6 +198,7 @@ export function VideoPreviewPanel({ projectId, segmentIndex, onTestApproved }: V
             if (videoAsset.status === 'completed' && videoAsset.url) {
               setTestVideoAsset({ id: videoAsset.id, url: videoAsset.url, status: 'completed' });
               setIsTestGenerating(false);
+              stopTimer();
               if (pollRef.current) {
                 clearInterval(pollRef.current);
                 pollRef.current = null;
@@ -181,6 +206,7 @@ export function VideoPreviewPanel({ projectId, segmentIndex, onTestApproved }: V
             } else if (videoAsset.status === 'failed') {
               setTestVideoAsset({ id: videoAsset.id, url: null, status: 'failed' });
               setIsTestGenerating(false);
+              stopTimer();
               if (pollRef.current) {
                 clearInterval(pollRef.current);
                 pollRef.current = null;
@@ -195,6 +221,7 @@ export function VideoPreviewPanel({ projectId, segmentIndex, onTestApproved }: V
       setLoadError(err instanceof Error ? err.message : 'Failed to start test generation');
       setErrorSource('test-generate');
       setIsTestGenerating(false);
+      stopTimer();
     }
   }
 
@@ -457,22 +484,9 @@ export function VideoPreviewPanel({ projectId, segmentIndex, onTestApproved }: V
                     Test Video
                   </h4>
 
-                  {/* Generating spinner */}
+                  {/* Generating progress */}
                   {testVideoAsset.status === 'generating' && (
-                    <div className="flex items-center gap-3 py-4">
-                      <div className="relative h-6 w-6 flex-shrink-0">
-                        <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-electric" />
-                        <div className="absolute inset-1 animate-spin rounded-full border-2 border-transparent border-b-electric-dim" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }} />
-                      </div>
-                      <div>
-                        <span className="font-[family-name:var(--font-display)] text-sm font-medium text-electric">
-                          Generating test video...
-                        </span>
-                        <p className="text-xs text-text-muted">
-                          This typically takes 2-5 minutes.
-                        </p>
-                      </div>
-                    </div>
+                    <GeneratingProgress elapsedSeconds={elapsedSeconds} />
                   )}
 
                   {/* Failed */}
@@ -587,6 +601,63 @@ function ConfigValue({ label, value, valueClass }: { label: string; value: strin
       <span className={`font-[family-name:var(--font-mono)] text-xs font-bold ${valueClass || 'text-text-primary'}`}>
         {value}
       </span>
+    </div>
+  );
+}
+
+// Typical Kling 3.0 Pro generation: 2-5 minutes. Use 180s as the "expected" midpoint.
+const EXPECTED_DURATION_S = 180;
+
+function GeneratingProgress({ elapsedSeconds }: { elapsedSeconds: number }) {
+  const mins = Math.floor(elapsedSeconds / 60);
+  const secs = elapsedSeconds % 60;
+  const elapsed = `${mins}:${secs.toString().padStart(2, '0')}`;
+
+  // Asymptotic progress: approaches 95% around EXPECTED_DURATION_S, never reaches 100%
+  const progress = Math.min(95, (elapsedSeconds / (elapsedSeconds + EXPECTED_DURATION_S / 2)) * 100);
+
+  // Phase labels based on elapsed time
+  let phase = 'Submitting to Kling 3.0 Pro...';
+  if (elapsedSeconds > 10) phase = 'Rendering video frames...';
+  if (elapsedSeconds > 90) phase = 'Finalizing video...';
+  if (elapsedSeconds > 180) phase = 'Still processing — almost there...';
+  if (elapsedSeconds > 300) phase = 'Taking longer than usual...';
+
+  return (
+    <div className="space-y-3 py-3">
+      {/* Header row: spinner + elapsed */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <div className="relative h-5 w-5 flex-shrink-0">
+            <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-electric" />
+            <div className="absolute inset-0.5 animate-spin rounded-full border-2 border-transparent border-b-electric-dim" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }} />
+          </div>
+          <span className="font-[family-name:var(--font-display)] text-sm font-medium text-electric">
+            Generating test video
+          </span>
+        </div>
+        <span className="font-[family-name:var(--font-mono)] text-sm font-bold tabular-nums text-text-primary">
+          {elapsed}
+        </span>
+      </div>
+
+      {/* Progress bar */}
+      <div className="relative h-1.5 overflow-hidden rounded-full bg-surface-overlay">
+        <div
+          className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-electric/80 to-electric transition-all duration-1000 ease-out"
+          style={{ width: `${progress}%` }}
+        />
+        {/* Shimmer effect */}
+        <div
+          className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-transparent via-white/10 to-transparent animate-pulse"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+
+      {/* Phase label */}
+      <p className="text-xs text-text-muted">
+        {phase}
+      </p>
     </div>
   );
 }
