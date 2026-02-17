@@ -215,7 +215,10 @@ export class WaveSpeedClient {
       image,
       prompt,
       negative_prompt: negativePrompt || '',
-      multi_prompt: multiPrompt || [],
+      multi_prompt: (multiPrompt || []).map(mp => ({
+        prompt: mp.prompt,
+        duration: typeof mp.duration === 'number' ? mp.duration : parseInt(mp.duration, 10),
+      })),
       duration,
       cfg_scale: cfgScale,
       sound: false,
