@@ -1035,6 +1035,34 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [ ] Log rate limit events to `generation_log` (event_type: `rate_limited`, detail: `{ provider: 'elevenlabs', retryAfterMs }`)
 - [ ] Add retry on Supabase Storage upload failure (1 retry with 2s delay — currently no retry on upload)
 
+#### R1.5.29 - Video Generation Preview & Test Mode
+**Priority:** P0 - Critical
+**Effort:** Medium
+**Spec:** `docs/plans/2026-02-16-video-generation-preview-design.md`
+**Depends on:** None (works with existing casting_review flow)
+**Why:** Video generation is the most expensive pipeline stage ($4.80 for 4 segments). Currently the user approves blind at casting_review with no visibility into what prompts will be sent to Kling 3.0. Bad prompts waste $4.80 + require a full retry ($9.60 total). A per-segment preview panel shows the exact Kling payload before committing, lets users iteratively refine prompts via LLM feedback, and test-generate a single segment ($1.20) before approving the rest. Pre-tested segments are skipped by DirectorAgent, saving cost. A per-project Fast Mode toggle auto-advances through review gates for trusted/repeat products.
+
+**Schema:**
+- [ ] Add `video_prompt_override` JSONB column to `scene` table
+- [ ] Add `fast_mode` boolean column to `project` table (default false)
+
+**Backend:**
+- [ ] `POST /api/projects/[id]/segments/[segIdx]/preview` — build StructuredPrompt + serialize, return full payload preview (no Kling call, $0)
+- [ ] `POST /api/projects/[id]/segments/[segIdx]/refine` — re-run LLM with user feedback, save to `scene.video_prompt_override` ($0.01)
+- [ ] `POST /api/projects/[id]/segments/[segIdx]/test-generate` — generate single segment video via Kling ($1.20), create asset record, poll for completion
+- [ ] DirectorAgent: skip segments with existing completed video asset; use `video_prompt_override` when present
+- [ ] Pipeline worker: check `project.fast_mode` at review gates, auto-advance if enabled (never skip `influencer_selection` or `asset_review`)
+- [ ] Add `fast_mode` to `ALWAYS_ALLOWED` fields in PATCH `/api/projects/[id]`
+
+**Frontend:**
+- [ ] Per-segment "Preview Video Prompt" expandable panel on casting review asset cards
+- [ ] Preview shows: keyframe thumbnails, main prompt, shot timeline (3 shots with energy badges), negative prompt (collapsible), config bar (duration, cfg_scale, cost)
+- [ ] "Adjust Prompt" feedback textarea → calls `/refine` → updates preview (iterative loop)
+- [ ] "Test Generate ($1.20)" button → generates single segment → inline video player on completion
+- [ ] "Approve Test" / "Regenerate" buttons after test video completes
+- [ ] "Approve & Continue" button shows dynamic cost (subtracts pre-tested segments)
+- [ ] Fast Mode toggle in project settings panel + amber badge on project card/header
+
 ---
 
 ### Tier 2: Make It Actually Convert (Quality & conversion optimization)
@@ -1281,6 +1309,7 @@ POLISH     Tier 1.5: UX Hardening
            R1.5.26 Scripting validation enforcement ──→ R1.5.27 LLM retry in BaseAgent (standardize retry across all agents)
            (reject bad scripts, auto-regen)           (protect ProductAnalyzer + ScriptingAgent from single-failure KO)
            R1.5.28 ElevenLabs rate limit protection (500ms delay + 429 retry in VoiceoverAgent)
+           R1.5.29 Video Generation Preview & Test Mode (preview Kling payload, test 1 segment, Fast Mode toggle)
            R1.5.21 Parallel Directing + Voiceover (~5 min savings per run, no deps)
            R1.5.22 B-Roll Timing in EditorAgent (depends on Creatomate template work)
            R1.5.23 Smart Cascade Editing — per-segment regeneration after script edits (depends on R1.5.8 ✅)
