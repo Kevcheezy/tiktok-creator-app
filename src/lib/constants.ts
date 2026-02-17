@@ -490,12 +490,15 @@ export const TONE_IDS = Object.keys(SCRIPT_TONES) as ScriptTone[];
 // Creatomate template ID for final video rendering
 export const CREATOMATE_TEMPLATE_ID = '85021700-850c-49cf-a65f-06aa50e720e6';
 
+/** Maximum poll time for video generation (Kling 3.0 Pro takes 8-13 min) */
+export const VIDEO_POLL_MAX_WAIT = 900000; // 15 minutes
+
 // Cost per API call (from cost_config.json)
 export const API_COSTS = {
   wavespeedChat: 0.01,
   nanoBananaPro: 0.07,
   nanoBananaProEdit: 0.07,
-  klingVideo: 1.20,
+  klingVideo: 1.80,  // 1.5x multiplier with sound enabled
   elevenLabsTts: 0.05,
   creatomateRender: 0.50,
   geminiVideoAnalysis: 0.02,

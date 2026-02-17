@@ -1,7 +1,7 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { BaseAgent } from './base-agent';
 import { CancellationError } from '@/lib/errors';
-import { API_COSTS } from '@/lib/constants';
+import { API_COSTS, VIDEO_POLL_MAX_WAIT } from '@/lib/constants';
 import { StructuredPrompt, STRUCTURED_PROMPT_SCHEMA_DESCRIPTION, isStructuredPrompt, resolveNegativePrompt } from '@/lib/prompt-schema';
 import { serializeForVideo } from '@/lib/prompt-serializer';
 
@@ -203,8 +203,8 @@ export class DirectorAgent extends BaseAgent {
             cost_usd: vm.cost_per_segment,
           });
 
-          this.log(`Polling video task ${result.taskId} (up to 5 min)...`);
-          const pollResult = await this.wavespeed.pollResult(result.taskId, { shouldCancel: this.shouldCancel });
+          this.log(`Polling video task ${result.taskId} (up to 15 min)...`);
+          const pollResult = await this.wavespeed.pollResult(result.taskId, { maxWait: VIDEO_POLL_MAX_WAIT, shouldCancel: this.shouldCancel });
 
           await this.supabase
             .from('asset')

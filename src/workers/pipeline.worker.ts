@@ -14,7 +14,7 @@ import { BRollAgent } from '../agents/broll-agent';
 import { VideoAnalysisAgent } from '../agents/video-analysis-agent';
 import { WaveSpeedClient } from '../lib/api-clients/wavespeed';
 import { ElevenLabsClient } from '../lib/api-clients/elevenlabs';
-import { FALLBACK_VOICES, API_COSTS, VideoModelConfig, getFallbackVideoModel, PRODUCT_PLACEMENT_ARC, VISIBILITY_ANGLE_MAP, RESOLUTION } from '../lib/constants';
+import { FALLBACK_VOICES, API_COSTS, VIDEO_POLL_MAX_WAIT, VideoModelConfig, getFallbackVideoModel, PRODUCT_PLACEMENT_ARC, VISIBILITY_ANGLE_MAP, RESOLUTION } from '../lib/constants';
 import { isStructuredPrompt, resolveNegativePrompt } from '../lib/prompt-schema';
 import { serializeForImage, serializeForVideo } from '../lib/prompt-serializer';
 import { getPipelineQueue, type PipelineJobData } from '../lib/queue';
@@ -1351,7 +1351,7 @@ async function regenerateVideo(
   });
 
   jobLog.info({ taskId: result.taskId }, 'Polling video result');
-  const pollResult = await wavespeed.pollResult(result.taskId, { shouldCancel: buildShouldCancel(projectId, assetId) });
+  const pollResult = await wavespeed.pollResult(result.taskId, { maxWait: VIDEO_POLL_MAX_WAIT, shouldCancel: buildShouldCancel(projectId, assetId) });
 
   await supabase
     .from('asset')
