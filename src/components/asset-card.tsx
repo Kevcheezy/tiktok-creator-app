@@ -290,7 +290,7 @@ export function AssetCard({ asset, showGrade, compact, onGrade, onReject, onRege
         </div>
       )}
 
-      {asset.cost_usd && parseFloat(asset.cost_usd) > 0 && (
+      {Number(asset.cost_usd) > 0 && (
         <div className="absolute right-2 top-2 rounded-md bg-void/70 px-1.5 py-0.5 backdrop-blur-sm">
           <GilDisplay amount={asset.cost_usd} />
         </div>
