@@ -62,6 +62,7 @@ interface ProjectData {
   video_model: { id: string; name: string; slug: string; resolution: string; total_duration: number; segment_count: number; provider: string; cost_per_segment: number } | null;
   negative_prompt_override: unknown;
   fast_mode: boolean | null;
+  video_retries: number;
 }
 
 // Client-side rollback map (mirrors backend cancel endpoint)
@@ -2352,6 +2353,7 @@ function ProjectSettings({ project, onUpdated }: { project: ProjectData; onUpdat
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [togglingFastMode, setTogglingFastMode] = useState(false);
+  const [updatingRetries, setUpdatingRetries] = useState(false);
 
   async function handleToggleFastMode() {
     setTogglingFastMode(true);
@@ -2371,6 +2373,30 @@ function ProjectSettings({ project, onUpdated }: { project: ProjectData; onUpdat
       setError('Failed to toggle fast mode');
     } finally {
       setTogglingFastMode(false);
+    }
+  }
+
+  async function handleChangeRetries(delta: number) {
+    const current = project.video_retries ?? 0;
+    const next = Math.max(0, Math.min(3, current + delta));
+    if (next === current) return;
+    setUpdatingRetries(true);
+    try {
+      const res = await fetch(`/api/projects/${project.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ video_retries: next }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || 'Failed to update retries');
+        return;
+      }
+      onUpdated();
+    } catch {
+      setError('Failed to update retries');
+    } finally {
+      setUpdatingRetries(false);
     }
   }
 
@@ -2655,6 +2681,38 @@ function ProjectSettings({ project, onUpdated }: { project: ProjectData; onUpdat
             Fast Mode
           </span>
         </button>
+
+        {/* Video Retries stepper */}
+        <div className="inline-flex items-center gap-1.5" title="Number of automatic retries on video generation failure (0 = no retries)">
+          <div className="inline-flex items-center rounded-full border border-border/60 bg-surface-overlay/40">
+            <button
+              type="button"
+              onClick={() => handleChangeRetries(-1)}
+              disabled={updatingRetries || (project.video_retries ?? 0) <= 0}
+              className="flex h-5 w-5 items-center justify-center rounded-full text-[11px] text-text-muted transition-colors hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <svg viewBox="0 0 12 12" fill="none" className="h-2.5 w-2.5" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+                <path d="M2.5 6h7" />
+              </svg>
+            </button>
+            <span className={`min-w-[14px] text-center font-[family-name:var(--font-display)] text-[11px] font-semibold tabular-nums transition-colors ${(project.video_retries ?? 0) > 0 ? 'text-amber-hot' : 'text-text-muted'}`}>
+              {project.video_retries ?? 0}
+            </span>
+            <button
+              type="button"
+              onClick={() => handleChangeRetries(1)}
+              disabled={updatingRetries || (project.video_retries ?? 0) >= 3}
+              className="flex h-5 w-5 items-center justify-center rounded-full text-[11px] text-text-muted transition-colors hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <svg viewBox="0 0 12 12" fill="none" className="h-2.5 w-2.5" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+                <path d="M6 2.5v7M2.5 6h7" />
+              </svg>
+            </button>
+          </div>
+          <span className={`font-[family-name:var(--font-display)] text-[11px] font-medium transition-colors ${(project.video_retries ?? 0) > 0 ? 'text-amber-hot' : 'text-text-muted'}`}>
+            Retries
+          </span>
+        </div>
 
         {/* Success feedback */}
         {success && (

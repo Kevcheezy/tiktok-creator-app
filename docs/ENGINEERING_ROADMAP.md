@@ -1061,7 +1061,7 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [ ] Log rate limit events to `generation_log` (event_type: `rate_limited`, detail: `{ provider: 'elevenlabs', retryAfterMs }`)
 - [ ] Add retry on Supabase Storage upload failure (1 retry with 2s delay — currently no retry on upload)
 
-#### R1.5.29 - Video Generation Preview & Test Mode 🔧 IN PROGRESS
+#### R1.5.29 - Video Generation Preview & Test Mode ~~DONE~~
 **Priority:** P0 - Critical
 **Effort:** Medium
 **Spec:** `docs/plans/2026-02-16-video-generation-preview-design.md`
@@ -1088,6 +1088,49 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] "Approve Test" / "Regenerate" buttons after test video completes
 - [x] "Approve & Continue" button shows dynamic cost (subtracts pre-tested segments)
 - [x] Fast Mode toggle in project settings panel + amber badge on project card/header
+
+#### R1.5.30 - Cancel In-Progress Generations ~~DONE~~
+**Priority:** P0 - Critical
+**Effort:** Medium
+**Spec:** `docs/plans/2026-02-16-cancel-generations-design.md`
+**Depends on:** R1.5.29
+**Why:** Users had no way to stop a pipeline once started. Stuck or unwanted generations waste API credits ($4-7 per run) and block the UI. Cooperative cancellation via database flag lets users hard-cancel at any stage while preserving completed work.
+
+**Schema:**
+- [x] Add `cancel_requested_at` timestamp column to `project` table
+
+**Backend:**
+- [x] Enhanced `POST /api/projects/[id]/cancel` — sets cancel flag, flips in-flight/pending assets to cancelled, rolls back project status
+- [x] `POST /api/projects/[id]/assets/[assetId]/cancel` — cancel individual asset generation
+- [x] `CancellationError` custom error class (prevents BullMQ retries)
+- [x] `shouldCancel` callback in `pollResult()` — checked each poll iteration
+- [x] `BaseAgent.setCancelCheck()` — cooperative cancellation for CastingAgent, DirectorAgent, BRollAgent
+- [x] Worker: CancellationError catch → clean exit, mark generating assets cancelled, clear flag
+- [x] Worker: `isProjectCancelled()` checks before/after each stage handler
+
+**Frontend:**
+- [x] Cancel button on PipelineProgress during processing stages
+- [x] Cancel confirmation dialog in ProjectDetail
+- [x] Cancel button on individual generating assets (AssetCard)
+- [x] Cancel test video generation (VideoPreviewPanel)
+- [x] Cancelled status display on assets with regenerate option
+
+#### R1.5.31 - Configurable Video Retries ~~DONE~~
+**Priority:** P1 - High
+**Effort:** Small
+**Depends on:** R1.5.30
+**Why:** DirectorAgent retried video generation 2x by default ($0.20/retry × 4 segments = $1.60 wasted on persistent failures). During initial testing, users want 0 retries to control costs. A per-project `video_retries` setting lets users dial in their risk tolerance.
+
+**Schema:**
+- [x] Add `video_retries` integer column to `project` table (default 0)
+
+**Backend:**
+- [x] DirectorAgent reads `video_retries` from project record, uses as `maxRetries` (replaces hardcoded `2`)
+- [x] `video_retries` added to `ALWAYS_ALLOWED` fields in PATCH endpoint
+
+**Frontend:**
+- [x] Stepper control in project settings bar (0-3 range, +/- buttons)
+- [x] Muted when 0, amber accent when > 0 (matches Fast Mode toggle style)
 
 ---
 

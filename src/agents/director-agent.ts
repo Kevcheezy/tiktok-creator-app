@@ -43,10 +43,10 @@ export class DirectorAgent extends BaseAgent {
       }
     }
 
-    // 2b. Fetch project for negative prompt override
+    // 2b. Fetch project for negative prompt override and video retries config
     const { data: project } = await this.supabase
       .from('project')
-      .select('negative_prompt_override')
+      .select('negative_prompt_override, video_retries')
       .eq('id', projectId)
       .single();
 
@@ -165,8 +165,8 @@ export class DirectorAgent extends BaseAgent {
         }
       }
 
-      // Generate video with retry logic
-      const maxRetries = 2;
+      // Generate video with retry logic (configurable per project, default 0 = no retries)
+      const maxRetries = project?.video_retries ?? 0;
       let lastError: Error | null = null;
       let apiCallsMade = 0;
       let segmentSuccess = false;
