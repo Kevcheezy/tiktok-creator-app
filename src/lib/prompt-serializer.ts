@@ -93,6 +93,9 @@ export function serializeForVideo(
     mainParts.push(`${prompt.camera_specs.shot}, ${prompt.camera_specs.movement}`);
   }
 
+  if (prompt.dialogue?.text) {
+    mainParts.push(`Speaking: "${prompt.dialogue.text}"`);
+  }
   if (prompt.dialogue?.delivery) {
     mainParts.push(prompt.dialogue.delivery);
   }

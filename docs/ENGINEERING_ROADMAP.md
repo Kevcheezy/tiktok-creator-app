@@ -365,6 +365,18 @@ Influencer `<select>` options displayed the entire `persona` field (full appeara
 - [x] Retry button dispatches to correct handler based on `errorSource`
 - [x] Retry button label reflects which operation will be retried
 
+#### ~~B0.32 - Video Prompt Missing Dialogue Text (Kling Has No Script Context)~~ FIXED
+**Severity:** Medium (video generation has no awareness of spoken dialogue — gestures and lip sync can't match script)
+**Scope:** Backend
+**Discovered:** 2026-02-16
+
+**Why:** `serializeForVideo()` in `src/lib/prompt-serializer.ts` reads `dialogue.delivery` (the delivery style) but completely ignores `dialogue.text` (the actual spoken script). Kling 3.0 Pro generates video without knowing what words the character is saying, so gestures, lip movements, and energy can't properly match the dialogue.
+
+**Fix checklist:**
+- [x] Add `dialogue.text` to main prompt with `Speaking: "..."` label so Kling understands it's spoken dialogue
+- [x] Keep `dialogue.delivery` as-is (describes HOW the line is delivered)
+- [x] Null-check `dialogue.text` since field is optional
+
 ---
 
 ### Tier 1: Complete the Core Pipeline (Ship a working end-to-end product)
@@ -1303,6 +1315,7 @@ BUGS ──→   Tier 0 Bug Bash Findings (fix BEFORE any new Tier 1.5 work)
            ~~B0.26 EditorAgent retry logic (elevated to High — $5-7 at stake)~~ ✅ FIXED
            ~~B0.29 Select-influencer race condition (duplicate casting jobs)~~ ✅ FIXED
            ~~B0.30 Keyframe ref image ordering broken (influencer drift + product overrides ignored)~~ ✅ FIXED
+           ~~B0.32 Video prompt missing dialogue text (Kling has no script context)~~ ✅ FIXED
 
 POLISH     Tier 1.5: UX Hardening
            R1.5.1 Influencer edit ──→ R1.5.2 Project settings ──→ R1.5.3 Navigation ──→ R1.5.4 Error handling (ALL DONE)
