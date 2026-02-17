@@ -1132,6 +1132,27 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] Stepper control in project settings bar (0-3 range, +/- buttons)
 - [x] Muted when 0, amber accent when > 0 (matches Fast Mode toggle style)
 
+#### R1.5.32 - Asset Upload Replacement ~~DONE~~
+**Priority:** P1 - High
+**Effort:** Medium
+**Spec:** `docs/plans/2026-02-17-asset-upload-replacement-design.md`
+**Depends on:** None
+**Why:** Users need to substitute their own images/videos for AI-generated assets. A keyframe that doesn't match the product, a video with wrong motion — instead of endless regeneration cycles, users upload their own file. Images auto-upscale to 4K for consistency with AI-generated keyframes.
+
+**Backend:**
+- [x] `POST /api/projects/[id]/assets/[assetId]/upload` — replaces asset with uploaded file
+- [x] `POST /api/storage/asset-upload-url` — signed URL endpoint supporting image + video content types
+- [x] Auto-upscale images to 4K via WaveSpeed ($0.01), skip for videos
+- [x] Old storage file cleanup on replacement
+- [x] Cost tracking for upscale operations
+
+**Frontend:**
+- [x] Upload button on AssetCard hover overlay for all visual asset types
+- [x] Uploading spinner state on card during upload
+- [x] Cascade propagation dialog after keyframe upload (same as edit flow)
+- [x] "Upload Video" button on VideoPreviewPanel next to Test Generate
+- [x] `uploadAssetToStorage()` utility in direct-upload.ts
+
 ---
 
 ### Tier 2: Make It Actually Convert (Quality & conversion optimization)
