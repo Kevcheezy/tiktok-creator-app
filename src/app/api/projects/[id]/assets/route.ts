@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/db';
 import { logger } from '@/lib/logger';
+import { WaveSpeedClient } from '@/lib/api-clients/wavespeed';
 
 interface AssetWithScene {
   id: string;
@@ -10,6 +11,7 @@ interface AssetWithScene {
   url: string | null;
   status: string;
   provider: string | null;
+  provider_task_id: string | null;
   cost_usd: string | null;
   grade: string | null;
   metadata: Record<string, unknown> | null;
@@ -46,6 +48,46 @@ export async function GET(
     }
 
     const typedAssets = (assets || []) as AssetWithScene[];
+
+    // Lazy poll: check WaveSpeed for any 'generating' assets with a provider_task_id
+    const generating = typedAssets.filter(
+      (a) => a.status === 'generating' && a.provider_task_id
+    );
+    if (generating.length > 0) {
+      const wavespeed = new WaveSpeedClient();
+      await Promise.all(
+        generating.map(async (asset) => {
+          try {
+            const url = `https://api.wavespeed.ai/api/v3/predictions/${asset.provider_task_id}/result`;
+            const res = await fetch(url, {
+              headers: { Authorization: `Bearer ${process.env.WAVESPEED_API_KEY || ''}` },
+              signal: AbortSignal.timeout(5000),
+            });
+            if (!res.ok) return;
+            const data = await res.json();
+            const status = data.data?.status;
+            const outputUrl = data.data?.outputs?.[0];
+
+            if (status === 'completed' && outputUrl) {
+              await supabase
+                .from('asset')
+                .update({ url: outputUrl, status: 'completed', updated_at: new Date().toISOString() })
+                .eq('id', asset.id);
+              asset.status = 'completed';
+              asset.url = outputUrl;
+            } else if (status === 'failed') {
+              await supabase
+                .from('asset')
+                .update({ status: 'failed', updated_at: new Date().toISOString() })
+                .eq('id', asset.id);
+              asset.status = 'failed';
+            }
+          } catch {
+            // Ignore poll errors — will be checked again on next request
+          }
+        })
+      );
+    }
 
     const bySegment: Record<number, AssetWithScene[]> = {};
     for (const asset of typedAssets) {
