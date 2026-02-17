@@ -261,7 +261,52 @@ export class BRollAgent extends BaseAgent {
       return;
     }
 
-    this.log(`Generating ${shots.length} B-roll images...`);
+    // 1b. Fetch product name + best product image for reference matching
+    const { data: project } = await this.supabase
+      .from('project')
+      .select('product_name, product_id, product:product(id, image_url)')
+      .eq('id', projectId)
+      .single();
+
+    const productName = (project?.product_name || '') as string;
+    const productId = project?.product_id || (project?.product as any)?.id;
+    let productImageUrl: string | null = null;
+
+    if (productId) {
+      const { data: productImages } = await this.supabase
+        .from('product_image')
+        .select('url, url_clean, is_primary')
+        .eq('product_id', productId)
+        .order('sort_order');
+      const imgs = productImages || [];
+      if (imgs.length > 0) {
+        // Prefer primary image, then first; prefer background-removed (url_clean)
+        const primary = imgs.find((i: any) => i.is_primary) || imgs[0];
+        productImageUrl = primary.url_clean || primary.url;
+      } else if ((project?.product as any)?.image_url) {
+        productImageUrl = (project!.product as any).image_url;
+      }
+    }
+
+    // Helper: check if prompt mentions the product name (case-insensitive)
+    const promptMentionsProduct = (prompt: string): boolean => {
+      if (!productName || productName.length < 3) return false;
+      const lower = prompt.toLowerCase();
+      const nameLower = productName.toLowerCase();
+      // Full name match
+      if (lower.includes(nameLower)) return true;
+      // Partial match: check 2+ word substrings of the product name
+      const words = nameLower.split(/\s+/).filter(w => w.length > 2);
+      if (words.length >= 2) {
+        for (let i = 0; i <= words.length - 2; i++) {
+          const twoWordPhrase = words.slice(i, i + 2).join(' ');
+          if (lower.includes(twoWordPhrase)) return true;
+        }
+      }
+      return false;
+    };
+
+    this.log(`Generating ${shots.length} B-roll images...${productImageUrl ? ` (product ref available for "${productName}")` : ''}`);
 
     let completedCount = 0;
     let failedCount = 0;
@@ -283,12 +328,32 @@ export class BRollAgent extends BaseAgent {
           ? serializeForBroll(structuredPromptData)
           : shot.prompt;
 
-        const imgOpts = {
-          aspectRatio: RESOLUTION.aspectRatio,
-          width: RESOLUTION.width,
-          height: RESOLUTION.height,
-        };
-        const { taskId } = await this.wavespeed.generateImage(effectivePrompt, imgOpts);
+        // If prompt mentions product and we have a product image, use edit mode
+        // so the generated b-roll shows the actual product appearance
+        const useProductRef = productImageUrl && promptMentionsProduct(effectivePrompt);
+
+        let taskId: string;
+        let provider: string;
+        let cost: number;
+
+        if (useProductRef && productImageUrl) {
+          const editOpts = { aspectRatio: RESOLUTION.aspectRatio, resolution: '1k' as const };
+          this.log(`Shot ${shot.segment_index}:${shot.shot_index} — using product image ref (prompt mentions "${productName}")`);
+          const result = await this.wavespeed.editImage([productImageUrl], effectivePrompt, editOpts);
+          taskId = result.taskId;
+          provider = 'nano-banana-pro-edit';
+          cost = API_COSTS.nanoBananaProEdit;
+        } else {
+          const imgOpts = {
+            aspectRatio: RESOLUTION.aspectRatio,
+            width: RESOLUTION.width,
+            height: RESOLUTION.height,
+          };
+          const result = await this.wavespeed.generateImage(effectivePrompt, imgOpts);
+          taskId = result.taskId;
+          provider = 'nano-banana-pro';
+          cost = API_COSTS.nanoBananaPro;
+        }
 
         this.log(`Shot ${shot.segment_index}:${shot.shot_index} — polling task ${taskId}`);
         const result = await this.wavespeed.pollResult(taskId, {
@@ -303,10 +368,10 @@ export class BRollAgent extends BaseAgent {
             project_id: projectId,
             type: 'broll',
             url: result.url || '',
-            provider: 'wavespeed',
+            provider,
             provider_task_id: taskId,
             status: 'completed',
-            cost_usd: API_COSTS.nanoBananaPro,
+            cost_usd: cost,
             metadata: {
               segment_index: shot.segment_index,
               shot_index: shot.shot_index,
@@ -314,6 +379,7 @@ export class BRollAgent extends BaseAgent {
               timing_seconds: shot.timing_seconds,
               duration_seconds: shot.duration_seconds,
               ken_burns_direction: pickKenBurnsDirection(shot.shot_index),
+              ...(useProductRef ? { product_ref: true } : {}),
             },
           })
           .select()
@@ -330,9 +396,9 @@ export class BRollAgent extends BaseAgent {
           })
           .eq('id', shot.id);
 
-        await this.trackCost(projectId, API_COSTS.nanoBananaPro);
+        await this.trackCost(projectId, cost);
         completedCount++;
-        this.log(`Shot ${shot.segment_index}:${shot.shot_index} completed: ${result.url}`);
+        this.log(`Shot ${shot.segment_index}:${shot.shot_index} completed: ${result.url}${useProductRef ? ' (product ref)' : ''}`);
       } catch (err) {
         failedCount++;
         this.log(`Shot ${shot.segment_index}:${shot.shot_index} failed: ${err instanceof Error ? err.message : String(err)}`);

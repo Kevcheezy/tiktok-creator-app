@@ -2,6 +2,9 @@
 
 Full-stack app for producing 60-second TikTok Shop UGC videos using AI agents.
 
+## Build & Verify
+Always run the build command (`npm run build`) after making code changes and before committing. Never commit code that doesn't pass the build step. If a type error or build failure occurs, fix it before proceeding.
+
 ## Agent Role Requirement
 
 **Every Claude Code instance MUST operate under a declared role.** The user's first message must specify which role this agent is. If no role is stated, **ASK before doing anything else.**
@@ -107,6 +110,18 @@ Upstash requires TLS. Both `src/lib/queue.ts` and `src/workers/pipeline.worker.t
 3. **New features**: If a requested feature isn't on the roadmap, flag it, determine where it fits in the tier/dependency structure, and update `docs/ENGINEERING_ROADMAP.md` before implementing.
 4. **Bug discoveries**: New bugs found during development get added to Tier 0 with severity and slotted above current feature work.
 5. **Progress tracking**: When picking up a roadmap item, mark it `🔧 IN PROGRESS` in `docs/ENGINEERING_ROADMAP.md` before writing any code. When completed, update to `~~DONE~~` / `~~FIXED~~`. Never update CLAUDE.md with progress — roadmap file only.
+
+## API Research
+When researching external APIs or services, ask the user for their preferred documentation source FIRST before web-fetching from multiple generic sources. Use project-specific docs (e.g., Higgsfield docs, specific API references) over general web searches.
+
+## Multi-Message Inputs
+When a user's message references a file, document, or content they plan to paste, wait for the follow-up message before proceeding. Do not ask them to provide what they've already indicated they will paste next.
+
+## TypeScript Conventions
+This project uses TypeScript. When editing types:
+- Ensure const assertions and literal types are compatible with wider config interfaces
+- Run `tsc --noEmit` or the project build after any type changes
+- Prefer widening types at the declaration site rather than using `as` casts
 
 ## Git Rule
 **Always push to GitHub after committing.** Every commit should be followed by `git push`. This applies to bug fixes, feature completions, and roadmap/doc updates. Do not let local commits accumulate unpushed.

@@ -980,6 +980,19 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] Video assets routed through backend proxy (avoids 50-100MB blobs in browser memory)
 - [x] Keyframes/audio use client-side fetch-and-blob (small files, no memory concern)
 
+#### ~~R1.5.25b - B-Roll Product Image Reference in Generation~~ DONE
+**Priority:** P1 - Medium
+**Effort:** Small
+**Depends on:** None
+**Why:** B-roll shots that mention the product by name (e.g., "Collagen Bio-Peptides Powder on a kitchen counter") were generated via text-to-image, so the model invented a random product appearance instead of matching the actual product packaging. Now the BRollAgent detects product name mentions in the prompt and uses Nano Banana Pro edit mode with the product's best available image as a reference, so generated b-roll shows the actual product.
+
+**Backend:** ~~DONE~~
+- [x] `BRollAgent.generate()`: Fetch product name + best product image (primary, prefer `url_clean`) at start of generation
+- [x] Per-shot product name detection (case-insensitive, supports 2-word partial matches)
+- [x] Conditional path: `editImage([productImageUrl], prompt)` when product mentioned, `generateImage(prompt)` otherwise
+- [x] Asset metadata includes `product_ref: true` flag for traceability
+- [x] Provider set to `nano-banana-pro-edit` when using product ref (same $0.07 cost)
+
 #### R1.5.26 - Scripting Validation Enforcement (Reject Invalid Scripts)
 **Priority:** P1 - High
 **Effort:** Small
