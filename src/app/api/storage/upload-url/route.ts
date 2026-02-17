@@ -3,6 +3,7 @@ import { logger } from '@/lib/logger';
 import { z } from 'zod';
 import {
   isAllowedImageType,
+  isAllowedUploadType,
   generateUploadPath,
   createSignedUploadUrl,
   getPublicUrl,
@@ -10,12 +11,22 @@ import {
 } from '@/lib/storage';
 
 const UploadUrlSchema = z.object({
-  entityType: z.enum(['influencer', 'product', 'project-product', 'product-image']),
+  entityType: z.enum(['influencer', 'product', 'project-product', 'product-image', 'asset-upload']),
   entityId: z.string().uuid(),
-  contentType: z.string().refine(isAllowedImageType, {
-    message: 'Content type must be image/jpeg, image/png, image/webp, or image/gif',
-  }),
-});
+  contentType: z.string(),
+}).refine(
+  (data) => {
+    // asset-upload allows images + videos; all others allow images only
+    if (data.entityType === 'asset-upload') {
+      return isAllowedUploadType(data.contentType);
+    }
+    return isAllowedImageType(data.contentType);
+  },
+  {
+    message: 'Unsupported content type for this entity',
+    path: ['contentType'],
+  }
+);
 
 /**
  * POST /api/storage/upload-url

@@ -44,3 +44,47 @@ export async function uploadToStorage(
 
   return { path, publicUrl };
 }
+
+/**
+ * Upload a file (image or video) to replace an existing asset.
+ * Uses the asset-specific upload-url endpoint which supports both image and video types.
+ *
+ * Flow: POST /api/storage/asset-upload-url → PUT to signed URL → return storagePath
+ */
+export async function uploadAssetToStorage(
+  file: File,
+  projectId: string,
+  assetId: string,
+): Promise<{ path: string; publicUrl: string }> {
+  // 1. Get a signed upload URL from our asset upload endpoint
+  const urlRes = await fetch('/api/storage/asset-upload-url', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      projectId,
+      assetId,
+      contentType: file.type,
+      filename: file.name,
+    }),
+  });
+
+  if (!urlRes.ok) {
+    const data = await urlRes.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to get upload URL (${urlRes.status})`);
+  }
+
+  const { signedUrl, path, publicUrl } = await urlRes.json();
+
+  // 2. PUT the file directly to Supabase Storage
+  const uploadRes = await fetch(signedUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': file.type },
+    body: file,
+  });
+
+  if (!uploadRes.ok) {
+    throw new Error(`Storage upload failed (${uploadRes.status})`);
+  }
+
+  return { path, publicUrl };
+}

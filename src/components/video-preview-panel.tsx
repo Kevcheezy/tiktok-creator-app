@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { uploadAssetToStorage } from './direct-upload';
 
 /* ==============================
    Video Preview Panel (R1.5.29)
@@ -75,6 +76,10 @@ export function VideoPreviewPanel({ projectId, segmentIndex, onTestApproved }: V
 
   // Negative prompt collapsible
   const [showNegativePrompt, setShowNegativePrompt] = useState(false);
+
+  // Video upload state
+  const [isUploadingVideo, setIsUploadingVideo] = useState(false);
+  const videoUploadRef = useRef<HTMLInputElement>(null);
 
   // Elapsed time tracking for generation
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -256,6 +261,45 @@ export function VideoPreviewPanel({ projectId, segmentIndex, onTestApproved }: V
     setShowFeedback(true);
   }
 
+  function handleUploadVideoClick() {
+    videoUploadRef.current?.click();
+  }
+
+  async function handleVideoFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !testVideoAsset?.id) return;
+    setIsUploadingVideo(true);
+    setLoadError(null);
+    setErrorSource(null);
+    try {
+      // Upload to Supabase storage
+      const { path: storagePath, publicUrl } = await uploadAssetToStorage(file, projectId, testVideoAsset.id);
+
+      // Call upload endpoint to replace the asset
+      const res = await fetch(`/api/projects/${projectId}/assets/${testVideoAsset.id}/upload`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storagePath }),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Upload failed (${res.status})`);
+      }
+
+      // Update local state with the new video URL from the API response
+      const updated = await res.json();
+      setTestVideoAsset({ id: testVideoAsset.id, url: updated.url || publicUrl, status: 'completed' });
+      setIsTestApproved(false);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Failed to upload video');
+      setErrorSource('test-generate');
+    } finally {
+      setIsUploadingVideo(false);
+      if (videoUploadRef.current) videoUploadRef.current.value = '';
+    }
+  }
+
   const costPerSegment = previewData?.config?.cost ?? 1.20;
 
   return (
@@ -421,6 +465,15 @@ export function VideoPreviewPanel({ projectId, segmentIndex, onTestApproved }: V
                 <ConfigValue label="Cost" value={`$${previewData.config.cost.toFixed(2)}`} valueClass="text-amber-hot" />
               </div>
 
+              {/* Hidden file input for video upload */}
+              <input
+                ref={videoUploadRef}
+                type="file"
+                accept="video/mp4,video/webm"
+                onChange={handleVideoFileChange}
+                className="hidden"
+              />
+
               {/* 6. Action Buttons */}
               {!isTestApproved && (
                 <div className="flex flex-wrap items-center gap-3">
@@ -456,6 +509,31 @@ export function VideoPreviewPanel({ projectId, segmentIndex, onTestApproved }: V
                         <path d="M6.5 6.5l3 2-3 2v-4z" fill="currentColor" stroke="none" />
                       </svg>
                       Test Generate (${costPerSegment.toFixed(2)})
+                    </button>
+                  )}
+                  {/* Upload Video — only shown when there's an existing video asset to replace */}
+                  {testVideoAsset && ['completed', 'failed', 'cancelled'].includes(testVideoAsset.status) && !isTestGenerating && (
+                    <button
+                      type="button"
+                      onClick={handleUploadVideoClick}
+                      disabled={isUploadingVideo}
+                      className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-4 py-2 font-[family-name:var(--font-display)] text-sm font-semibold text-text-muted transition-all hover:border-electric/30 hover:text-electric disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isUploadingVideo ? (
+                        <>
+                          <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="60" strokeDashoffset="15" strokeLinecap="round" />
+                          </svg>
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+                            <path d="M8 11V2M4 5l4-3 4 3M2 13h12" />
+                          </svg>
+                          Upload Video
+                        </>
+                      )}
                     </button>
                   )}
                 </div>

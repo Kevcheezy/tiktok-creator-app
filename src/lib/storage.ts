@@ -10,17 +10,28 @@ const ALLOWED_IMAGE_TYPES = [
   'image/gif',
 ];
 
+const ALLOWED_VIDEO_TYPES = [
+  'video/mp4',
+  'video/webm',
+];
+
 const EXTENSION_MAP: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
   'image/webp': 'webp',
   'image/gif': 'gif',
+  'video/mp4': 'mp4',
+  'video/webm': 'webm',
 };
 
-export type EntityType = 'influencer' | 'product' | 'project-product' | 'product-image';
+export type EntityType = 'influencer' | 'product' | 'project-product' | 'product-image' | 'asset-upload';
 
 export function isAllowedImageType(contentType: string): boolean {
   return ALLOWED_IMAGE_TYPES.includes(contentType);
+}
+
+export function isAllowedUploadType(contentType: string): boolean {
+  return ALLOWED_IMAGE_TYPES.includes(contentType) || ALLOWED_VIDEO_TYPES.includes(contentType);
 }
 
 export function generateUploadPath(
@@ -40,6 +51,8 @@ export function generateUploadPath(
       return `products/${entityId}/product-${uniqueSuffix}.${ext}`;
     case 'product-image':
       return `products/${entityId}/angles/${uniqueSuffix}.${ext}`;
+    case 'asset-upload':
+      return `projects/${entityId}/uploads/${crypto.randomUUID()}.${ext}`;
     default:
       throw new Error(`Unknown entity type: ${entityType}`);
   }

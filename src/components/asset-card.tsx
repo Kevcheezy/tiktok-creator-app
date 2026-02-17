@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { GilDisplay } from './gil-display';
 import { DownloadButton } from './download-button';
 import { downloadViaProxy } from '@/lib/download-utils';
@@ -30,6 +30,8 @@ interface AssetCardProps {
   /** When set, downloads use the backend proxy endpoint instead of fetch-and-blob. Use for large files (videos). */
   proxyDownload?: { projectId: string };
   onCancelAsset?: (assetId: string) => void;
+  /** Called when user selects a file to upload as replacement for this asset. */
+  onUploadAsset?: (assetId: string, file: File) => void;
 }
 
 const TYPE_BADGES: Record<string, { label: string; color: string }> = {
@@ -45,6 +47,15 @@ const GRADES = [
   { value: 'B', color: 'bg-amber-hot/10 text-amber-hot border-amber-hot/30 hover:bg-amber-hot/20' },
   { value: 'F', color: 'bg-magenta/10 text-magenta border-magenta/30 hover:bg-magenta/20' },
 ];
+
+/** Asset types that support user file upload replacement */
+const UPLOADABLE_TYPES = new Set(['keyframe_start', 'keyframe_end', 'video', 'broll']);
+
+/** Returns the accept attribute value for the file input based on asset type */
+function getUploadAccept(assetType: string): string {
+  if (assetType === 'video') return 'video/mp4,video/webm';
+  return 'image/jpeg,image/png,image/webp';
+}
 
 // ─── Structured Prompt Display ────────────────────────────────────────────────
 // Renders a StructuredPrompt as labeled key-value sections inside the popover.
@@ -191,11 +202,14 @@ function StructuredPromptDisplay({ prompt }: { prompt: StructuredPrompt }) {
   );
 }
 
-export function AssetCard({ asset, showGrade, compact, onGrade, onReject, onRegenerate, onEdit, downloadFilename, proxyDownload, onCancelAsset }: AssetCardProps) {
+export function AssetCard({ asset, showGrade, compact, onGrade, onReject, onRegenerate, onEdit, downloadFilename, proxyDownload, onCancelAsset, onUploadAsset }: AssetCardProps) {
   const [grading, setGrading] = useState(false);
   const [showPrompt, setShowPrompt] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const badge = TYPE_BADGES[asset.type] || { label: asset.type, color: 'bg-surface-overlay text-text-muted border-border' };
   const isKeyframe = asset.type.startsWith('keyframe');
+  const isUploadable = UPLOADABLE_TYPES.has(asset.type) && !!onUploadAsset;
 
   // Extract the prompt for this specific keyframe (start or end)
   // visual_prompt is a JSONB { start: StructuredPrompt, end: StructuredPrompt }
@@ -229,6 +243,47 @@ export function AssetCard({ asset, showGrade, compact, onGrade, onReject, onRege
     } finally {
       setGrading(false);
     }
+  }
+
+  function handleUploadClick() {
+    fileInputRef.current?.click();
+  }
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !onUploadAsset) return;
+    setUploading(true);
+    try {
+      await onUploadAsset(asset.id, file);
+    } finally {
+      setUploading(false);
+      // Reset file input so the same file can be re-selected
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
+  // Uploading overlay — show while a user file is being uploaded
+  if (uploading) {
+    return (
+      <div className="relative overflow-hidden rounded-xl border border-electric/30 bg-electric/5">
+        <div className={`flex items-center justify-center ${isKeyframe || asset.type === 'video' ? 'aspect-[9/16]' : 'h-24'}`}>
+          <div className="flex flex-col items-center gap-3">
+            <div className="relative h-8 w-8">
+              <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-electric" />
+              <div className="absolute inset-1 animate-spin rounded-full border-2 border-transparent border-b-electric/50" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }} />
+            </div>
+            <span className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-electric">
+              Uploading...
+            </span>
+          </div>
+        </div>
+        <div className="absolute left-2 top-2">
+          <span className={`inline-flex rounded-md border px-1.5 py-0.5 font-[family-name:var(--font-display)] text-[9px] font-semibold uppercase tracking-wider ${badge.color}`}>
+            {badge.label}
+          </span>
+        </div>
+      </div>
+    );
   }
 
   if (asset.status === 'generating') {
@@ -297,19 +352,42 @@ export function AssetCard({ asset, showGrade, compact, onGrade, onReject, onRege
               <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
             </svg>
             <span className="text-sm text-text-muted">Cancelled</span>
-            {onRegenerate && (
-              <button
-                type="button"
-                onClick={() => onRegenerate(asset.id)}
-                className="mt-1 inline-flex items-center gap-1.5 rounded-lg bg-electric/10 px-3 py-1.5 font-[family-name:var(--font-display)] text-[10px] font-semibold text-electric transition-all hover:bg-electric/20"
-              >
-                <svg viewBox="0 0 16 16" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M1 2v5h5" />
-                  <path d="M3.5 10a5 5 0 109-2.3" />
-                </svg>
-                Regenerate
-              </button>
-            )}
+            <div className="mt-1 flex items-center gap-2">
+              {isUploadable && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleUploadClick}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-surface-overlay px-3 py-1.5 font-[family-name:var(--font-display)] text-[10px] font-semibold text-text-muted transition-all hover:text-electric hover:bg-electric/10"
+                  >
+                    <svg viewBox="0 0 16 16" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+                      <path d="M8 11V2M4 5l4-3 4 3M2 13h12" />
+                    </svg>
+                    Upload
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept={getUploadAccept(asset.type)}
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                </>
+              )}
+              {onRegenerate && (
+                <button
+                  type="button"
+                  onClick={() => onRegenerate(asset.id)}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-electric/10 px-3 py-1.5 font-[family-name:var(--font-display)] text-[10px] font-semibold text-electric transition-all hover:bg-electric/20"
+                >
+                  <svg viewBox="0 0 16 16" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1 2v5h5" />
+                    <path d="M3.5 10a5 5 0 109-2.3" />
+                  </svg>
+                  Regenerate
+                </button>
+              )}
+            </div>
           </div>
         </div>
         <div className="absolute left-2 top-2">
@@ -341,6 +419,27 @@ export function AssetCard({ asset, showGrade, compact, onGrade, onReject, onRege
               </p>
             )}
             <div className="mt-1 flex items-center gap-2">
+              {isUploadable && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleUploadClick}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-surface-overlay px-3 py-1.5 font-[family-name:var(--font-display)] text-[10px] font-semibold text-text-muted transition-all hover:text-electric hover:bg-electric/10"
+                  >
+                    <svg viewBox="0 0 16 16" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+                      <path d="M8 11V2M4 5l4-3 4 3M2 13h12" />
+                    </svg>
+                    Upload
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept={getUploadAccept(asset.type)}
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                </>
+              )}
               {wasEditFailure && onEdit && isKeyframe && (
                 <button
                   type="button"
@@ -389,19 +488,42 @@ export function AssetCard({ asset, showGrade, compact, onGrade, onReject, onRege
             <span className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-amber-hot">
               Rejected
             </span>
-            {onRegenerate && (
-              <button
-                type="button"
-                onClick={() => onRegenerate(asset.id)}
-                className="mt-1 inline-flex items-center gap-1.5 rounded-lg bg-amber-hot/10 px-3 py-1.5 font-[family-name:var(--font-display)] text-[10px] font-semibold text-amber-hot transition-all hover:bg-amber-hot/20"
-              >
-                <svg viewBox="0 0 16 16" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M1 2v5h5" />
-                  <path d="M3.5 10a5 5 0 109-2.3" />
-                </svg>
-                Regenerate
-              </button>
-            )}
+            <div className="mt-1 flex items-center gap-2">
+              {isUploadable && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleUploadClick}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-surface-overlay px-3 py-1.5 font-[family-name:var(--font-display)] text-[10px] font-semibold text-text-muted transition-all hover:text-electric hover:bg-electric/10"
+                  >
+                    <svg viewBox="0 0 16 16" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+                      <path d="M8 11V2M4 5l4-3 4 3M2 13h12" />
+                    </svg>
+                    Upload
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept={getUploadAccept(asset.type)}
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                </>
+              )}
+              {onRegenerate && (
+                <button
+                  type="button"
+                  onClick={() => onRegenerate(asset.id)}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-amber-hot/10 px-3 py-1.5 font-[family-name:var(--font-display)] text-[10px] font-semibold text-amber-hot transition-all hover:bg-amber-hot/20"
+                >
+                  <svg viewBox="0 0 16 16" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1 2v5h5" />
+                    <path d="M3.5 10a5 5 0 109-2.3" />
+                  </svg>
+                  Regenerate
+                </button>
+              )}
+            </div>
           </div>
         </div>
         <div className="absolute left-2 top-2">
@@ -500,8 +622,19 @@ export function AssetCard({ asset, showGrade, compact, onGrade, onReject, onRege
         </div>
       )}
 
-      {/* Action buttons: download + edit + reject + regenerate (shown on hover for completed assets) */}
-      {asset.status === 'completed' && (onEdit || onReject || onRegenerate || (asset.url && downloadFilename)) && (
+      {/* Hidden file input for upload — placed once in the completed card body */}
+      {isUploadable && (
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={getUploadAccept(asset.type)}
+          onChange={handleFileChange}
+          className="hidden"
+        />
+      )}
+
+      {/* Action buttons: download + upload + edit + reject + regenerate (shown on hover for completed assets) */}
+      {asset.status === 'completed' && (onEdit || onReject || onRegenerate || isUploadable || (asset.url && downloadFilename)) && (
         <div className="absolute right-2 bottom-14 flex flex-col gap-1 opacity-0 transition-opacity group-hover:opacity-100">
           {asset.url && downloadFilename && proxyDownload ? (
             <button
@@ -521,6 +654,18 @@ export function AssetCard({ asset, showGrade, compact, onGrade, onReject, onRege
           ) : asset.url && downloadFilename ? (
             <DownloadButton url={asset.url} filename={downloadFilename} size="sm" />
           ) : null}
+          {isUploadable && (
+            <button
+              type="button"
+              onClick={handleUploadClick}
+              title="Upload replacement"
+              className="flex h-7 w-7 items-center justify-center rounded-md bg-void/70 text-text-muted backdrop-blur-sm transition-colors hover:bg-electric/20 hover:text-electric"
+            >
+              <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+                <path d="M8 11V2M4 5l4-3 4 3M2 13h12" />
+              </svg>
+            </button>
+          )}
           {onEdit && isKeyframe && (
             <button
               type="button"

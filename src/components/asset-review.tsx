@@ -5,6 +5,7 @@ import { AssetCard } from './asset-card';
 import { DownloadAllButton } from './download-button';
 import { VideoPreviewPanel } from './video-preview-panel';
 import { keyframeFilename, videoFilename, voiceFilename } from '@/lib/download-utils';
+import { uploadAssetToStorage } from './direct-upload';
 
 interface Asset {
   id: string;
@@ -222,6 +223,54 @@ export function AssetReview({ projectId, projectNumber, onStatusChange, confirmB
       fetchAssets();
     } catch (err) {
       console.error('Failed to cancel asset:', err);
+    }
+  }
+
+  async function handleUploadAsset(assetId: string, file: File) {
+    const asset = assets.find((a) => a.id === assetId);
+    if (!asset) return;
+
+    try {
+      // 1. Upload file to Supabase storage via signed URL
+      const { path: storagePath } = await uploadAssetToStorage(file, projectId, assetId);
+
+      // 2. Call the upload API endpoint to update the asset record
+      const res = await fetch(`/api/projects/${projectId}/assets/${assetId}/upload`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storagePath }),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        console.error('Upload API failed:', body.error || res.status);
+        return;
+      }
+
+      // 3. Refresh assets
+      fetchAssets();
+
+      // 4. For keyframe types, trigger cascade propagation dialog
+      if (asset.type.startsWith('keyframe')) {
+        const segIdx = asset.scene?.segment_index ?? -1;
+        const isStart = asset.type === 'keyframe_start';
+
+        const subsequentCount = assets.filter((a) => {
+          if (!a.type.startsWith('keyframe') || a.status !== 'completed' || a.id === assetId) return false;
+          const aSegIdx = a.scene?.segment_index ?? -1;
+          if (aSegIdx > segIdx) return true;
+          if (aSegIdx === segIdx && isStart && a.type === 'keyframe_end') return true;
+          return false;
+        }).length;
+
+        if (subsequentCount > 0) {
+          // Show the propagation dialog — re-use the edit propagation dialog
+          // with a generic "uploaded replacement" prompt description
+          setPropagateTarget({ assetId, prompt: 'user-uploaded replacement image', subsequentCount });
+        }
+      }
+    } catch (err) {
+      console.error('Failed to upload asset:', err);
     }
   }
 
@@ -448,6 +497,7 @@ export function AssetReview({ projectId, projectNumber, onStatusChange, confirmB
                         onEdit={!readOnly && confirmBeforeApprove ? openEditModal : undefined}
                         downloadFilename={getDownloadFilename(keyframeStart)}
                         onCancelAsset={readOnly ? undefined : handleCancelAsset}
+                        onUploadAsset={readOnly ? undefined : handleUploadAsset}
                       />
                     )}
                     {keyframeEnd && (
@@ -460,6 +510,7 @@ export function AssetReview({ projectId, projectNumber, onStatusChange, confirmB
                         onEdit={!readOnly && confirmBeforeApprove ? openEditModal : undefined}
                         downloadFilename={getDownloadFilename(keyframeEnd)}
                         onCancelAsset={readOnly ? undefined : handleCancelAsset}
+                        onUploadAsset={readOnly ? undefined : handleUploadAsset}
                       />
                     )}
                   </div>
@@ -497,6 +548,7 @@ export function AssetReview({ projectId, projectNumber, onStatusChange, confirmB
                       downloadFilename={getDownloadFilename(video)}
                       proxyDownload={{ projectId }}
                       onCancelAsset={readOnly ? undefined : handleCancelAsset}
+                      onUploadAsset={readOnly ? undefined : handleUploadAsset}
                     />
                   </div>
                 </div>
