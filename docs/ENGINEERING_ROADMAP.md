@@ -1095,6 +1095,28 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 
 These features separate "generates a video" from "generates a video that sells."
 
+#### R2.0b - Lip Sync Post-Processing
+**Priority:** P1 - High (first quality item — visible artifact in every video)
+**Effort:** Medium-Large
+**Depends on:** R1.1 (end-to-end pipeline must be functional)
+**Why:** Kling 3.0 generates video from keyframes with AI-generated lip movements that don't correspond to the ElevenLabs voiceover audio. The mouth moves but doesn't match the spoken words — a visible uncanny valley artifact in every talking-head shot. This is the single biggest quality gap between our output and real UGC. A lip sync post-processing step between voiceover and editing would take the generated video + TTS audio and correct the lip movements to match.
+
+**Research needed:**
+- [ ] Evaluate Wav2Lip, SadTalker, MuseTalk, Sync Labs, Hedra for quality, latency, and cost
+- [ ] Determine hosting: self-hosted GPU (RunPod/Modal) vs. API service
+- [ ] Benchmark: process a 15s segment — quality, latency, cost per segment
+- [ ] Test edge cases: side angles, hand-over-mouth, product-in-frame shots
+
+**Implementation:**
+- [ ] New pipeline stage: `lip_sync` between `voiceover` and `editing` (or `broll_generation` and `editing`)
+- [ ] LipSyncAgent: takes per-segment video URL + audio URL → outputs lip-synced video URL
+- [ ] Pipeline worker: new handler for `lip_sync` stage with per-segment error handling
+- [ ] Fallback: if lip sync fails for a segment, use original video (graceful degradation)
+- [ ] Cost tracking: add lip sync cost to project total
+- [ ] Progress UI: show lip sync stage in pipeline progress
+
+**Cost estimate:** TBD after research (likely $0.02-0.10 per segment depending on provider)
+
 #### R2.0 - Performance Tracking & KPI Dashboard ~~DONE~~ (backend)
 **Priority:** P1 - High (first in Tier 2 - data foundation for everything below)
 **Effort:** Medium
@@ -1343,6 +1365,7 @@ POLISH     Tier 1.5: UX Hardening
            R1.5.25 Asset Download for All Generated Media ✅ DONE
 
 NEXT       Tier 2: Quality & Conversion
+           R2.0b Lip Sync Post-Processing ⬅ HIGH PRIORITY (biggest quality gap — lips don't match voiceover)
            R2.0 Performance Tracking ✅ DONE (backend) ──→ R2.4 Product Images ✅ DONE (backend) ──→ R2.3 Avatar Consistency ──→ R2.1 Hook Testing ──→ R2.2 Trends
            (data foundation complete)                        (multi-angle + bg removal)               (builds trust)             (optimizes output)    (stays fresh)
            ▲ R2.0 fully wired (KPIs, leaderboard, breakdown live; RunTable still mock). R2.4 backend done. R2.5 already done as R1.3.
