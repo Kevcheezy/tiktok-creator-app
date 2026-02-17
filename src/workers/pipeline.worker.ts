@@ -21,6 +21,7 @@ import { getPipelineQueue, type PipelineJobData } from '../lib/queue';
 import { APP_VERSION, GIT_COMMIT } from '../lib/version';
 import { createLogger, logToGenerationLog } from '../lib/logger';
 import crypto from 'crypto';
+import { CancellationError } from '../lib/errors';
 
 // Worker-level logger
 const log = createLogger({ agentName: 'PipelineWorker' });
@@ -30,6 +31,35 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
+
+/** Check if a project has been cancelled. */
+async function isProjectCancelled(projectId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from('project')
+    .select('cancel_requested_at')
+    .eq('id', projectId)
+    .single();
+  return !!data?.cancel_requested_at;
+}
+
+/** Check if an individual asset has been cancelled. */
+async function isAssetCancelled(assetId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from('asset')
+    .select('status')
+    .eq('id', assetId)
+    .single();
+  return data?.status === 'cancelled';
+}
+
+/** Build a shouldCancel callback for use in pollResult(). */
+function buildShouldCancel(projectId: string, assetId?: string): () => Promise<boolean> {
+  return async () => {
+    if (await isProjectCancelled(projectId)) return true;
+    if (assetId && await isAssetCancelled(assetId)) return true;
+    return false;
+  };
+}
 
 // Set up standalone Redis connection
 const redisUrl = process.env.REDIS_CONNECTION_URL || 'redis://localhost:6379';
@@ -116,6 +146,7 @@ const worker = new Worker(
 
     jobLog.info({ step, projectId, productId }, 'Processing job');
 
+    try {
     if (step === 'product_analysis') {
       await handleProductAnalysis(projectId, correlationId, jobLog, productId);
     } else if (step === 'scripting') {
@@ -140,6 +171,32 @@ const worker = new Worker(
       await handleKeyframeEdit(projectId!, job.data.assetId!, job.data.editPrompt!, job.data.propagate || false, correlationId, jobLog);
     } else {
       jobLog.warn({ step }, 'Unknown step, skipping');
+    }
+    } catch (err) {
+      if (err instanceof CancellationError) {
+        jobLog.info({ step, projectId }, 'Job cancelled by user, exiting cleanly');
+        await logToGenerationLog(supabase, {
+          project_id: projectId || productId || 'unknown',
+          correlation_id: correlationId,
+          event_type: 'stage_cancelled',
+          agent_name: 'PipelineWorker',
+          stage: step,
+        });
+        if (projectId) {
+          await supabase
+            .from('asset')
+            .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+            .eq('project_id', projectId)
+            .eq('status', 'generating');
+          // Clear cancel flag now that worker has stopped
+          await supabase
+            .from('project')
+            .update({ cancel_requested_at: null, updated_at: new Date().toISOString() })
+            .eq('id', projectId);
+        }
+        return; // Exit cleanly — no retry
+      }
+      throw err; // Re-throw other errors for BullMQ retry
     }
   },
   {
@@ -490,9 +547,14 @@ async function handleCasting(projectId: string, correlationId: string, jobLog: R
       event_type: 'stage_start', agent_name: 'CastingAgent', stage,
     });
 
+    if (await isProjectCancelled(projectId)) {
+      throw new CancellationError(`Stage ${stage} cancelled before start`);
+    }
+
     const agent = new CastingAgent(supabase);
     agent.setCorrelationId(correlationId);
     agent.setVideoModel(await getVideoModelForProject(projectId));
+    agent.setCancelCheck(buildShouldCancel(projectId));
     await agent.run(projectId);
 
     await supabase
@@ -549,10 +611,19 @@ async function handleDirecting(projectId: string, correlationId: string, jobLog:
       event_type: 'stage_start', agent_name: 'DirectorAgent', stage,
     });
 
+    if (await isProjectCancelled(projectId)) {
+      throw new CancellationError(`Stage ${stage} cancelled before start`);
+    }
+
     const agent = new DirectorAgent(supabase);
     agent.setCorrelationId(correlationId);
     agent.setVideoModel(await getVideoModelForProject(projectId));
+    agent.setCancelCheck(buildShouldCancel(projectId));
     await agent.run(projectId);
+
+    if (await isProjectCancelled(projectId)) {
+      throw new CancellationError(`Stage ${stage} cancelled after completion`);
+    }
 
     // Auto-enqueue voiceover (no review gate between directing and voiceover)
     await getPipelineQueue().add('voiceover', {
@@ -606,10 +677,18 @@ async function handleVoiceover(projectId: string, correlationId: string, jobLog:
       event_type: 'stage_start', agent_name: 'VoiceoverAgent', stage,
     });
 
+    if (await isProjectCancelled(projectId)) {
+      throw new CancellationError(`Stage ${stage} cancelled before start`);
+    }
+
     const agent = new VoiceoverAgent(supabase);
     agent.setCorrelationId(correlationId);
     agent.setVideoModel(await getVideoModelForProject(projectId));
     await agent.run(projectId);
+
+    if (await isProjectCancelled(projectId)) {
+      throw new CancellationError(`Stage ${stage} cancelled after completion`);
+    }
 
     // Auto-enqueue B-roll generation (runs before asset review)
     await getPipelineQueue().add('broll_generation', {
@@ -662,6 +741,10 @@ async function handleEditing(projectId: string, correlationId: string, jobLog: R
       project_id: projectId, correlation_id: correlationId,
       event_type: 'stage_start', agent_name: 'EditorAgent', stage,
     });
+
+    if (await isProjectCancelled(projectId)) {
+      throw new CancellationError(`Stage ${stage} cancelled before start`);
+    }
 
     const agent = new EditorAgent(supabase);
     agent.setCorrelationId(correlationId);
@@ -775,9 +858,14 @@ async function handleBrollGeneration(projectId: string, correlationId: string, j
       event_type: 'stage_start', agent_name: 'BRollAgent', stage,
     });
 
+    if (await isProjectCancelled(projectId)) {
+      throw new CancellationError(`Stage ${stage} cancelled before start`);
+    }
+
     const agent = new BRollAgent(supabase);
     agent.setCorrelationId(correlationId);
     agent.setVideoModel(await getVideoModelForProject(projectId));
+    agent.setCancelCheck(buildShouldCancel(projectId));
     await agent.generate(projectId);
 
     await supabase
@@ -862,6 +950,15 @@ async function handleAssetRegeneration(
     });
     jobLog.info({ assetId, durationMs }, 'Asset regeneration complete');
   } catch (error) {
+    // Let CancellationError propagate with correct asset status
+    if (error instanceof CancellationError) {
+      await supabase
+        .from('asset')
+        .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+        .eq('id', assetId);
+      throw error;
+    }
+
     const errorMessage = error instanceof Error ? error.message : String(error);
     jobLog.error({ assetId, err: error }, 'Asset regeneration failed');
 
@@ -1010,7 +1107,7 @@ async function regenerateKeyframe(
   }
 
   jobLog.info({ taskId }, 'Polling keyframe result');
-  const pollResult = await wavespeed.pollResult(taskId, { maxWait: 240000, initialInterval: 5000 });
+  const pollResult = await wavespeed.pollResult(taskId, { maxWait: 240000, initialInterval: 5000, shouldCancel: buildShouldCancel(projectId, assetId) });
   const newUrl = pollResult.url || '';
 
   await supabase
@@ -1254,7 +1351,7 @@ async function regenerateVideo(
   });
 
   jobLog.info({ taskId: result.taskId }, 'Polling video result');
-  const pollResult = await wavespeed.pollResult(result.taskId);
+  const pollResult = await wavespeed.pollResult(result.taskId, { shouldCancel: buildShouldCancel(projectId, assetId) });
 
   await supabase
     .from('asset')
@@ -1498,6 +1595,7 @@ async function editSingleKeyframe(
   const pollResult = await wavespeed.pollResult(result.taskId, {
     maxWait: 240000,
     initialInterval: 5000,
+    shouldCancel: buildShouldCancel(projectId, assetId),
   });
 
   const existingMeta = (asset.metadata || {}) as Record<string, unknown>;

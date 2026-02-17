@@ -2,13 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/db';
 import { logger } from '@/lib/logger';
 
-/**
- * Maps each processing stage to the review gate the user should return to.
- * Pipeline: created → analyzing → analysis_review → scripting → script_review
- *   → broll_planning → broll_review → influencer_selection → casting
- *   → casting_review → directing → voiceover → broll_generation
- *   → asset_review → editing → completed
- */
 const CANCEL_ROLLBACK_MAP: Record<string, string> = {
   analyzing: 'created',
   scripting: 'analysis_review',
@@ -20,12 +13,6 @@ const CANCEL_ROLLBACK_MAP: Record<string, string> = {
   editing: 'asset_review',
 };
 
-/**
- * POST /api/projects/[id]/cancel
- *
- * Cancels an in-progress pipeline stage and rolls the project back
- * to the previous review gate so the user can make changes and retry.
- */
 export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -51,6 +38,23 @@ export async function POST(
       );
     }
 
+    // 1. Set cancel flag so the worker knows to stop
+    await supabase
+      .from('project')
+      .update({
+        cancel_requested_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id);
+
+    // 2. Flip in-flight and pending assets to cancelled
+    await supabase
+      .from('asset')
+      .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+      .eq('project_id', id)
+      .in('status', ['generating', 'pending']);
+
+    // 3. Roll back project status (leave cancel_requested_at set for worker to consume)
     await supabase
       .from('project')
       .update({
@@ -63,7 +67,7 @@ export async function POST(
 
     logger.info(
       { projectId: id, from: proj.status, to: rollbackTo, route: '/api/projects/[id]/cancel' },
-      'Pipeline canceled, rolled back to review gate'
+      'Pipeline hard-cancelled, assets marked cancelled, rolled back to review gate'
     );
 
     return NextResponse.json({ status: rollbackTo });

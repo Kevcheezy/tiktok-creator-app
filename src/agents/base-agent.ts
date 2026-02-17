@@ -10,6 +10,7 @@ export abstract class BaseAgent {
   protected agentName: string;
   protected correlationId?: string;
   protected videoModel: VideoModelConfig;
+  protected shouldCancel?: () => Promise<boolean>;
   private _logger: pino.Logger;
 
   constructor(agentName: string, supabaseClient?: SupabaseClient) {
@@ -29,6 +30,14 @@ export abstract class BaseAgent {
    */
   setVideoModel(config: VideoModelConfig): void {
     this.videoModel = config;
+  }
+
+  /**
+   * Set a cancellation check callback for this agent run.
+   * Used to abort long-running poll loops when a user cancels.
+   */
+  setCancelCheck(fn: () => Promise<boolean>): void {
+    this.shouldCancel = fn;
   }
 
   /**

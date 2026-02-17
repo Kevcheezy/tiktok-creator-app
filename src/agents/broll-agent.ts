@@ -1,5 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { BaseAgent } from './base-agent';
+import { CancellationError } from '@/lib/errors';
 import {
   API_COSTS,
   RESOLUTION,
@@ -359,6 +360,7 @@ export class BRollAgent extends BaseAgent {
         const result = await this.wavespeed.pollResult(taskId, {
           maxWait: 120000,
           initialInterval: 5000,
+          shouldCancel: this.shouldCancel,
         });
 
         // Create asset record
@@ -400,6 +402,7 @@ export class BRollAgent extends BaseAgent {
         completedCount++;
         this.log(`Shot ${shot.segment_index}:${shot.shot_index} completed: ${result.url}${useProductRef ? ' (product ref)' : ''}`);
       } catch (err) {
+        if (err instanceof CancellationError) throw err;
         failedCount++;
         this.log(`Shot ${shot.segment_index}:${shot.shot_index} failed: ${err instanceof Error ? err.message : String(err)}`);
 

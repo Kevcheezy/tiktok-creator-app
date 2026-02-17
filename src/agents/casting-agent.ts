@@ -1,5 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { BaseAgent } from './base-agent';
+import { CancellationError } from '@/lib/errors';
 import { AVATAR_MAPPING, PRODUCT_PLACEMENT_ARC, ENERGY_ARC, API_COSTS, RESOLUTION, VISIBILITY_ANGLE_MAP } from '@/lib/constants';
 import { StructuredPrompt, STRUCTURED_PROMPT_SCHEMA_DESCRIPTION, IMAGE_NEGATIVE_PROMPT, resolveNegativePrompt, isStructuredPrompt } from '@/lib/prompt-schema';
 import { serializeForImage } from '@/lib/prompt-serializer';
@@ -221,7 +222,7 @@ export class CastingAgent extends BaseAgent {
               this.log(`Segment ${segIdx}: generating END keyframe with reused start as primary ref (attempt ${attempt + 1})`);
               const endResult = await this.wavespeed.editImage(endRefs, endPromptStr, editOpts);
               await this.createAsset(projectId, scene.id, 'keyframe_end', endResult.taskId, 'nano-banana-pro-edit');
-              const endPoll = await this.wavespeed.pollResult(endResult.taskId, { maxWait: POLL_MAX_WAIT, initialInterval: POLL_INITIAL_INTERVAL });
+              const endPoll = await this.wavespeed.pollResult(endResult.taskId, { maxWait: POLL_MAX_WAIT, initialInterval: POLL_INITIAL_INTERVAL, shouldCancel: this.shouldCancel });
               endUrl = endPoll.url || '';
               await this.updateAssetUrl(endResult.taskId, endUrl);
 
@@ -236,7 +237,7 @@ export class CastingAgent extends BaseAgent {
               this.log(`Segment ${segIdx}: generating START keyframe with refs [${refLabels}] (attempt ${attempt + 1})`);
               const startResult = await this.wavespeed.editImage(referenceImages, startPromptStr, editOpts);
               await this.createAsset(projectId, scene.id, 'keyframe_start', startResult.taskId, 'nano-banana-pro-edit');
-              const startPoll = await this.wavespeed.pollResult(startResult.taskId, { maxWait: POLL_MAX_WAIT, initialInterval: POLL_INITIAL_INTERVAL });
+              const startPoll = await this.wavespeed.pollResult(startResult.taskId, { maxWait: POLL_MAX_WAIT, initialInterval: POLL_INITIAL_INTERVAL, shouldCancel: this.shouldCancel });
               startUrl = startPoll.url || '';
               await this.updateAssetUrl(startResult.taskId, startUrl);
 
@@ -248,7 +249,7 @@ export class CastingAgent extends BaseAgent {
               this.log(`Segment ${segIdx}: generating END keyframe with start frame as primary ref (attempt ${attempt + 1})`);
               const endResult = await this.wavespeed.editImage(endRefs, endPromptStr, editOpts);
               await this.createAsset(projectId, scene.id, 'keyframe_end', endResult.taskId, 'nano-banana-pro-edit');
-              const endPoll = await this.wavespeed.pollResult(endResult.taskId, { maxWait: POLL_MAX_WAIT, initialInterval: POLL_INITIAL_INTERVAL });
+              const endPoll = await this.wavespeed.pollResult(endResult.taskId, { maxWait: POLL_MAX_WAIT, initialInterval: POLL_INITIAL_INTERVAL, shouldCancel: this.shouldCancel });
               endUrl = endPoll.url || '';
               await this.updateAssetUrl(endResult.taskId, endUrl);
 
@@ -261,7 +262,7 @@ export class CastingAgent extends BaseAgent {
             this.log(`Segment ${segIdx}: text-to-image START (no references) (attempt ${attempt + 1})`);
             const startResult = await this.wavespeed.generateImage(startPromptStr, imgOpts);
             await this.createAsset(projectId, scene.id, 'keyframe_start', startResult.taskId);
-            const startPoll = await this.wavespeed.pollResult(startResult.taskId, { maxWait: POLL_MAX_WAIT, initialInterval: POLL_INITIAL_INTERVAL });
+            const startPoll = await this.wavespeed.pollResult(startResult.taskId, { maxWait: POLL_MAX_WAIT, initialInterval: POLL_INITIAL_INTERVAL, shouldCancel: this.shouldCancel });
             startUrl = startPoll.url || '';
             await this.updateAssetUrl(startResult.taskId, startUrl);
 
@@ -271,7 +272,7 @@ export class CastingAgent extends BaseAgent {
               this.log(`Segment ${segIdx}: generating END keyframe using start frame as ref (attempt ${attempt + 1})`);
               const endResult = await this.wavespeed.editImage([startUrl], endPromptStr, editOpts);
               await this.createAsset(projectId, scene.id, 'keyframe_end', endResult.taskId, 'nano-banana-pro-edit');
-              const endPoll = await this.wavespeed.pollResult(endResult.taskId, { maxWait: POLL_MAX_WAIT, initialInterval: POLL_INITIAL_INTERVAL });
+              const endPoll = await this.wavespeed.pollResult(endResult.taskId, { maxWait: POLL_MAX_WAIT, initialInterval: POLL_INITIAL_INTERVAL, shouldCancel: this.shouldCancel });
               endUrl = endPoll.url || '';
               await this.updateAssetUrl(endResult.taskId, endUrl);
               await this.trackCost(projectId, API_COSTS.nanoBananaPro + API_COSTS.nanoBananaProEdit);
@@ -280,7 +281,7 @@ export class CastingAgent extends BaseAgent {
               this.log(`Segment ${segIdx}: text-to-image END (start failed) (attempt ${attempt + 1})`);
               const endResult = await this.wavespeed.generateImage(endPromptStr, imgOpts);
               await this.createAsset(projectId, scene.id, 'keyframe_end', endResult.taskId);
-              const endPoll = await this.wavespeed.pollResult(endResult.taskId, { maxWait: POLL_MAX_WAIT, initialInterval: POLL_INITIAL_INTERVAL });
+              const endPoll = await this.wavespeed.pollResult(endResult.taskId, { maxWait: POLL_MAX_WAIT, initialInterval: POLL_INITIAL_INTERVAL, shouldCancel: this.shouldCancel });
               endUrl = endPoll.url || '';
               await this.updateAssetUrl(endResult.taskId, endUrl);
               await this.trackCost(projectId, API_COSTS.nanoBananaPro * 2);
@@ -297,6 +298,7 @@ export class CastingAgent extends BaseAgent {
           segmentsCompleted++;
           break;
         } catch (error) {
+          if (error instanceof CancellationError) throw error;
           const errMsg = error instanceof Error ? error.message : String(error);
           this.log(`Casting failed for segment ${segIdx} (attempt ${attempt + 1}): ${errMsg}`);
           await this.logEvent(projectId, 'segment_error', 'casting', {

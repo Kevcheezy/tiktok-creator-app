@@ -29,6 +29,7 @@ interface AssetCardProps {
   downloadFilename?: string;
   /** When set, downloads use the backend proxy endpoint instead of fetch-and-blob. Use for large files (videos). */
   proxyDownload?: { projectId: string };
+  onCancelAsset?: (assetId: string) => void;
 }
 
 const TYPE_BADGES: Record<string, { label: string; color: string }> = {
@@ -190,7 +191,7 @@ function StructuredPromptDisplay({ prompt }: { prompt: StructuredPrompt }) {
   );
 }
 
-export function AssetCard({ asset, showGrade, compact, onGrade, onReject, onRegenerate, onEdit, downloadFilename, proxyDownload }: AssetCardProps) {
+export function AssetCard({ asset, showGrade, compact, onGrade, onReject, onRegenerate, onEdit, downloadFilename, proxyDownload, onCancelAsset }: AssetCardProps) {
   const [grading, setGrading] = useState(false);
   const [showPrompt, setShowPrompt] = useState(false);
   const badge = TYPE_BADGES[asset.type] || { label: asset.type, color: 'bg-surface-overlay text-text-muted border-border' };
@@ -233,6 +234,17 @@ export function AssetCard({ asset, showGrade, compact, onGrade, onReject, onRege
   if (asset.status === 'generating') {
     return (
       <div className="relative overflow-hidden rounded-xl border border-border bg-surface">
+        {onCancelAsset && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onCancelAsset(asset.id); }}
+            className="absolute top-2 right-2 z-10 rounded-full bg-surface/80 p-1 text-text-muted transition-colors hover:bg-magenta/20 hover:text-magenta"
+            title="Cancel generation"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
         <div className={`flex items-center justify-center ${isKeyframe || asset.type === 'video' ? (compact ? 'aspect-[9/16]' : 'aspect-[9/16]') : 'h-24'}`}>
           <div className="flex flex-col items-center gap-3">
             <div className="relative h-8 w-8">
@@ -265,6 +277,39 @@ export function AssetCard({ asset, showGrade, compact, onGrade, onReject, onRege
             <span className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-amber-hot">
               Editing...
             </span>
+          </div>
+        </div>
+        <div className="absolute left-2 top-2">
+          <span className={`inline-flex rounded-md border px-1.5 py-0.5 font-[family-name:var(--font-display)] text-[9px] font-semibold uppercase tracking-wider ${badge.color}`}>
+            {badge.label}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  if (asset.status === 'cancelled') {
+    return (
+      <div className="relative overflow-hidden rounded-xl border border-border/50 bg-surface/50">
+        <div className={`flex items-center justify-center ${isKeyframe || asset.type === 'video' ? 'aspect-[9/16]' : 'h-24'}`}>
+          <div className="flex flex-col items-center gap-2">
+            <svg className="h-6 w-6 text-text-muted" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+            </svg>
+            <span className="text-sm text-text-muted">Cancelled</span>
+            {onRegenerate && (
+              <button
+                type="button"
+                onClick={() => onRegenerate(asset.id)}
+                className="mt-1 inline-flex items-center gap-1.5 rounded-lg bg-electric/10 px-3 py-1.5 font-[family-name:var(--font-display)] text-[10px] font-semibold text-electric transition-all hover:bg-electric/20"
+              >
+                <svg viewBox="0 0 16 16" fill="none" className="h-3 w-3" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M1 2v5h5" />
+                  <path d="M3.5 10a5 5 0 109-2.3" />
+                </svg>
+                Regenerate
+              </button>
+            )}
           </div>
         </div>
         <div className="absolute left-2 top-2">

@@ -24,6 +24,7 @@ export interface VideoParams {
   multiPrompt?: { prompt: string; duration: string }[];
   duration?: number;
   cfgScale?: number;
+  sound?: boolean;
 }
 
 export interface ApiCallContext {
@@ -209,7 +210,7 @@ export class WaveSpeedClient {
   }
 
   async generateVideo(params: VideoParams, context?: ApiCallContext): Promise<{ taskId: string }> {
-    const { image, tailImage, prompt, negativePrompt, multiPrompt, duration = 15, cfgScale = 0.5 } = params;
+    const { image, tailImage, prompt, negativePrompt, multiPrompt, duration = 15, cfgScale = 0.5, sound = true } = params;
 
     const body: Record<string, unknown> = {
       image,
@@ -221,7 +222,7 @@ export class WaveSpeedClient {
       })),
       duration,
       cfg_scale: cfgScale,
-      sound: false,
+      sound,
     };
 
     if (tailImage) {
@@ -258,7 +259,7 @@ export class WaveSpeedClient {
 
   async pollResult(
     taskId: string,
-    options?: { maxWait?: number; initialInterval?: number }
+    options?: { maxWait?: number; initialInterval?: number; shouldCancel?: () => Promise<boolean> }
   ): Promise<{ status: string; url?: string }> {
     const config = {
       url: `${this.baseUrl}/api/v3/predictions/${taskId}/result`,
@@ -278,6 +279,16 @@ export class WaveSpeedClient {
     let interval = config.initialInterval;
 
     while (Date.now() - startTime < config.maxWait) {
+      // Check for cancellation before polling
+      if (options?.shouldCancel) {
+        const cancelled = await options.shouldCancel();
+        if (cancelled) {
+          logger.info({ taskId }, 'Poll cancelled by shouldCancel callback');
+          const { CancellationError } = await import('../../lib/errors');
+          throw new CancellationError(`Task ${taskId} cancelled by user`);
+        }
+      }
+
       try {
         // Promise.race guarantees this resolves within perRequestTimeout,
         // regardless of whether AbortController works in this runtime.

@@ -31,18 +31,26 @@ function getStageIndex(status: string): number {
   return idx;
 }
 
+const PROCESSING_STAGES = new Set([
+  'analyzing', 'scripting', 'casting', 'directing', 'voiceover',
+  'broll_generation', 'broll_planning', 'editing',
+]);
+
 interface PipelineProgressProps {
   status: string;
   failedAtStatus?: string | null;
   onStageClick?: (stageKey: string) => void;
   viewingStage?: string | null;
+  onCancel?: () => void;
 }
 
-export function PipelineProgress({ status, failedAtStatus, onStageClick, viewingStage }: PipelineProgressProps) {
+export function PipelineProgress({ status, failedAtStatus, onStageClick, viewingStage, onCancel }: PipelineProgressProps) {
   const isFailed = status === 'failed';
   const effectiveStatus = isFailed && failedAtStatus ? failedAtStatus : status;
   const currentIndex = getStageIndex(effectiveStatus);
   const failedIndex = isFailed && failedAtStatus ? getStageIndex(failedAtStatus) : -1;
+
+  const isProcessing = PROCESSING_STAGES.has(status);
 
   return (
     <div className="w-full overflow-x-auto">
@@ -144,6 +152,19 @@ export function PipelineProgress({ status, failedAtStatus, onStageClick, viewing
           );
         })}
       </div>
+      {onCancel && isProcessing && (
+        <div className="mt-2 flex justify-end">
+          <button
+            onClick={onCancel}
+            className="flex items-center gap-1.5 rounded-lg border border-magenta/30 bg-magenta/10 px-3 py-1.5 text-xs font-medium text-magenta transition-colors hover:bg-magenta/20"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+            Cancel
+          </button>
+        </div>
+      )}
     </div>
   );
 }

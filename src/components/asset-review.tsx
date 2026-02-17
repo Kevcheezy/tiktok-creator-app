@@ -214,6 +214,17 @@ export function AssetReview({ projectId, projectNumber, onStatusChange, confirmB
     }
   }
 
+  async function handleCancelAsset(assetId: string) {
+    try {
+      await fetch(`/api/projects/${projectId}/assets/${assetId}/cancel`, {
+        method: 'POST',
+      });
+      fetchAssets();
+    } catch (err) {
+      console.error('Failed to cancel asset:', err);
+    }
+  }
+
   function openEditModal(assetId: string) {
     const asset = assets.find((a) => a.id === assetId);
     if (!asset) return;
@@ -436,6 +447,7 @@ export function AssetReview({ projectId, projectNumber, onStatusChange, confirmB
                         onRegenerate={readOnly ? undefined : handleRegenerate}
                         onEdit={!readOnly && confirmBeforeApprove ? openEditModal : undefined}
                         downloadFilename={getDownloadFilename(keyframeStart)}
+                        onCancelAsset={readOnly ? undefined : handleCancelAsset}
                       />
                     )}
                     {keyframeEnd && (
@@ -447,6 +459,7 @@ export function AssetReview({ projectId, projectNumber, onStatusChange, confirmB
                         onRegenerate={readOnly ? undefined : handleRegenerate}
                         onEdit={!readOnly && confirmBeforeApprove ? openEditModal : undefined}
                         downloadFilename={getDownloadFilename(keyframeEnd)}
+                        onCancelAsset={readOnly ? undefined : handleCancelAsset}
                       />
                     )}
                   </div>
@@ -483,6 +496,7 @@ export function AssetReview({ projectId, projectNumber, onStatusChange, confirmB
                       onRegenerate={readOnly ? undefined : handleRegenerate}
                       downloadFilename={getDownloadFilename(video)}
                       proxyDownload={{ projectId }}
+                      onCancelAsset={readOnly ? undefined : handleCancelAsset}
                     />
                   </div>
                 </div>
@@ -501,6 +515,7 @@ export function AssetReview({ projectId, projectNumber, onStatusChange, confirmB
                     onReject={readOnly ? undefined : handleReject}
                     onRegenerate={readOnly ? undefined : handleRegenerate}
                     downloadFilename={getDownloadFilename(audio)}
+                    onCancelAsset={readOnly ? undefined : handleCancelAsset}
                   />
                 </div>
               )}

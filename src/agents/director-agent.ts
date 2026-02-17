@@ -1,5 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { BaseAgent } from './base-agent';
+import { CancellationError } from '@/lib/errors';
 import { API_COSTS } from '@/lib/constants';
 import { StructuredPrompt, STRUCTURED_PROMPT_SCHEMA_DESCRIPTION, isStructuredPrompt, resolveNegativePrompt } from '@/lib/prompt-schema';
 import { serializeForVideo } from '@/lib/prompt-serializer';
@@ -203,7 +204,7 @@ export class DirectorAgent extends BaseAgent {
           });
 
           this.log(`Polling video task ${result.taskId} (up to 5 min)...`);
-          const pollResult = await this.wavespeed.pollResult(result.taskId);
+          const pollResult = await this.wavespeed.pollResult(result.taskId, { shouldCancel: this.shouldCancel });
 
           await this.supabase
             .from('asset')
@@ -216,6 +217,7 @@ export class DirectorAgent extends BaseAgent {
           break;
 
         } catch (error) {
+          if (error instanceof CancellationError) throw error;
           lastError = error instanceof Error ? error : new Error(String(error));
           this.log(`Video generation failed for segment ${segIdx}: ${lastError.message}`);
         }

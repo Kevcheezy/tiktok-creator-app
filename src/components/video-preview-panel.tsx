@@ -203,8 +203,8 @@ export function VideoPreviewPanel({ projectId, segmentIndex, onTestApproved }: V
                 clearInterval(pollRef.current);
                 pollRef.current = null;
               }
-            } else if (videoAsset.status === 'failed') {
-              setTestVideoAsset({ id: videoAsset.id, url: null, status: 'failed' });
+            } else if (videoAsset.status === 'failed' || videoAsset.status === 'cancelled') {
+              setTestVideoAsset({ id: videoAsset.id, url: null, status: videoAsset.status });
               setIsTestGenerating(false);
               stopTimer();
               if (pollRef.current) {
@@ -228,6 +228,26 @@ export function VideoPreviewPanel({ projectId, segmentIndex, onTestApproved }: V
   function handleApproveTest() {
     setIsTestApproved(true);
     onTestApproved?.();
+  }
+
+  async function handleCancelTestGenerate() {
+    if (!testVideoAsset?.id) return;
+
+    // Stop frontend polling and timer
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+    stopTimer();
+
+    // Cancel on server
+    await fetch(`/api/projects/${projectId}/assets/${testVideoAsset.id}/cancel`, {
+      method: 'POST',
+    });
+
+    setIsTestGenerating(false);
+    setTestVideoAsset(null);
+    setElapsedSeconds(0);
   }
 
   function handleRegenerate() {
@@ -414,29 +434,30 @@ export function VideoPreviewPanel({ projectId, segmentIndex, onTestApproved }: V
                     </svg>
                     Adjust Prompt
                   </button>
-                  <button
-                    type="button"
-                    onClick={handleTestGenerate}
-                    disabled={isTestGenerating}
-                    className="inline-flex items-center gap-2 rounded-lg bg-electric px-4 py-2 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:shadow-[0_0_24px_rgba(0,229,160,0.25)] disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {isTestGenerating ? (
-                      <>
-                        <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="60" strokeDashoffset="15" strokeLinecap="round" />
-                        </svg>
-                        Generating...
-                      </>
-                    ) : (
-                      <>
-                        <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-                          <rect x="2" y="3" width="12" height="10" rx="1.5" />
-                          <path d="M6.5 6.5l3 2-3 2v-4z" fill="currentColor" stroke="none" />
-                        </svg>
-                        Test Generate (${costPerSegment.toFixed(2)})
-                      </>
-                    )}
-                  </button>
+                  {isTestGenerating ? (
+                    <button
+                      type="button"
+                      onClick={handleCancelTestGenerate}
+                      className="inline-flex items-center gap-2 rounded-lg border border-magenta/30 bg-magenta/10 px-4 py-2 font-[family-name:var(--font-display)] text-sm font-semibold text-magenta transition-all hover:bg-magenta/20"
+                    >
+                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      Cancel Generation
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleTestGenerate}
+                      className="inline-flex items-center gap-2 rounded-lg bg-electric px-4 py-2 font-[family-name:var(--font-display)] text-sm font-semibold text-void transition-all hover:shadow-[0_0_24px_rgba(0,229,160,0.25)]"
+                    >
+                      <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="2" y="3" width="12" height="10" rx="1.5" />
+                        <path d="M6.5 6.5l3 2-3 2v-4z" fill="currentColor" stroke="none" />
+                      </svg>
+                      Test Generate (${costPerSegment.toFixed(2)})
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -493,6 +514,13 @@ export function VideoPreviewPanel({ projectId, segmentIndex, onTestApproved }: V
                   {testVideoAsset.status === 'failed' && (
                     <div className="rounded-lg border border-magenta/20 bg-magenta/5 px-4 py-3">
                       <p className="text-xs text-magenta">Test video generation failed. Try adjusting the prompt and regenerating.</p>
+                    </div>
+                  )}
+
+                  {/* Cancelled */}
+                  {testVideoAsset.status === 'cancelled' && (
+                    <div className="rounded-lg border border-border/50 bg-surface/50 px-4 py-3">
+                      <p className="text-xs text-text-muted">Test video generation was cancelled.</p>
                     </div>
                   )}
 

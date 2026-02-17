@@ -440,6 +440,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
           failedAtStatus={project.failed_at_status}
           onStageClick={handleStageClick}
           viewingStage={viewingStage}
+          onCancel={() => setShowCancelConfirm(true)}
         />
       </div>
 

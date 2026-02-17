@@ -153,6 +153,7 @@ export const project = pgTable('project', {
   costUsd: numeric('cost_usd', { precision: 10, scale: 4 }).default('0'),
   errorMessage: text('error_message'),
   failedAtStatus: text('failed_at_status'),
+  cancelRequestedAt: timestamp('cancel_requested_at'),
   productPlacement: jsonb('product_placement'),
   negativePromptOverride: jsonb('negative_prompt_override'),
   createdAt: timestamp('created_at').defaultNow(),
