@@ -5,7 +5,7 @@ import { GilDisplay } from './gil-display';
 import { DownloadButton } from './download-button';
 import { downloadViaProxy } from '@/lib/download-utils';
 import { serializeForImage } from '@/lib/prompt-serializer';
-import { isStructuredPrompt } from '@/lib/prompt-schema';
+import { isStructuredPrompt, type StructuredPrompt } from '@/lib/prompt-schema';
 
 interface AssetCardProps {
   asset: {
@@ -45,6 +45,151 @@ const GRADES = [
   { value: 'F', color: 'bg-magenta/10 text-magenta border-magenta/30 hover:bg-magenta/20' },
 ];
 
+// ─── Structured Prompt Display ────────────────────────────────────────────────
+// Renders a StructuredPrompt as labeled key-value sections inside the popover.
+
+function PromptLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="font-[family-name:var(--font-display)] text-[9px] font-semibold uppercase tracking-wider text-summon/80">
+      {children}
+    </span>
+  );
+}
+
+function PromptValue({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="font-[family-name:var(--font-mono)] text-[10px] leading-snug text-text-secondary">
+      {children}
+    </span>
+  );
+}
+
+function StructuredPromptDisplay({ prompt }: { prompt: StructuredPrompt }) {
+  const sections: { label: string; content: React.ReactNode }[] = [];
+
+  // Subject
+  if (prompt.subject) {
+    const parts: string[] = [];
+    if (prompt.subject.primary) parts.push(prompt.subject.primary);
+    if (prompt.subject.features) parts.push(prompt.subject.features);
+    if (prompt.subject.wardrobe) parts.push(prompt.subject.wardrobe);
+    if (parts.length > 0) {
+      sections.push({ label: 'Subject', content: parts.join(' · ') });
+    }
+  }
+
+  // Environment
+  if (prompt.environment) {
+    const parts: string[] = [];
+    if (prompt.environment.setting) parts.push(prompt.environment.setting);
+    if (prompt.environment.elements?.length) {
+      parts.push(prompt.environment.elements.join(', '));
+    }
+    if (prompt.environment.product_visible && prompt.environment.product_position) {
+      parts.push(`product: ${prompt.environment.product_position}`);
+    }
+    if (parts.length > 0) {
+      sections.push({ label: 'Environment', content: parts.join(' · ') });
+    }
+  }
+
+  // Product
+  if (prompt.product && (prompt.product.emphasis || prompt.product.position)) {
+    const parts: string[] = [];
+    if (prompt.product.emphasis) parts.push(prompt.product.emphasis);
+    if (prompt.product.position) parts.push(prompt.product.position);
+    sections.push({ label: 'Product', content: parts.join(' · ') });
+  }
+
+  // Lighting
+  if (prompt.lighting) {
+    const parts: string[] = [];
+    if (prompt.lighting.type) parts.push(prompt.lighting.type);
+    if (prompt.lighting.quality) parts.push(prompt.lighting.quality);
+    if (prompt.lighting.details) parts.push(prompt.lighting.details);
+    if (parts.length > 0) {
+      sections.push({ label: 'Lighting', content: parts.join(' · ') });
+    }
+  }
+
+  // Camera
+  if (prompt.camera_specs) {
+    const parts: string[] = [];
+    if (prompt.camera_specs.shot) parts.push(prompt.camera_specs.shot);
+    if (prompt.camera_specs.movement) parts.push(prompt.camera_specs.movement);
+    if (prompt.camera_specs.framing) parts.push(prompt.camera_specs.framing);
+    if (parts.length > 0) {
+      sections.push({ label: 'Camera', content: parts.join(' · ') });
+    }
+  }
+
+  // Style
+  if (prompt.style) {
+    const parts: string[] = [];
+    if (prompt.style.aesthetic) parts.push(prompt.style.aesthetic);
+    if (prompt.style.quality) parts.push(prompt.style.quality);
+    if (prompt.style.skin) parts.push(prompt.style.skin);
+    if (parts.length > 0) {
+      sections.push({ label: 'Style', content: parts.join(' · ') });
+    }
+  }
+
+  // Action
+  if (prompt.action) {
+    const actionContent = (
+      <span>
+        {prompt.action.energy_arc && (
+          <span className="text-electric/70">{prompt.action.energy_arc}</span>
+        )}
+        {prompt.action.sequence?.length > 0 && (
+          <>
+            {prompt.action.energy_arc && <br />}
+            {prompt.action.sequence.map((step, i) => (
+              <span key={i} className="block">
+                <span className="text-text-muted">{step.time}</span>{' '}
+                {step.action}
+                {step.energy && <span className="text-amber-hot/60"> [{step.energy}]</span>}
+              </span>
+            ))}
+          </>
+        )}
+      </span>
+    );
+    sections.push({ label: 'Action', content: actionContent });
+  }
+
+  // Dialogue
+  if (prompt.dialogue && (prompt.dialogue.text || prompt.dialogue.delivery)) {
+    const parts: string[] = [];
+    if (prompt.dialogue.text) parts.push(`"${prompt.dialogue.text}"`);
+    if (prompt.dialogue.delivery) parts.push(prompt.dialogue.delivery);
+    sections.push({ label: 'Dialogue', content: parts.join(' — ') });
+  }
+
+  // Negative prompt (dimmed)
+  if (prompt.negative_prompt) {
+    sections.push({
+      label: 'Negative',
+      content: (
+        <span className="text-text-muted/60">{prompt.negative_prompt}</span>
+      ),
+    });
+  }
+
+  return (
+    <div className="space-y-1.5">
+      {sections.map(({ label, content }) => (
+        <div key={label}>
+          <PromptLabel>{label}</PromptLabel>
+          <div className="mt-0.5">
+            <PromptValue>{content}</PromptValue>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function AssetCard({ asset, showGrade, compact, onGrade, onReject, onRegenerate, onEdit, downloadFilename, proxyDownload }: AssetCardProps) {
   const [grading, setGrading] = useState(false);
   const [showPrompt, setShowPrompt] = useState(false);
@@ -58,6 +203,14 @@ export function AssetCard({ asset, showGrade, compact, onGrade, onReject, onRege
       ? (asset.scene.visual_prompt as Record<string, unknown>)?.start
       : (asset.scene.visual_prompt as Record<string, unknown>)?.end
     : null;
+
+  // Keep the structured prompt object if available (for rich display in popover)
+  const structuredPrompt: StructuredPrompt | null =
+    rawPrompt && typeof rawPrompt !== 'string' && isStructuredPrompt(rawPrompt)
+      ? rawPrompt
+      : null;
+
+  // Legacy flat string fallback
   const keyframePrompt = rawPrompt
     ? typeof rawPrompt === 'string'
       ? rawPrompt
@@ -65,6 +218,8 @@ export function AssetCard({ asset, showGrade, compact, onGrade, onReject, onRege
         ? serializeForImage(rawPrompt)
         : JSON.stringify(rawPrompt, null, 2)
     : null;
+
+  const hasPrompt = !!(structuredPrompt || keyframePrompt);
 
   async function handleGrade(grade: string) {
     setGrading(true);
@@ -251,7 +406,7 @@ export function AssetCard({ asset, showGrade, compact, onGrade, onReject, onRege
         <span className={`inline-flex rounded-md border px-1.5 py-0.5 font-[family-name:var(--font-display)] text-[9px] font-semibold uppercase tracking-wider ${badge.color}`}>
           {badge.label}
         </span>
-        {keyframePrompt && (
+        {hasPrompt && (
           <button
             type="button"
             onClick={() => setShowPrompt(!showPrompt)}
@@ -268,7 +423,7 @@ export function AssetCard({ asset, showGrade, compact, onGrade, onReject, onRege
       </div>
 
       {/* Prompt popover */}
-      {showPrompt && keyframePrompt && (
+      {showPrompt && hasPrompt && (
         <div className="absolute inset-x-2 top-9 z-10 max-h-[60%] overflow-y-auto rounded-lg border border-summon/30 bg-void/90 p-3 backdrop-blur-md">
           <div className="mb-1.5 flex items-center justify-between">
             <span className="font-[family-name:var(--font-display)] text-[9px] font-semibold uppercase tracking-wider text-summon">
@@ -284,9 +439,13 @@ export function AssetCard({ asset, showGrade, compact, onGrade, onReject, onRege
               </svg>
             </button>
           </div>
-          <p className="font-[family-name:var(--font-mono)] text-[10px] leading-relaxed text-text-secondary">
-            {keyframePrompt}
-          </p>
+          {structuredPrompt ? (
+            <StructuredPromptDisplay prompt={structuredPrompt} />
+          ) : (
+            <p className="font-[family-name:var(--font-mono)] text-[10px] leading-relaxed text-text-secondary">
+              {keyframePrompt}
+            </p>
+          )}
         </div>
       )}
 
