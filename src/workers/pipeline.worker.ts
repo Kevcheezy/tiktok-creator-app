@@ -1275,6 +1275,26 @@ async function handleCascadeRegeneration(
     const errorMessage = error instanceof Error ? error.message : String(error);
     jobLog.error({ sourceAssetId, err: error }, 'Cascade regeneration failed');
 
+    // B0.34: Clean up all cascade-marked assets still stuck in 'generating'
+    try {
+      const { data: stuckAssets } = await supabase
+        .from('asset')
+        .select('id')
+        .eq('project_id', projectId)
+        .in('type', ['keyframe_start', 'keyframe_end'])
+        .eq('status', 'generating');
+
+      if (stuckAssets?.length) {
+        await supabase
+          .from('asset')
+          .update({ status: 'failed', metadata: { lastRegenError: errorMessage } })
+          .in('id', stuckAssets.map((a: any) => a.id));
+        jobLog.info({ cleanedUp: stuckAssets.length }, 'Marked orphaned generating keyframes as failed');
+      }
+    } catch (cleanupErr) {
+      jobLog.error({ err: cleanupErr }, 'Failed to clean up orphaned generating assets');
+    }
+
     await logToGenerationLog(supabase, {
       project_id: projectId, correlation_id: correlationId,
       event_type: 'cascade_regen_error', agent_name: 'PipelineWorker',
@@ -1668,8 +1688,26 @@ worker.on('failed', (job, error) => {
   log.error({ jobId: job?.id, err: error }, 'Job failed');
 });
 
-worker.on('ready', () => {
+worker.on('ready', async () => {
   log.info('Pipeline worker connected and ready for jobs');
+
+  // B0.34: Clean up orphaned 'generating' assets from previous crashes
+  try {
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const { data: orphaned } = await supabase
+      .from('asset')
+      .update({ status: 'failed', metadata: { lastRegenError: 'Worker restart cleanup — asset was stuck in generating' } })
+      .in('type', ['keyframe_start', 'keyframe_end'])
+      .eq('status', 'generating')
+      .lt('updated_at', tenMinutesAgo)
+      .select('id');
+
+    if (orphaned?.length) {
+      log.info({ count: orphaned.length, ids: orphaned.map((a: any) => a.id) }, 'Cleaned up orphaned generating keyframes on startup');
+    }
+  } catch (err) {
+    log.error({ err }, 'Failed to clean up orphaned assets on startup');
+  }
 });
 
 worker.on('error', (error) => {

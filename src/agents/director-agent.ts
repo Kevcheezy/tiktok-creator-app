@@ -46,11 +46,12 @@ export class DirectorAgent extends BaseAgent {
     // 2b. Fetch project for negative prompt override and video retries config
     const { data: project } = await this.supabase
       .from('project')
-      .select('negative_prompt_override, video_retries')
+      .select('negative_prompt_override, video_retries, lock_camera')
       .eq('id', projectId)
       .single();
 
     const negativePrompt = resolveNegativePrompt(project, 'directing');
+    const lockCamera = project?.lock_camera ?? false;
 
     // 3. For each segment, generate video from start+end keyframes
     for (let segIdx = 0; segIdx < vm.segment_count; segIdx++) {
@@ -109,7 +110,7 @@ export class DirectorAgent extends BaseAgent {
       if (promptOverride && isStructuredPrompt(promptOverride)) {
         // R1.5.29: Use override directly — skip LLM prompt generation
         this.log(`Segment ${segIdx}: using video_prompt_override from preview panel`);
-        const serialized = serializeForVideo(promptOverride, shotDuration);
+        const serialized = serializeForVideo(promptOverride, { shotDuration, lockCamera });
         mainPrompt = serialized.prompt;
         multiPrompt = vm.supports_multi_prompt ? serialized.multiPrompt : [];
         effectiveNegativePrompt = serialized.negativePrompt;
@@ -126,7 +127,7 @@ export class DirectorAgent extends BaseAgent {
             await this.trackCost(projectId, API_COSTS.wavespeedChat);
 
             if (isStructuredPrompt(videoPrompt)) {
-              const serialized = serializeForVideo(videoPrompt, shotDuration);
+              const serialized = serializeForVideo(videoPrompt, { shotDuration, lockCamera });
               mainPrompt = serialized.prompt;
               multiPrompt = vm.supports_multi_prompt ? serialized.multiPrompt : [];
               effectiveNegativePrompt = serialized.negativePrompt;
@@ -138,30 +139,38 @@ export class DirectorAgent extends BaseAgent {
             this.log(`Video StructuredPrompt LLM failed, falling back to legacy: ${llmError instanceof Error ? llmError.message : String(llmError)}`);
             // Fallback to legacy string concatenation
             const shotScripts = scene.shot_scripts as { index: number; text: string; energy: string }[] | null;
+            const legacyCameraNote = lockCamera ? 'Static locked camera.' : 'Camera follows subject naturally.';
             multiPrompt = (shotScripts || []).map((shot: { index: number; text: string; energy: string }) => ({
-              prompt: `${shot.text}. Energy: ${shot.energy}. Camera follows subject naturally.`,
+              prompt: `${shot.text}. Energy: ${shot.energy}. ${legacyCameraNote}`,
               duration: shotDuration,
             }));
+            const movementNote = lockCamera ? 'Static locked camera' : 'Natural movement';
             mainPrompt = [
               scene.script_text ? `Scene: ${scene.script_text.substring(0, 200)}` : '',
               scene.section ? `Section: ${scene.section}` : '',
-              `Natural movement, professional lighting, TikTok style video, ${vm.aspect_ratio} portrait`,
+              `${movementNote}, professional lighting, TikTok style video, ${vm.aspect_ratio} portrait`,
             ].filter(Boolean).join('. ');
-            effectiveNegativePrompt = negativePrompt;
+            effectiveNegativePrompt = lockCamera
+              ? negativePrompt + ', camera movement, camera shake, camera pan, camera zoom, camera tilt'
+              : negativePrompt;
           }
         } else {
           // Legacy path: no structured prompt available
           const shotScripts = scene.shot_scripts as { index: number; text: string; energy: string }[] | null;
+          const legacyCameraNote = lockCamera ? 'Static locked camera.' : 'Camera follows subject naturally.';
           multiPrompt = (shotScripts || []).map((shot: { index: number; text: string; energy: string }) => ({
-            prompt: `${shot.text}. Energy: ${shot.energy}. Camera follows subject naturally.`,
+            prompt: `${shot.text}. Energy: ${shot.energy}. ${legacyCameraNote}`,
             duration: shotDuration,
           }));
+          const movementNote = lockCamera ? 'Static locked camera' : 'Natural movement';
           mainPrompt = [
             scene.script_text ? `Scene: ${scene.script_text.substring(0, 200)}` : '',
             scene.section ? `Section: ${scene.section}` : '',
-            `Natural movement, professional lighting, TikTok style video, ${vm.aspect_ratio} portrait`,
+            `${movementNote}, professional lighting, TikTok style video, ${vm.aspect_ratio} portrait`,
           ].filter(Boolean).join('. ');
-          effectiveNegativePrompt = negativePrompt;
+          effectiveNegativePrompt = lockCamera
+            ? negativePrompt + ', camera movement, camera shake, camera pan, camera zoom, camera tilt'
+            : negativePrompt;
         }
       }
 

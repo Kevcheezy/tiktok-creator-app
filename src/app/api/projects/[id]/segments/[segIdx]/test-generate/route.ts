@@ -98,7 +98,7 @@ export async function POST(
     // Fetch project
     const { data: project, error: projError } = await supabase
       .from('project')
-      .select('id, status, negative_prompt_override')
+      .select('id, status, negative_prompt_override, lock_camera')
       .eq('id', id)
       .single();
 
@@ -160,6 +160,7 @@ export async function POST(
     }
 
     const negativePrompt = resolveNegativePrompt(project, 'directing');
+    const lockCamera = project.lock_camera ?? false;
 
     // Get the StructuredPrompt (override or generate fresh)
     let structuredPrompt: StructuredPrompt;
@@ -182,15 +183,20 @@ export async function POST(
         // Legacy path: build a basic serialized prompt without LLM
         const shotScripts = scene.shot_scripts as { index: number; text: string; energy: string }[] | null;
         const shotDuration = String(vm.shot_duration);
+        const legacyCameraNote = lockCamera ? 'Static locked camera.' : 'Camera follows subject naturally.';
         const multiPrompt = (shotScripts || []).map((shot: any) => ({
-          prompt: `${shot.text}. Energy: ${shot.energy}. Camera follows subject naturally.`,
+          prompt: `${shot.text}. Energy: ${shot.energy}. ${legacyCameraNote}`,
           duration: shotDuration,
         }));
+        const movementNote = lockCamera ? 'Static locked camera' : 'Natural movement';
         const mainPrompt = [
           scene.script_text ? `Scene: ${scene.script_text.substring(0, 200)}` : '',
           scene.section ? `Section: ${scene.section}` : '',
-          `Natural movement, professional lighting, TikTok style video, ${vm.aspect_ratio} portrait`,
+          `${movementNote}, professional lighting, TikTok style video, ${vm.aspect_ratio} portrait`,
         ].filter(Boolean).join('. ');
+        const legacyNegativePrompt = lockCamera
+          ? negativePrompt + ', camera movement, camera shake, camera pan, camera zoom, camera tilt'
+          : negativePrompt;
 
         // Generate video directly with legacy prompts
         const wavespeed = new WaveSpeedClient();
@@ -198,7 +204,7 @@ export async function POST(
           image: startKeyframe.url,
           tailImage: vm.supports_tail_image ? endKeyframe?.url : undefined,
           prompt: mainPrompt,
-          negativePrompt,
+          negativePrompt: legacyNegativePrompt,
           multiPrompt: vm.supports_multi_prompt ? multiPrompt : [],
           duration: vm.segment_duration,
           cfgScale: 0.5,
@@ -240,7 +246,7 @@ export async function POST(
 
     // Serialize the StructuredPrompt for video
     const shotDuration = String(vm.shot_duration);
-    const serialized = serializeForVideo(structuredPrompt, shotDuration);
+    const serialized = serializeForVideo(structuredPrompt, { shotDuration, lockCamera });
 
     // Call wavespeed.generateVideo with the same parameters DirectorAgent would use
     const wavespeed = new WaveSpeedClient();

@@ -62,6 +62,7 @@ interface ProjectData {
   video_model: { id: string; name: string; slug: string; resolution: string; total_duration: number; segment_count: number; provider: string; cost_per_segment: number } | null;
   negative_prompt_override: unknown;
   fast_mode: boolean | null;
+  lock_camera: boolean | null;
   video_retries: number;
 }
 
@@ -673,6 +674,12 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
             projectId={projectId}
             negativePromptOverride={project.negative_prompt_override}
             onSaved={fetchProject}
+            readOnly={readOnlyMode}
+          />
+          <LockCameraToggle
+            projectId={projectId}
+            lockCamera={!!project.lock_camera}
+            onUpdated={fetchProject}
             readOnly={readOnlyMode}
           />
           <AssetReview
@@ -2735,6 +2742,89 @@ function ProjectSettings({ project, onUpdated }: { project: ProjectData; onUpdat
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ── Lock Camera Toggle ─────────────────────────────────────────────── */
+function LockCameraToggle({
+  projectId,
+  lockCamera,
+  onUpdated,
+  readOnly,
+}: {
+  projectId: string;
+  lockCamera: boolean;
+  onUpdated: () => void;
+  readOnly?: boolean;
+}) {
+  const [toggling, setToggling] = useState(false);
+
+  async function handleToggle() {
+    if (readOnly) return;
+    setToggling(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lock_camera: !lockCamera }),
+      });
+      if (res.ok) {
+        onUpdated();
+      }
+    } catch {
+      // silently fail — user can retry
+    } finally {
+      setToggling(false);
+    }
+  }
+
+  return (
+    <div className="glass flex items-center justify-between rounded-lg px-4 py-2.5">
+      <div className="flex items-center gap-2.5">
+        {/* Camera lock icon */}
+        <svg
+          viewBox="0 0 16 16"
+          fill="none"
+          className={`h-3.5 w-3.5 transition-colors ${lockCamera ? 'text-electric' : 'text-text-muted'}`}
+          stroke="currentColor"
+          strokeWidth={1.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <rect x="1" y="4" width="10" height="8" rx="1.5" />
+          <path d="M11 7l4-2v6l-4-2v-2z" />
+          {lockCamera && <path d="M3 7.5l1.5 1.5L7 6.5" strokeWidth={1.5} />}
+        </svg>
+        <div className="flex flex-col">
+          <span className="font-[family-name:var(--font-display)] text-xs font-semibold text-text-secondary">
+            Lock Camera
+          </span>
+          <span className="font-[family-name:var(--font-mono)] text-[10px] text-text-muted">
+            Static camera, no movement
+          </span>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={handleToggle}
+        disabled={toggling || readOnly}
+        className="group inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+        title={lockCamera ? 'Camera is locked — no movement during video generation' : 'Camera is free — default movement allowed'}
+      >
+        <div
+          className={`relative h-5 w-9 rounded-full transition-colors duration-200 ${
+            lockCamera ? 'bg-electric' : 'bg-surface-overlay'
+          }`}
+        >
+          <div
+            className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-all duration-200 ${
+              lockCamera ? 'left-[18px]' : 'left-0.5'
+            }`}
+          />
+        </div>
+      </button>
     </div>
   );
 }
