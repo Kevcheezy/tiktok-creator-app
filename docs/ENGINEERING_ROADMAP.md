@@ -408,6 +408,16 @@ Influencer `<select>` options displayed the entire `persona` field (full appeara
 - [x] Add `@media (prefers-reduced-motion: reduce)` to disable animations for accessibility
 - [x] Add `src/app/error.tsx` error boundary with retry button and styled error display
 
+#### ~~B0.37 - Cascade Keyframe Regeneration Fails: "No visual prompt found"~~ FIXED
+**Severity:** High (cascade regeneration always fails, marking all downstream keyframes as failed)
+**Scope:** Backend (worker)
+**Discovered:** 2026-02-21
+
+**Why:** `handleCascadeRegeneration()` fetched all keyframes with a partial scene select (`scene:scene(id, segment_index)`), missing the `visual_prompt` field. When these assets were passed to `regenerateKeyframe()`, it read `scene.visual_prompt` which was `undefined`, throwing "No visual prompt found on scene for regeneration". Single-asset regeneration worked fine because it used `scene:scene(*)`.
+
+**Fix checklist:**
+- [x] Change cascade keyframe fetch from `scene:scene(id, segment_index)` to `scene:scene(*)` in `pipeline.worker.ts` line 1186
+
 ---
 
 ### Tier 1: Complete the Core Pipeline (Ship a working end-to-end product)

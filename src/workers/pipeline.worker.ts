@@ -1183,7 +1183,7 @@ async function handleCascadeRegeneration(
     // Fetch ALL keyframe assets for this project, ordered by segment + type
     const { data: allKeyframes } = await supabase
       .from('asset')
-      .select('*, scene:scene(id, segment_index)')
+      .select('*, scene:scene(*)')
       .eq('project_id', projectId)
       .in('type', ['keyframe_start', 'keyframe_end']);
 
