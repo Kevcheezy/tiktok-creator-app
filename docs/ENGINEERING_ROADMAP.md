@@ -390,6 +390,24 @@ Influencer `<select>` options displayed the entire `persona` field (full appeara
 - [x] Add `e.stopPropagation()` to all action buttons (upload, edit, reject) for consistency
 - [x] Download button already had `e.stopPropagation()` — no change needed
 
+#### ~~B0.36 - Dashboard Shows Blank Content (Projects Not Rendering)~~ FIXED
+**Severity:** Critical (home page shows no projects — entire kanban board invisible)
+**Scope:** Frontend
+**Discovered:** 2026-02-21
+
+**Why:** Three compounding issues made the dashboard appear blank despite data existing:
+1. `page.tsx` imported the service-role Supabase client from `@/db` instead of the cookie-based SSR client from `@/lib/supabase/server`. The auth context mismatch could cause the query to fail silently.
+2. Error from the Supabase query was destructured away (`{ data: projects }` without `error`). On failure, `data` is `null`, and `projects || []` passes an empty array to QuestBoard, which shows "No quests active" instead of surfacing the error.
+3. The `stagger-children` CSS class used `animation-fill-mode: both`, which sets elements to `opacity: 0` before the animation fires. During SSR hydration, if the animation doesn't replay, content stays permanently invisible.
+4. No `error.tsx` error boundary existed — any server component throw produced a blank page with no feedback.
+
+**Fix checklist:**
+- [x] Switch `page.tsx` to use `createClient()` from `@/lib/supabase/server` (cookie-based SSR client)
+- [x] Capture `error` from Supabase query, log with `console.error`, show visible error banner
+- [x] Change `stagger-children` from `both` to `forwards` fill-mode so content is visible by default
+- [x] Add `@media (prefers-reduced-motion: reduce)` to disable animations for accessibility
+- [x] Add `src/app/error.tsx` error boundary with retry button and styled error display
+
 ---
 
 ### Tier 1: Complete the Core Pipeline (Ship a working end-to-end product)
@@ -1427,7 +1445,7 @@ See R1.3 above for full implementation details.
 ## Recommended Execution Order
 
 ```
-DONE       Tier 0: Critical Bugs (B0.1-B0.25)
+DONE       Tier 0: Critical Bugs (B0.1-B0.25, B0.36)
 DONE       Tier 1: Core Pipeline (R1.1, R1.2, R1.4, R1.5, R1.6)
            ▲ Full end-to-end pipeline functional: URL → analysis → script → casting → directing → voiceover → editing → finished video
 

@@ -1,14 +1,20 @@
 import Link from 'next/link';
 import { QuestBoard } from '@/components/quest-board';
-import { supabase } from '@/db';
+import { createClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
-  const { data: projects } = await supabase
+  const supabase = await createClient();
+
+  const { data: projects, error } = await supabase
     .from('project')
     .select('*, character:ai_character(*)')
     .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('[DashboardPage] Failed to fetch projects:', error.message, error.details);
+  }
 
   return (
     <main className="mx-auto max-w-[1600px] px-6 py-10 lg:px-8">
@@ -42,6 +48,18 @@ export default async function DashboardPage() {
             New Project
           </Link>
         </div>
+
+        {/* Error banner */}
+        {error && (
+          <div className="mt-6 rounded-lg border border-magenta/30 bg-magenta/5 px-4 py-3">
+            <p className="font-[family-name:var(--font-display)] text-sm font-semibold text-magenta">
+              Failed to load projects
+            </p>
+            <p className="mt-1 font-[family-name:var(--font-mono)] text-xs text-magenta/70">
+              {error.message}
+            </p>
+          </div>
+        )}
 
         {/* Project grid */}
         <div className="mt-8">

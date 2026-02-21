@@ -124,7 +124,7 @@ This project uses TypeScript. When editing types:
 - Prefer widening types at the declaration site rather than using `as` casts
 
 ## Git Rule
-**Always push to GitHub after committing.** Every commit should be followed by `git push`. This applies to bug fixes, feature completions, and roadmap/doc updates. Do not let local commits accumulate unpushed.
+**Commit after every major feature or bug fix.** Do not batch multiple unrelated changes into a single commit. Each feature, bug fix, or meaningful change should be its own commit with a clear message. **Always push to GitHub after committing.** Every commit should be followed by `git push`. This applies to bug fixes, feature completions, and roadmap/doc updates. Do not let local commits accumulate unpushed.
 
 ## Frontend Design Rule
 **ALL frontend changes MUST use the `frontend-designer` skill.** Any work touching `.tsx` files, pages, components, or styling must invoke `/frontend-designer` first. This applies to both direct work and subagent-dispatched work. The skill is at `.claude/skills/frontend-designer/SKILL.md`.

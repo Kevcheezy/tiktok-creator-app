@@ -280,9 +280,11 @@ body::after {
   animation: awaiting-pulse 2s ease-in-out infinite;
 }
 
-/* Stagger children */
+/* Stagger children — uses forwards (not both) so content is visible by default.
+   The animation enhances with a fade-in-up, but content is never hidden if
+   the animation engine doesn't fire (e.g. SSR hydration, reduced motion). */
 .stagger-children > * {
-  animation: fade-in-up 0.4s ease-out both;
+  animation: fade-in-up 0.4s ease-out forwards;
 }
 .stagger-children > *:nth-child(1) { animation-delay: 0ms; }
 .stagger-children > *:nth-child(2) { animation-delay: 60ms; }
@@ -294,6 +296,17 @@ body::after {
 .stagger-children > *:nth-child(8) { animation-delay: 420ms; }
 .stagger-children > *:nth-child(9) { animation-delay: 480ms; }
 .stagger-children > *:nth-child(10) { animation-delay: 540ms; }
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .stagger-children > *,
+  .animate-fade-in-up,
+  .animate-float,
+  .animate-attack-flash,
+  .animate-ko-spin {
+    animation: none !important;
+  }
+}
 
 /* === UTILITY CLASSES === */
 .glass {
