@@ -377,6 +377,19 @@ Influencer `<select>` options displayed the entire `persona` field (full appeara
 - [x] Keep `dialogue.delivery` as-is (describes HOW the line is delivered)
 - [x] Null-check `dialogue.text` since field is optional
 
+#### ~~B0.33 - Video Regeneration Button Not Working (z-index / Event Interception)~~ FIXED
+**Severity:** Medium (regenerate button visible on hover but clicks intercepted by HTML5 video controls)
+**Scope:** Frontend
+**Discovered:** 2026-02-21
+
+**Why:** The hover action button container in `AssetCard` sits below the native HTML5 `<video controls>` control bar in stacking context. When user clicks the regenerate (or any action) button over a video asset, the native video controls intercept the click event before it reaches the button.
+
+**Fix checklist:**
+- [x] Add `z-10` to hover action button container so it stacks above native video controls
+- [x] Add `e.stopPropagation()` to regenerate button onClick
+- [x] Add `e.stopPropagation()` to all action buttons (upload, edit, reject) for consistency
+- [x] Download button already had `e.stopPropagation()` — no change needed
+
 ---
 
 ### Tier 1: Complete the Core Pipeline (Ship a working end-to-end product)
@@ -1432,6 +1445,7 @@ BUGS ──→   Tier 0 Bug Bash Findings (fix BEFORE any new Tier 1.5 work)
            ~~B0.29 Select-influencer race condition (duplicate casting jobs)~~ ✅ FIXED
            ~~B0.30 Keyframe ref image ordering broken (influencer drift + product overrides ignored)~~ ✅ FIXED
            ~~B0.32 Video prompt missing dialogue text (Kling has no script context)~~ ✅ FIXED
+           ~~B0.33 Video regeneration button not working (z-index / event interception)~~ ✅ FIXED
 
 POLISH     Tier 1.5: UX Hardening
            R1.5.1 Influencer edit ──→ R1.5.2 Project settings ──→ R1.5.3 Navigation ──→ R1.5.4 Error handling (ALL DONE)

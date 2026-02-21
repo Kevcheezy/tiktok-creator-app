@@ -635,7 +635,7 @@ export function AssetCard({ asset, showGrade, compact, onGrade, onReject, onRege
 
       {/* Action buttons: download + upload + edit + reject + regenerate (shown on hover for completed assets) */}
       {asset.status === 'completed' && (onEdit || onReject || onRegenerate || isUploadable || (asset.url && downloadFilename)) && (
-        <div className="absolute right-2 bottom-14 flex flex-col gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+        <div className="absolute right-2 bottom-14 z-10 flex flex-col gap-1 opacity-0 transition-opacity group-hover:opacity-100">
           {asset.url && downloadFilename && proxyDownload ? (
             <button
               type="button"
@@ -657,7 +657,7 @@ export function AssetCard({ asset, showGrade, compact, onGrade, onReject, onRege
           {isUploadable && (
             <button
               type="button"
-              onClick={handleUploadClick}
+              onClick={(e) => { e.stopPropagation(); handleUploadClick(); }}
               title="Upload replacement"
               className="flex h-7 w-7 items-center justify-center rounded-md bg-void/70 text-text-muted backdrop-blur-sm transition-colors hover:bg-electric/20 hover:text-electric"
             >
@@ -669,7 +669,7 @@ export function AssetCard({ asset, showGrade, compact, onGrade, onReject, onRege
           {onEdit && isKeyframe && (
             <button
               type="button"
-              onClick={() => onEdit(asset.id)}
+              onClick={(e) => { e.stopPropagation(); onEdit(asset.id); }}
               title="Edit keyframe"
               className="flex h-7 w-7 items-center justify-center rounded-md bg-void/70 text-text-muted backdrop-blur-sm transition-colors hover:bg-amber-hot/20 hover:text-amber-hot"
             >
@@ -681,7 +681,7 @@ export function AssetCard({ asset, showGrade, compact, onGrade, onReject, onRege
           {onReject && (
             <button
               type="button"
-              onClick={() => onReject(asset.id)}
+              onClick={(e) => { e.stopPropagation(); onReject(asset.id); }}
               title="Reject asset"
               className="flex h-7 w-7 items-center justify-center rounded-md bg-void/70 text-text-muted backdrop-blur-sm transition-colors hover:bg-magenta/20 hover:text-magenta"
             >
@@ -693,7 +693,7 @@ export function AssetCard({ asset, showGrade, compact, onGrade, onReject, onRege
           {onRegenerate && (
             <button
               type="button"
-              onClick={() => onRegenerate(asset.id)}
+              onClick={(e) => { e.stopPropagation(); onRegenerate(asset.id); }}
               title="Regenerate asset"
               className="flex h-7 w-7 items-center justify-center rounded-md bg-void/70 text-text-muted backdrop-blur-sm transition-colors hover:bg-electric/20 hover:text-electric"
             >
