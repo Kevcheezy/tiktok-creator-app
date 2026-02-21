@@ -41,10 +41,10 @@ export async function POST(
       return NextResponse.json({ error: 'Asset not found' }, { status: 404 });
     }
 
-    // Only allow regenerating failed, rejected, or completed assets
-    if (!['failed', 'rejected', 'completed'].includes(asset.status)) {
+    // Only allow regenerating assets that aren't currently in progress
+    if (!['failed', 'rejected', 'completed', 'cancelled'].includes(asset.status)) {
       return NextResponse.json(
-        { error: 'Can only regenerate failed, rejected, or completed assets' },
+        { error: 'Can only regenerate failed, rejected, completed, or cancelled assets' },
         { status: 400 }
       );
     }
