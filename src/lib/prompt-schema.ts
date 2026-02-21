@@ -12,6 +12,7 @@ export interface StructuredPrompt {
   product?: {
     emphasis?: string;
     position?: string;
+    scale?: string;
   };
   dialogue?: {
     text?: string;
@@ -125,7 +126,8 @@ export const STRUCTURED_PROMPT_SCHEMA_DESCRIPTION = `Output a JSON object matchi
   },
   "product": {
     "emphasis": "++product description with emphasis++",
-    "position": "where/how product appears"
+    "position": "where/how product appears",
+    "scale": "realistic relative size vs subject (e.g. palm-sized bottle, forearm-height container)"
   },
   "dialogue": {
     "text": "what is being said",

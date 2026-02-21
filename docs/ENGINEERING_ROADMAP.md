@@ -1153,6 +1153,36 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] "Upload Video" button on VideoPreviewPanel next to Test Generate
 - [x] `uploadAssetToStorage()` utility in direct-upload.ts
 
+#### ~~R1.5.33 - Lock Camera Setting for Video Generation~~ DONE
+**Priority:** P1 - High
+**Effort:** Small
+**Depends on:** R1.5.29
+**Why:** Some scenes look better with a completely static camera — especially close-up talking head shots where camera movement is distracting. A project-level toggle that locks the camera to static overrides all camera movement instructions in video prompts and adds camera motion terms to the negative prompt.
+
+**Backend:**
+- [x] `lock_camera` boolean column on `project` table (default false)
+- [x] `serializeForVideo()` accepts `lockCamera` option — overrides camera_specs.movement to static, appends camera motion to negative prompt
+- [x] DirectorAgent reads `lock_camera` from project, passes through all prompt paths (structured, legacy, override)
+- [x] Test-generate route reads `lock_camera`, passes through all prompt paths
+
+**Frontend:**
+- [x] Toggle in Casting Review UI — `LockCameraToggle` component with `glass` panel, camera icon, descriptive label, PATCH toggle
+
+---
+
+#### ~~R1.5.34 - Product Size in Keyframe Prompts~~ DONE
+**Priority:** P1 - High
+**Effort:** Small
+**Depends on:** R1.5.29
+**Why:** Products appeared significantly smaller than their real-world size in generated keyframes because `product_size` data existed in the DB but was never passed to the CastingAgent's LLM prompt. The LLM had to guess proportions, resulting in undersized products.
+
+**Backend:**
+- [x] Add `scale?: string` field to `StructuredPrompt.product` interface and schema description
+- [x] Extract `product_size`, `product_type`, `product_category` from project/product data in CastingAgent
+- [x] Pass size/type info to `generateVisualPrompts()` and include in LLM user prompt
+- [x] Add SCALE RULE instruction for realistic proportional rendering
+- [x] Update fallback template prompt with size info
+
 ---
 
 ### Tier 2: Make It Actually Convert (Quality & conversion optimization)

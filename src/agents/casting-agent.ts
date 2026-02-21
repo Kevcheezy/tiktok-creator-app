@@ -159,6 +159,14 @@ export class CastingAgent extends BaseAgent {
           const sealSegment = project.video_analysis?.segments?.[segIdx] || null;
           const hasProductRef = !!segmentProductImage;
           const negativePrompt = resolveNegativePrompt(project, 'casting');
+
+          // Build product size/type string from available product data
+          const productSizeParts: string[] = [];
+          if (project.product?.product_size) productSizeParts.push(project.product.product_size);
+          if (project.product?.product_type) productSizeParts.push(project.product.product_type);
+          if (project.product_category) productSizeParts.push(project.product_category);
+          const productSizeType = productSizeParts.length > 0 ? productSizeParts.join(', ') : null;
+
           const promptPair = await this.generateVisualPrompts(
             appearance, wardrobe, sceneDescription,
             scene, placement, energyArc,
@@ -171,6 +179,7 @@ export class CastingAgent extends BaseAgent {
             isContinuation,
             segIdx,
             negativePrompt,
+            productSizeType,
           );
 
           // Save visual prompts to scene
@@ -347,6 +356,7 @@ export class CastingAgent extends BaseAgent {
     isContinuation: boolean = false,
     segmentIndex: number = 0,
     negativePrompt: string = IMAGE_NEGATIVE_PROMPT,
+    productSizeType?: string | null,
   ): Promise<{ start: StructuredPrompt | string; end: StructuredPrompt | string }> {
     const consistencyRule = `CONSISTENCY RULE: All 4 segments MUST use the same room, lighting setup, and props. Only vary: character pose, energy level, product visibility, and camera micro-adjustments (slight angle shift, subtle lighting warmth change matching energy arc). The video must look like one continuous shoot in one location.`;
 
@@ -396,6 +406,11 @@ ${consistencyRule}${differentiationRule}${structuredOutputInstruction}`;
       ? `\nIMPORTANT: The real product image is provided as a reference. Preserve the EXACT product appearance — packaging, shape, colors, label, and branding. Do not invent or alter the product's look.`
       : '';
 
+    const productSizeLine = productSizeType ? `\nProduct size/type: ${productSizeType}` : '';
+    const scaleRule = productSizeType
+      ? `\nSCALE RULE: The product MUST be rendered at realistic proportional scale relative to the subject's body. Use the product size/type info to determine correct proportions.`
+      : '';
+
     let userPrompt = isEdit
       ? `Transform the reference images into the following scene context:
 Character: ${appearance}
@@ -403,11 +418,11 @@ Wardrobe: ${wardrobe}
 Scene: ${sceneDescription}
 ${interactionLine}${cameraLine ? `\n${cameraLine}` : ''}
 Segment: ${placement.section} (${placement.description})
-Product: ${productName}
+Product: ${productName}${productSizeLine}
 Product visibility: ${placement.visibility}
 Energy arc: starts at ${energyArc.pattern.start}, peaks at ${energyArc.pattern.middle}, ends at ${energyArc.pattern.end}
 Script context: ${scene.script_text || 'N/A'}
-Text overlay: ${scene.text_overlay || 'N/A'}${productRefLine}
+Text overlay: ${scene.text_overlay || 'N/A'}${productRefLine}${scaleRule}
 
 Generate START StructuredPrompt (energy: ${energyArc.pattern.start}) and END StructuredPrompt (energy: ${energyArc.pattern.end}).${frameActions ? `\nSTART pose: ${frameActions.start}\nEND pose: ${frameActions.end}` : ''}
 Fill all fields. START and END must be visually distinct.
@@ -418,11 +433,11 @@ Wardrobe: ${wardrobe}
 Scene: ${sceneDescription}
 ${interactionLine}${cameraLine ? `\n${cameraLine}` : ''}
 Segment: ${placement.section} (${placement.description})
-Product: ${productName}
+Product: ${productName}${productSizeLine}
 Product visibility: ${placement.visibility}
 Energy arc: starts at ${energyArc.pattern.start}, peaks at ${energyArc.pattern.middle}, ends at ${energyArc.pattern.end}
 Script context: ${scene.script_text || 'N/A'}
-Text overlay: ${scene.text_overlay || 'N/A'}
+Text overlay: ${scene.text_overlay || 'N/A'}${scaleRule}
 
 Generate START StructuredPrompt (energy: ${energyArc.pattern.start}) and END StructuredPrompt (energy: ${energyArc.pattern.end}).${frameActions ? `\nSTART pose: ${frameActions.start}\nEND pose: ${frameActions.end}` : ''}
 Fill all fields. Keep the scene LOCKED — same room, same lighting, same props across all segments. START and END must be visually distinct.
@@ -459,10 +474,11 @@ Match this reference video's visual style: use similar lighting, camera angle, a
       const cameraStr = cameraSpecs
         ? `${cameraSpecs.angle || 'medium'} shot, ${cameraSpecs.movement || 'static'}, ${cameraSpecs.lighting || 'natural_window'} lighting`
         : 'medium shot, static, cinematic lighting';
+      const sizeInfo = productSizeType ? `, ${productSizeType} product at realistic scale` : '';
       const base = `${appearance}, ${wardrobe}, ${sceneDescription}, ${cameraStr}, 9:16 portrait, photorealistic`;
       return {
-        start: `${base}, ${energyArc.pattern.start.toLowerCase()} energy, opening pose, ${placement.visibility} product visibility`,
-        end: `${base}, ${energyArc.pattern.end.toLowerCase()} energy, closing pose, ${placement.visibility} product visibility`,
+        start: `${base}, ${energyArc.pattern.start.toLowerCase()} energy, opening pose, ${placement.visibility} product visibility${sizeInfo}`,
+        end: `${base}, ${energyArc.pattern.end.toLowerCase()} energy, closing pose, ${placement.visibility} product visibility${sizeInfo}`,
       };
     }
   }
