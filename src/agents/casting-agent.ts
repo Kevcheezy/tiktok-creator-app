@@ -188,9 +188,9 @@ export class CastingAgent extends BaseAgent {
             .update({ visual_prompt: promptPair })
             .eq('id', scene.id);
 
-          // Build reference images: influencer FIRST (face/likeness), product second, chain ref third.
-          // Influencer must always be the primary reference so the model preserves the exact likeness.
-          // Previous end frame is a continuity hint, not the identity source.
+          // Build reference images for the INITIAL keyframe (Seg 0 START only).
+          // Influencer sets the initial look. Product included only when visibility != 'none'.
+          // All subsequent frames use chain-first refs (previous frame as primary input).
           const referenceImages: string[] = [];
           if (useInfluencer) referenceImages.push(influencer.image_url);
           if (segmentProductImage) referenceImages.push(segmentProductImage);
@@ -224,12 +224,10 @@ export class CastingAgent extends BaseAgent {
                 cost_usd: 0,
               });
 
-              // Generate only the end keyframe: influencer first (identity), then start frame (continuity), then product
-              const endRefs: string[] = [];
-              if (useInfluencer) endRefs.push(influencer.image_url);
-              endRefs.push(startUrl);
+              // Generate only the end keyframe: chain ref first (sequential continuity), then product if visible
+              const endRefs: string[] = [startUrl];
               if (segmentProductImage) endRefs.push(segmentProductImage);
-              this.log(`Segment ${segIdx}: generating END keyframe with influencer as primary ref (attempt ${attempt + 1})`);
+              this.log(`Segment ${segIdx}: generating END keyframe with previous frame as primary ref (attempt ${attempt + 1})`);
               const endResult = await this.wavespeed.editImage(endRefs, endPromptStr, editOpts);
               await this.createAsset(projectId, scene.id, 'keyframe_end', endResult.taskId, 'nano-banana-pro-edit');
               const endPoll = await this.wavespeed.pollResult(endResult.taskId, { maxWait: POLL_MAX_WAIT, initialInterval: POLL_INITIAL_INTERVAL, shouldCancel: this.shouldCancel });
@@ -251,12 +249,11 @@ export class CastingAgent extends BaseAgent {
               startUrl = startPoll.url || '';
               await this.updateAssetUrl(startResult.taskId, startUrl);
 
-              // End frame: influencer first (identity), then start frame (intra-segment continuity), then product
+              // End frame: chain ref first (sequential continuity), then product if visible
               const endRefs: string[] = [];
-              if (useInfluencer) endRefs.push(influencer.image_url);
               if (startUrl) endRefs.push(startUrl);
               if (segmentProductImage) endRefs.push(segmentProductImage);
-              this.log(`Segment ${segIdx}: generating END keyframe with influencer as primary ref (attempt ${attempt + 1})`);
+              this.log(`Segment ${segIdx}: generating END keyframe with start frame as primary ref (attempt ${attempt + 1})`);
               const endResult = await this.wavespeed.editImage(endRefs, endPromptStr, editOpts);
               await this.createAsset(projectId, scene.id, 'keyframe_end', endResult.taskId, 'nano-banana-pro-edit');
               const endPoll = await this.wavespeed.pollResult(endResult.taskId, { maxWait: POLL_MAX_WAIT, initialInterval: POLL_INITIAL_INTERVAL, shouldCancel: this.shouldCancel });

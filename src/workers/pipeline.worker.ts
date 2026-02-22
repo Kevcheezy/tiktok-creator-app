@@ -1085,48 +1085,17 @@ async function regenerateKeyframe(
   // Use pre-fetched project refs (cascade path) or fetch now (single-regen path)
   const refs = projectRefs ?? await fetchProjectReferences(projectId, jobLog);
 
-  // Build reference images matching CastingAgent pattern:
-  // [influencerImage, productImage, chainReference]
-  // Influencer FIRST (face/likeness preservation), product second, chain ref third.
+  // Build reference images: chain-first sequential generation.
+  // Chain ref is ALWAYS position [0] (primary) for sequential continuity.
+  // Influencer is only used as fallback when no chain ref exists (very first keyframe).
+  // Product is included only when product placement visibility != 'none'.
   const referenceImages: string[] = [];
 
-  // 1. Influencer image — ALWAYS first for likeness preservation
-  if (refs.influencerImageUrl) {
-    referenceImages.push(refs.influencerImageUrl);
-  }
-
-  // 2. Product image — ALWAYS included (prompt controls visibility, ref ensures consistency)
-  //    Use angle-specific image when visibility != 'none' and multiple images exist
-  if (refs.productImages.length > 0) {
-    const segmentIndex = scene?.segment_index ?? 0;
-    const defaultPlacement = PRODUCT_PLACEMENT_ARC[segmentIndex];
-    const userOverride = refs.productPlacement?.find((p: any) => p.segment === segmentIndex);
-    const visibility = userOverride?.visibility || defaultPlacement?.visibility || 'subtle';
-
-    if (visibility !== 'none' && refs.productImages.length > 1) {
-      // Angle-aware selection from pre-fetched product images
-      const preferredAngles = VISIBILITY_ANGLE_MAP[visibility] || ['front'];
-      let picked: typeof refs.productImages[0] | undefined;
-      for (const angle of preferredAngles) {
-        picked = refs.productImages.find((i) => i.angle === angle);
-        if (picked) break;
-      }
-      if (!picked) picked = refs.productImages.find((i) => i.is_primary) || refs.productImages[0];
-      referenceImages.push(picked.url_clean || picked.url);
-    } else {
-      // visibility='none' or single image — still include product (use primary or first)
-      const primary = refs.productImages.find((i) => i.is_primary) || refs.productImages[0];
-      referenceImages.push(primary.url_clean || primary.url);
-    }
-  } else if (refs.fallbackProductUrl) {
-    referenceImages.push(refs.fallbackProductUrl);
-  }
-
-  // 3. Chain reference — previous frame for continuity (lowest priority)
+  // 1. Chain reference — FIRST (primary) for sequential continuity
   if (previousFrameUrl) {
     referenceImages.push(previousFrameUrl);
   } else if (asset.type === 'keyframe_end' && scene) {
-    // For END keyframe: use same segment's START as reference
+    // For END keyframe: use same segment's START as chain ref
     const { data: startAsset } = await supabase
       .from('asset')
       .select('url')
@@ -1136,7 +1105,7 @@ async function regenerateKeyframe(
       .single();
     if (startAsset?.url) referenceImages.push(startAsset.url);
   } else if (asset.type === 'keyframe_start' && scene) {
-    // For START keyframe: use previous segment's END as reference (chaining)
+    // For START keyframe: use previous segment's END as chain ref
     const segmentIndex = scene.segment_index ?? 0;
     if (segmentIndex > 0) {
       const { data: prevEndAsset } = await supabase
@@ -1150,6 +1119,37 @@ async function regenerateKeyframe(
         return s?.segment_index === segmentIndex - 1;
       });
       if (prevEnd?.url) referenceImages.push(prevEnd.url);
+    }
+  }
+
+  // 2. If NO chain ref found, use influencer as the initial identity source
+  //    (only happens for the very first keyframe in the chain)
+  if (referenceImages.length === 0 && refs.influencerImageUrl) {
+    referenceImages.push(refs.influencerImageUrl);
+  }
+
+  // 3. Product image — only when product placement visibility != 'none'
+  const segmentIndex = scene?.segment_index ?? 0;
+  const defaultPlacement = PRODUCT_PLACEMENT_ARC[segmentIndex];
+  const userOverride = refs.productPlacement?.find((p: any) => p.segment === segmentIndex);
+  const visibility = userOverride?.visibility || defaultPlacement?.visibility || 'subtle';
+
+  if (visibility !== 'none') {
+    if (refs.productImages.length > 1) {
+      // Angle-aware selection from pre-fetched product images
+      const preferredAngles = VISIBILITY_ANGLE_MAP[visibility] || ['front'];
+      let picked: typeof refs.productImages[0] | undefined;
+      for (const angle of preferredAngles) {
+        picked = refs.productImages.find((i) => i.angle === angle);
+        if (picked) break;
+      }
+      if (!picked) picked = refs.productImages.find((i) => i.is_primary) || refs.productImages[0];
+      referenceImages.push(picked.url_clean || picked.url);
+    } else if (refs.productImages.length === 1) {
+      const img = refs.productImages[0];
+      referenceImages.push(img.url_clean || img.url);
+    } else if (refs.fallbackProductUrl) {
+      referenceImages.push(refs.fallbackProductUrl);
     }
   }
 
