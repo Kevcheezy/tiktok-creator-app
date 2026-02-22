@@ -9,11 +9,14 @@ import { StructuredPrompt } from './prompt-schema';
  * Flattens a StructuredPrompt into descriptive prose for Nano Banana Pro
  * text-to-image or image-edit. Uses `++emphasis++` syntax for subject/product.
  */
-export function serializeForImage(prompt: StructuredPrompt): string {
+export function serializeForImage(
+  prompt: StructuredPrompt,
+  opts?: { skipSubject?: boolean },
+): string {
   const parts: string[] = [];
 
-  // Subject with emphasis
-  if (prompt.subject) {
+  // Subject — skip when a reference image defines the person's appearance
+  if (prompt.subject && !opts?.skipSubject) {
     parts.push(prompt.subject.emphasis || prompt.subject.primary);
     if (prompt.subject.features) parts.push(prompt.subject.features);
     if (prompt.subject.wardrobe) parts.push(`wearing ${prompt.subject.wardrobe}`);

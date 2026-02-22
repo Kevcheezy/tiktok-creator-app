@@ -199,9 +199,12 @@ export class CastingAgent extends BaseAgent {
           let startUrl = '';
           let endUrl = '';
 
-          // Serialize structured prompts to API-ready strings
-          const startPromptStr = isStructuredPrompt(promptPair.start) ? serializeForImage(promptPair.start) : String(promptPair.start);
-          const endPromptStr = isStructuredPrompt(promptPair.end) ? serializeForImage(promptPair.end) : String(promptPair.end);
+          // Serialize structured prompts to API-ready strings.
+          // When using reference images (isEdit), skip subject description — the reference
+          // image defines the person's appearance. Only describe actions, scenery, and product.
+          const skipSubject = useInfluencer || hasProductRef || isContinuation;
+          const startPromptStr = isStructuredPrompt(promptPair.start) ? serializeForImage(promptPair.start, { skipSubject }) : String(promptPair.start);
+          const endPromptStr = isStructuredPrompt(promptPair.end) ? serializeForImage(promptPair.end, { skipSubject }) : String(promptPair.end);
 
           if (referenceImages.length > 0) {
             // Edit mode: use reference images

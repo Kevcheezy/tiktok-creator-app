@@ -1079,9 +1079,6 @@ async function regenerateKeyframe(
 
   if (!rawPrompt) throw new Error('No visual prompt found on scene for regeneration');
 
-  // Serialize structured prompts; pass through legacy strings
-  const promptText = isStructuredPrompt(rawPrompt) ? serializeForImage(rawPrompt) : String(rawPrompt);
-
   // Use pre-fetched project refs (cascade path) or fetch now (single-regen path)
   const refs = projectRefs ?? await fetchProjectReferences(projectId, jobLog);
 
@@ -1152,6 +1149,12 @@ async function regenerateKeyframe(
       referenceImages.push(refs.fallbackProductUrl);
     }
   }
+
+  // Serialize prompt AFTER building referenceImages so we can skip subject
+  // description when a reference image defines the person's appearance
+  const promptText = isStructuredPrompt(rawPrompt)
+    ? serializeForImage(rawPrompt, { skipSubject: referenceImages.length > 0 })
+    : String(rawPrompt);
 
   const wavespeed = new WaveSpeedClient();
   let taskId: string;
