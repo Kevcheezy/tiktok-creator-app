@@ -418,6 +418,16 @@ Influencer `<select>` options displayed the entire `persona` field (full appeara
 **Fix checklist:**
 - [x] Change cascade keyframe fetch from `scene:scene(id, segment_index)` to `scene:scene(*)` in `pipeline.worker.ts` line 1186
 
+#### ~~B0.40 — END frame reference images use wrong order (face drift)~~ FIXED
+**Severity:** Critical — causes influencer face to drift across segments
+**Scope:** Backend (worker)
+
+**Why:** Casting agent END frame references put `startUrl` at position 0 (primary identity) and influencer at position 1 (secondary). WaveSpeed API treats position 0 as the primary face/likeness reference. Over 4 segments, this causes cumulative face drift — each END looks less like the influencer.
+
+**Fix checklist:**
+- [x] Fix: Reorder both END frame reference arrays (continuation path + first segment path) to put influencer at position 0
+- The B0.30 fix correctly ordered START frame references but missed END frame references
+
 ---
 
 ### Tier 1: Complete the Core Pipeline (Ship a working end-to-end product)
@@ -1485,6 +1495,7 @@ BUGS ──→   Tier 0 Bug Bash Findings (fix BEFORE any new Tier 1.5 work)
            ~~B0.30 Keyframe ref image ordering broken (influencer drift + product overrides ignored)~~ ✅ FIXED
            ~~B0.32 Video prompt missing dialogue text (Kling has no script context)~~ ✅ FIXED
            ~~B0.33 Video regeneration button not working (z-index / event interception)~~ ✅ FIXED
+           ~~B0.40 END frame reference image ordering (face drift across segments)~~ ✅ FIXED
 
 POLISH     Tier 1.5: UX Hardening
            R1.5.1 Influencer edit ──→ R1.5.2 Project settings ──→ R1.5.3 Navigation ──→ R1.5.4 Error handling (ALL DONE)

@@ -224,11 +224,12 @@ export class CastingAgent extends BaseAgent {
                 cost_usd: 0,
               });
 
-              // Generate only the end keyframe: start frame first (continuity), then influencer + product
-              const endRefs: string[] = [startUrl];
+              // Generate only the end keyframe: influencer first (identity), then start frame (continuity), then product
+              const endRefs: string[] = [];
               if (useInfluencer) endRefs.push(influencer.image_url);
+              endRefs.push(startUrl);
               if (segmentProductImage) endRefs.push(segmentProductImage);
-              this.log(`Segment ${segIdx}: generating END keyframe with reused start as primary ref (attempt ${attempt + 1})`);
+              this.log(`Segment ${segIdx}: generating END keyframe with influencer as primary ref (attempt ${attempt + 1})`);
               const endResult = await this.wavespeed.editImage(endRefs, endPromptStr, editOpts);
               await this.createAsset(projectId, scene.id, 'keyframe_end', endResult.taskId, 'nano-banana-pro-edit');
               const endPoll = await this.wavespeed.pollResult(endResult.taskId, { maxWait: POLL_MAX_WAIT, initialInterval: POLL_INITIAL_INTERVAL, shouldCancel: this.shouldCancel });
@@ -250,12 +251,12 @@ export class CastingAgent extends BaseAgent {
               startUrl = startPoll.url || '';
               await this.updateAssetUrl(startResult.taskId, startUrl);
 
-              // End frame: start frame first (intra-segment consistency), then influencer + product
+              // End frame: influencer first (identity), then start frame (intra-segment continuity), then product
               const endRefs: string[] = [];
-              if (startUrl) endRefs.push(startUrl);
               if (useInfluencer) endRefs.push(influencer.image_url);
+              if (startUrl) endRefs.push(startUrl);
               if (segmentProductImage) endRefs.push(segmentProductImage);
-              this.log(`Segment ${segIdx}: generating END keyframe with start frame as primary ref (attempt ${attempt + 1})`);
+              this.log(`Segment ${segIdx}: generating END keyframe with influencer as primary ref (attempt ${attempt + 1})`);
               const endResult = await this.wavespeed.editImage(endRefs, endPromptStr, editOpts);
               await this.createAsset(projectId, scene.id, 'keyframe_end', endResult.taskId, 'nano-banana-pro-edit');
               const endPoll = await this.wavespeed.pollResult(endResult.taskId, { maxWait: POLL_MAX_WAIT, initialInterval: POLL_INITIAL_INTERVAL, shouldCancel: this.shouldCancel });
