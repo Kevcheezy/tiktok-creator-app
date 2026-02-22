@@ -86,6 +86,31 @@ export async function POST(
           .in('id', subsequentIds);
       }
 
+      // Invalidate stale video previews for all affected scenes
+      const affectedSceneIds = [...new Set(subsequent.map((kf: any) => kf.scene_id))];
+      if (affectedSceneIds.length > 0) {
+        const { data: staleVideos } = await supabase
+          .from('asset')
+          .select('id')
+          .eq('project_id', id)
+          .eq('type', 'video')
+          .in('scene_id', affectedSceneIds)
+          .in('status', ['completed', 'generating']);
+
+        if (staleVideos?.length) {
+          const staleVideoIds = staleVideos.map((v: any) => v.id);
+          await supabase
+            .from('asset')
+            .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+            .in('id', staleVideoIds);
+
+          logger.info(
+            { projectId: id, cancelledVideos: staleVideoIds.length, route: '/api/projects/[id]/assets/regenerate' },
+            'Cancelled stale video previews due to cascade keyframe regeneration'
+          );
+        }
+      }
+
       // Enqueue cascade regeneration job
       await getPipelineQueue().add('regenerate_asset_cascade', {
         projectId: id,
@@ -112,6 +137,28 @@ export async function POST(
       .from('asset')
       .update({ status: 'generating', url: null, updated_at: new Date().toISOString() })
       .eq('id', assetId);
+
+    // Invalidate stale video previews for the same scene
+    if (isKeyframe) {
+      const { data: staleVideos } = await supabase
+        .from('asset')
+        .select('id')
+        .eq('scene_id', asset.scene_id)
+        .eq('type', 'video')
+        .in('status', ['completed', 'generating']);
+
+      if (staleVideos?.length) {
+        await supabase
+          .from('asset')
+          .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+          .in('id', staleVideos.map((v: any) => v.id));
+
+        logger.info(
+          { projectId: id, cancelledVideos: staleVideos.length, route: '/api/projects/[id]/assets/regenerate' },
+          'Cancelled stale video previews due to keyframe regeneration'
+        );
+      }
+    }
 
     await getPipelineQueue().add('regenerate_asset', {
       projectId: id,

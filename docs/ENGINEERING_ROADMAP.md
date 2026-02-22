@@ -1224,6 +1224,17 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] Add SCALE RULE instruction for realistic proportional rendering
 - [x] Update fallback template prompt with size info
 
+#### ~~R1.5.35 - Invalidate Stale Video Previews on Keyframe Regeneration~~ DONE
+**Priority:** P1 - High
+**Effort:** Small
+**Depends on:** R1.5.23 (cascade editing provides per-segment regeneration)
+**Why:** When a keyframe is regenerated (single or cascade), any previously generated video assets for the affected scene(s) remained marked as active. This caused stale video previews to display in the UI even though the underlying keyframe had changed. Automatically cancelling video assets in affected scenes ensures the UI never shows outdated previews.
+
+**Backend:**
+- [x] On keyframe regeneration (single or cascade), identify all video assets in affected scene(s)
+- [x] Cancel/invalidate stale video assets so they are no longer shown as active
+- [x] Ensure cancelled assets are excluded from downstream pipeline stages
+
 ---
 
 ### Tier 2: Make It Actually Convert (Quality & conversion optimization)
@@ -1499,6 +1510,7 @@ POLISH     Tier 1.5: UX Hardening
            R1.5.22 B-Roll Timing in EditorAgent (depends on Creatomate template work)
            R1.5.23 Smart Cascade Editing — per-segment regeneration after script edits (depends on R1.5.8 ✅)
            R1.5.25 Asset Download for All Generated Media ✅ DONE
+           R1.5.35 Invalidate Stale Video Previews on Keyframe Regen ✅ DONE (depends on R1.5.23 — cancels video assets when keyframe changes)
 
 NEXT       Tier 2: Quality & Conversion
            R2.0b Lip Sync Post-Processing ⬅ HIGH PRIORITY (biggest quality gap — lips don't match voiceover)
