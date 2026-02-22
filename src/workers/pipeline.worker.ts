@@ -992,12 +992,84 @@ async function handleAssetRegeneration(
   }
 }
 
+// Reference data pre-fetched once for cascade, passed to each keyframe regen call
+interface ProjectReferenceData {
+  influencerImageUrl: string | null;
+  productImages: { url: string; url_clean: string | null; angle: string; is_primary: boolean }[];
+  fallbackProductUrl: string | null;
+  productPlacement: { segment: number; visibility: string; notes?: string }[] | null;
+  productId: string | null;
+}
+
+/**
+ * Fetches project with influencer + product data once. Throws on failure.
+ * Used by both single-keyframe and cascade regeneration.
+ */
+async function fetchProjectReferences(
+  projectId: string,
+  jobLog: ReturnType<typeof createLogger>,
+): Promise<ProjectReferenceData> {
+  const { data: project, error } = await supabase
+    .from('project')
+    .select('*, influencer:influencer(*), product:product(*)')
+    .eq('id', projectId)
+    .single();
+
+  if (error || !project) {
+    throw new Error(`Failed to fetch project ${projectId} for reference images: ${error?.message || 'project not found'}`);
+  }
+
+  const influencerImageUrl = project.influencer?.image_url || null;
+  if (!influencerImageUrl) {
+    jobLog.warn({ projectId }, 'No influencer image found — keyframes will lack subject reference');
+  }
+
+  const productId = project.product_id || project.product?.id || null;
+  let productImages: ProjectReferenceData['productImages'] = [];
+  let fallbackProductUrl: string | null = null;
+
+  if (productId) {
+    const { data: imgs, error: prodErr } = await supabase
+      .from('product_image')
+      .select('url, url_clean, angle, is_primary')
+      .eq('product_id', productId)
+      .order('sort_order');
+
+    if (prodErr) {
+      jobLog.warn({ productId, error: prodErr.message }, 'Failed to fetch product images');
+    }
+
+    productImages = (imgs || []) as ProjectReferenceData['productImages'];
+    if (productImages.length === 0 && project.product?.image_url) {
+      fallbackProductUrl = project.product.image_url;
+    }
+  } else if (project.product?.image_url) {
+    fallbackProductUrl = project.product.image_url;
+  }
+
+  if (productImages.length === 0 && !fallbackProductUrl) {
+    jobLog.warn({ projectId, productId }, 'No product image found — keyframes will lack product reference');
+  }
+
+  const productPlacement = (project.product_placement as ProjectReferenceData['productPlacement']) || null;
+
+  jobLog.info({
+    projectId,
+    hasInfluencer: !!influencerImageUrl,
+    productImageCount: productImages.length,
+    hasFallbackProduct: !!fallbackProductUrl,
+  }, 'Project reference data fetched for keyframe regeneration');
+
+  return { influencerImageUrl, productImages, fallbackProductUrl, productPlacement, productId };
+}
+
 async function regenerateKeyframe(
   projectId: string,
   assetId: string,
   asset: any,
   jobLog: ReturnType<typeof createLogger>,
   previousFrameUrl?: string | null,
+  projectRefs?: ProjectReferenceData | null,
 ): Promise<string> {
   const scene = Array.isArray(asset.scene) ? asset.scene[0] : asset.scene;
   const visualPrompt = scene?.visual_prompt as { start: unknown; end: unknown } | null;
@@ -1010,12 +1082,8 @@ async function regenerateKeyframe(
   // Serialize structured prompts; pass through legacy strings
   const promptText = isStructuredPrompt(rawPrompt) ? serializeForImage(rawPrompt) : String(rawPrompt);
 
-  // Fetch project with influencer + product for reference images
-  const { data: project } = await supabase
-    .from('project')
-    .select('*, influencer:influencer(*), product:product(*)')
-    .eq('id', projectId)
-    .single();
+  // Use pre-fetched project refs (cascade path) or fetch now (single-regen path)
+  const refs = projectRefs ?? await fetchProjectReferences(projectId, jobLog);
 
   // Build reference images matching CastingAgent pattern:
   // [influencerImage, productImage, chainReference]
@@ -1023,45 +1091,35 @@ async function regenerateKeyframe(
   const referenceImages: string[] = [];
 
   // 1. Influencer image — ALWAYS first for likeness preservation
-  if (project?.influencer?.image_url) {
-    referenceImages.push(project.influencer.image_url);
+  if (refs.influencerImageUrl) {
+    referenceImages.push(refs.influencerImageUrl);
   }
 
-  // 2. Product image (angle-aware, respecting user overrides from Casting Review)
-  const productId = project?.product_id || project?.product?.id;
-  if (productId) {
+  // 2. Product image — ALWAYS included (prompt controls visibility, ref ensures consistency)
+  //    Use angle-specific image when visibility != 'none' and multiple images exist
+  if (refs.productImages.length > 0) {
     const segmentIndex = scene?.segment_index ?? 0;
-    // Respect user product placement overrides (same merge logic as CastingAgent)
     const defaultPlacement = PRODUCT_PLACEMENT_ARC[segmentIndex];
-    const customPlacement = project?.product_placement as
-      | { segment: number; visibility: string; notes?: string }[]
-      | null;
-    const userOverride = customPlacement?.find((p: any) => p.segment === segmentIndex);
-    const visibility = userOverride?.visibility || defaultPlacement?.visibility;
+    const userOverride = refs.productPlacement?.find((p: any) => p.segment === segmentIndex);
+    const visibility = userOverride?.visibility || defaultPlacement?.visibility || 'subtle';
 
-    if (visibility && visibility !== 'none') {
-      const { data: productImages } = await supabase
-        .from('product_image')
-        .select('url, url_clean, angle, is_primary')
-        .eq('product_id', productId)
-        .order('sort_order');
-      const imgs = productImages || [];
-      if (imgs.length > 0) {
-        const preferredAngles = VISIBILITY_ANGLE_MAP[visibility] || ['front'];
-        let productUrl: string | null = null;
-        for (const angle of preferredAngles) {
-          const match = imgs.find((i: any) => i.angle === angle);
-          if (match) { productUrl = match.url_clean || match.url; break; }
-        }
-        if (!productUrl) {
-          const primary = imgs.find((i: any) => i.is_primary);
-          productUrl = primary ? (primary.url_clean || primary.url) : (imgs[0].url_clean || imgs[0].url);
-        }
-        if (productUrl) referenceImages.push(productUrl);
-      } else if (project?.product?.image_url) {
-        referenceImages.push(project.product.image_url);
+    if (visibility !== 'none' && refs.productImages.length > 1) {
+      // Angle-aware selection from pre-fetched product images
+      const preferredAngles = VISIBILITY_ANGLE_MAP[visibility] || ['front'];
+      let picked: typeof refs.productImages[0] | undefined;
+      for (const angle of preferredAngles) {
+        picked = refs.productImages.find((i) => i.angle === angle);
+        if (picked) break;
       }
+      if (!picked) picked = refs.productImages.find((i) => i.is_primary) || refs.productImages[0];
+      referenceImages.push(picked.url_clean || picked.url);
+    } else {
+      // visibility='none' or single image — still include product (use primary or first)
+      const primary = refs.productImages.find((i) => i.is_primary) || refs.productImages[0];
+      referenceImages.push(primary.url_clean || primary.url);
     }
+  } else if (refs.fallbackProductUrl) {
+    referenceImages.push(refs.fallbackProductUrl);
   }
 
   // 3. Chain reference — previous frame for continuity (lowest priority)
@@ -1101,13 +1159,21 @@ async function regenerateKeyframe(
   const editOpts = { aspectRatio: RESOLUTION.aspectRatio, resolution: '1k' as const };
 
   if (referenceImages.length > 0) {
-    const refLabels = referenceImages.map((_, i) => i === 0 ? 'primary_ref' : `ref_${i}`).join('+');
-    jobLog.info({ refs: refLabels, refCount: referenceImages.length }, 'Regenerating keyframe via image edit');
+    const refLabels: string[] = [];
+    for (let i = 0; i < referenceImages.length; i++) {
+      if (refs.influencerImageUrl && referenceImages[i] === refs.influencerImageUrl) refLabels.push('influencer');
+      else if (previousFrameUrl && referenceImages[i] === previousFrameUrl) refLabels.push('chain_ref');
+      else refLabels.push('product');
+    }
+    jobLog.info({ refs: refLabels.join('+'), refCount: referenceImages.length, assetId, segment: scene?.segment_index }, 'Regenerating keyframe via image edit');
     const result = await wavespeed.editImage(referenceImages, promptText, editOpts);
     taskId = result.taskId;
     cost = API_COSTS.nanoBananaProEdit;
   } else {
-    jobLog.info('Regenerating keyframe via text-to-image (no references)');
+    jobLog.warn(
+      { assetId, projectId, hasInfluencer: !!refs.influencerImageUrl, hasProduct: refs.productImages.length > 0 || !!refs.fallbackProductUrl },
+      'FALLING BACK to text-to-image — no reference images available. This likely indicates missing influencer/product data.',
+    );
     const result = await wavespeed.generateImage(promptText);
     taskId = result.taskId;
     cost = API_COSTS.nanoBananaPro;
@@ -1180,6 +1246,10 @@ async function handleCascadeRegeneration(
       detail: { sourceAssetId, sourceSegment, sourceType: sourceAsset.type },
     });
 
+    // Pre-fetch project reference data ONCE for the entire cascade.
+    // Avoids N redundant Supabase joins and ensures consistent reference data.
+    const projectRefs = await fetchProjectReferences(projectId, jobLog);
+
     // Fetch ALL keyframe assets for this project, ordered by segment + type
     const { data: allKeyframes } = await supabase
       .from('asset')
@@ -1224,7 +1294,7 @@ async function handleCascadeRegeneration(
       try {
         jobLog.info({ assetId: kf.id, segment: kf._seg, type: kf.type, previousUrl: !!previousUrl }, 'Cascade: regenerating keyframe');
 
-        const newUrl = await regenerateKeyframe(projectId, kf.id, kf, jobLog, previousUrl);
+        const newUrl = await regenerateKeyframe(projectId, kf.id, kf, jobLog, previousUrl, projectRefs);
         previousUrl = newUrl;
         regeneratedCount++;
 
