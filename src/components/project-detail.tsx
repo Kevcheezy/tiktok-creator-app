@@ -64,6 +64,10 @@ interface ProjectData {
   fast_mode: boolean | null;
   lock_camera: boolean | null;
   video_retries: number;
+  scene_preset_id: string | null;
+  scene_override: string | null;
+  interaction_preset_id: string | null;
+  interaction_override: string | null;
 }
 
 // Client-side rollback map (mirrors backend cancel endpoint)
@@ -102,6 +106,14 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
   const [cancelToast, setCancelToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const failCountRef = useRef(0);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Scene/interaction preset state for casting_review editing
+  const [castingScenePresets, setCastingScenePresets] = useState<Preset[]>([]);
+  const [castingInteractionPresets, setCastingInteractionPresets] = useState<Preset[]>([]);
+  const [castingSceneId, setCastingSceneId] = useState<string | null>(null);
+  const [castingSceneOverride, setCastingSceneOverride] = useState('');
+  const [castingInteractionId, setCastingInteractionId] = useState<string | null>(null);
+  const [castingInteractionOverride, setCastingInteractionOverride] = useState('');
 
   // Navigation state for viewing past stages
   const [viewingStage, setViewingStage] = useState<string | null>(null);
@@ -172,6 +184,30 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       setEditMode(false);
     }
   }, [project?.status]);
+
+  // Load scene/interaction presets for casting_review editing
+  useEffect(() => {
+    if (!project || project.status !== 'casting_review') return;
+    const catParam = project.product_category ? `?category=${encodeURIComponent(project.product_category)}` : '';
+    Promise.all([
+      fetch(`/api/scene-presets${catParam}`),
+      fetch(`/api/interaction-presets${catParam}`),
+    ]).then(async ([sRes, iRes]) => {
+      if (sRes.ok) {
+        const d = await sRes.json();
+        setCastingScenePresets(d.presets || []);
+      }
+      if (iRes.ok) {
+        const d = await iRes.json();
+        setCastingInteractionPresets(d.presets || []);
+      }
+    }).catch(() => {});
+    // Pre-populate from project
+    setCastingSceneId(project.scene_preset_id || null);
+    setCastingSceneOverride(project.scene_override || '');
+    setCastingInteractionId(project.interaction_preset_id || null);
+    setCastingInteractionOverride(project.interaction_override || '');
+  }, [project?.status, project?.product_category]);
 
   // Retry a stuck stage by re-triggering its entry point
   const handleStageRetry = useCallback(async (stuckStage: string) => {
@@ -328,7 +364,13 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
     await fetch(`/api/projects/${projectId}/select-influencer`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ influencerId: project.influencer_id }),
+      body: JSON.stringify({
+        influencerId: project.influencer_id,
+        scenePresetId: castingSceneId || project.scene_preset_id,
+        sceneOverride: castingSceneOverride || project.scene_override || undefined,
+        interactionPresetId: castingInteractionId || project.interaction_preset_id,
+        interactionOverride: castingInteractionOverride || project.interaction_override || undefined,
+      }),
     });
     fetchProject();
   }
@@ -670,6 +712,80 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       {/* Casting Review */}
       {displayStage === 'casting_review' && (
         <>
+          {/* WHERE — Scene */}
+          {castingScenePresets.length > 0 && (
+            <PresetSelector
+              step={2}
+              title="Where"
+              subtitle="Scene"
+              presets={castingScenePresets}
+              selectedId={castingSceneId}
+              onSelect={(id) => {
+                setCastingSceneId(id);
+                setCastingSceneOverride('');
+                fetch(`/api/projects/${projectId}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ scene_preset_id: id, scene_override: null }),
+                });
+              }}
+              customText={castingSceneOverride}
+              onCustomTextChange={(text) => {
+                setCastingSceneOverride(text);
+                fetch(`/api/projects/${projectId}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ scene_override: text || null }),
+                });
+              }}
+              productCategory={project.product_category}
+              readOnly={readOnlyMode}
+              presetType="scene"
+              onPresetUpdate={(updated) =>
+                setCastingScenePresets((prev) =>
+                  prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p))
+                )
+              }
+            />
+          )}
+
+          {/* HOW — Interaction */}
+          {castingInteractionPresets.length > 0 && (
+            <PresetSelector
+              step={3}
+              title="How"
+              subtitle="Interaction"
+              presets={castingInteractionPresets}
+              selectedId={castingInteractionId}
+              onSelect={(id) => {
+                setCastingInteractionId(id);
+                setCastingInteractionOverride('');
+                fetch(`/api/projects/${projectId}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ interaction_preset_id: id, interaction_override: null }),
+                });
+              }}
+              customText={castingInteractionOverride}
+              onCustomTextChange={(text) => {
+                setCastingInteractionOverride(text);
+                fetch(`/api/projects/${projectId}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ interaction_override: text || null }),
+                });
+              }}
+              productCategory={project.product_category}
+              readOnly={readOnlyMode}
+              presetType="interaction"
+              onPresetUpdate={(updated) =>
+                setCastingInteractionPresets((prev) =>
+                  prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p))
+                )
+              }
+            />
+          )}
+
           <NegativePromptPanel
             projectId={projectId}
             negativePromptOverride={project.negative_prompt_override}

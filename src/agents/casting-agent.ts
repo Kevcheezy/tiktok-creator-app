@@ -422,8 +422,7 @@ Segment: ${placement.section} (${placement.description})
 Product: ${productName}${productSizeLine}
 Product visibility: ${placement.visibility}
 Energy arc: starts at ${energyArc.pattern.start}, peaks at ${energyArc.pattern.middle}, ends at ${energyArc.pattern.end}
-Script context: ${scene.script_text || 'N/A'}
-Text overlay: ${scene.text_overlay || 'N/A'}${productRefLine}${scaleRule}
+Script context: ${scene.script_text || 'N/A'}${productRefLine}${scaleRule}
 
 Generate START StructuredPrompt (energy: ${energyArc.pattern.start}) and END StructuredPrompt (energy: ${energyArc.pattern.end}).${frameActions ? `\nSTART pose: ${frameActions.start}\nEND pose: ${frameActions.end}` : ''}
 Fill all fields. START and END must be visually distinct.
@@ -437,8 +436,7 @@ Segment: ${placement.section} (${placement.description})
 Product: ${productName}${productSizeLine}
 Product visibility: ${placement.visibility}
 Energy arc: starts at ${energyArc.pattern.start}, peaks at ${energyArc.pattern.middle}, ends at ${energyArc.pattern.end}
-Script context: ${scene.script_text || 'N/A'}
-Text overlay: ${scene.text_overlay || 'N/A'}${scaleRule}
+Script context: ${scene.script_text || 'N/A'}${scaleRule}
 
 Generate START StructuredPrompt (energy: ${energyArc.pattern.start}) and END StructuredPrompt (energy: ${energyArc.pattern.end}).${frameActions ? `\nSTART pose: ${frameActions.start}\nEND pose: ${frameActions.end}` : ''}
 Fill all fields. Keep the scene LOCKED — same room, same lighting, same props across all segments. START and END must be visually distinct.
