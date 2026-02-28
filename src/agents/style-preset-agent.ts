@@ -1,14 +1,11 @@
 import { SupabaseClient } from '@supabase/supabase-js';
-import { execFile } from 'child_process';
-import { promisify } from 'util';
-import { stat, unlink, readFile } from 'fs/promises';
+import { unlink, readFile } from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import { BaseAgent } from './base-agent';
 import { GeminiClient } from '@/lib/api-clients/gemini';
 import { API_COSTS } from '@/lib/constants';
-
-const execFileAsync = promisify(execFile);
+import { downloadTikTokVideo } from '@/lib/tiktok-video-downloader';
 
 // ---------------------------------------------------------------------------
 // StylePresetAnalysis interface
@@ -208,41 +205,32 @@ export class StylePresetAgent extends BaseAgent {
       this.log(`Video URL found: ${videoUrl}`, { presetId });
 
       // ---------------------------------------------------------------
-      // 2. Download video via yt-dlp
+      // 2. Download video
       // ---------------------------------------------------------------
-      this.log('Downloading video via yt-dlp...', { presetId });
+      await this.setStep(presetId, 'downloading');
+      let stepStart = Date.now();
+      this.log('Downloading video...', { presetId });
 
+      let downloadResult: { sizeBytes: number; source: string };
       try {
-        await execFileAsync('yt-dlp', [
-          videoUrl,
-          '-o', tmpPath,
-          '-f', 'best[ext=mp4][height<=720]/best[ext=mp4]/best',
-          '--no-playlist',
-          '--no-warnings',
-          '--quiet',
-        ], {
-          timeout: DOWNLOAD_TIMEOUT_MS,
+        downloadResult = await downloadTikTokVideo(videoUrl, tmpPath, {
+          timeoutMs: DOWNLOAD_TIMEOUT_MS,
+          maxSizeBytes: MAX_FILE_SIZE_BYTES,
         });
       } catch (dlError) {
         const msg = dlError instanceof Error ? dlError.message : String(dlError);
-        this.log(`yt-dlp download failed: ${msg}`, { presetId });
+        this.log(`Video download failed: ${msg}`, { presetId });
         await this.setFailed(presetId, `Video download failed: ${msg}`);
         return null;
       }
 
-      // Check file size
-      const fileStat = await stat(tmpPath);
-      if (fileStat.size > MAX_FILE_SIZE_BYTES) {
-        this.log(`Downloaded file exceeds 100MB (${(fileStat.size / 1024 / 1024).toFixed(1)}MB), aborting`, { presetId });
-        await this.setFailed(presetId, `Video file too large: ${(fileStat.size / 1024 / 1024).toFixed(1)}MB`);
-        return null;
-      }
-
-      this.log(`Video downloaded: ${(fileStat.size / 1024 / 1024).toFixed(1)}MB`, { presetId });
+      this.log(`Video downloaded via ${downloadResult.source}: ${(downloadResult.sizeBytes / 1024 / 1024).toFixed(1)}MB in ${((Date.now() - stepStart) / 1000).toFixed(1)}s`, { presetId, step: 'downloading' });
 
       // ---------------------------------------------------------------
       // 3. Upload to Supabase Storage
       // ---------------------------------------------------------------
+      await this.setStep(presetId, 'uploading');
+      stepStart = Date.now();
       this.log('Uploading video to Supabase Storage...', { presetId });
       const storagePath = `style-presets/${presetId}/reference.mp4`;
 
@@ -262,7 +250,7 @@ export class StylePresetAgent extends BaseAgent {
         const { data: publicUrlData } = this.supabase.storage
           .from('assets')
           .getPublicUrl(storagePath);
-        this.log(`Video uploaded to storage: ${publicUrlData.publicUrl}`, { presetId });
+        this.log(`Video uploaded to storage in ${((Date.now() - stepStart) / 1000).toFixed(1)}s: ${publicUrlData.publicUrl}`, { presetId, step: 'uploading' });
 
         // Save storage path to record
         await this.supabase
@@ -277,6 +265,8 @@ export class StylePresetAgent extends BaseAgent {
       // ---------------------------------------------------------------
       // 4. Send to Gemini for analysis
       // ---------------------------------------------------------------
+      await this.setStep(presetId, 'analyzing');
+      stepStart = Date.now();
       this.log('Sending video to Gemini for style preset analysis...', { presetId });
 
       let rawResponse: string;
@@ -286,14 +276,17 @@ export class StylePresetAgent extends BaseAgent {
         });
       } catch (geminiError) {
         const msg = geminiError instanceof Error ? geminiError.message : String(geminiError);
-        this.log(`Gemini video analysis failed: ${msg}`, { presetId });
+        this.log(`Gemini video analysis failed after ${((Date.now() - stepStart) / 1000).toFixed(1)}s: ${msg}`, { presetId, step: 'analyzing' });
         await this.setFailed(presetId, `Gemini analysis failed: ${msg}`);
         return null;
       }
 
+      this.log(`Gemini analysis completed in ${((Date.now() - stepStart) / 1000).toFixed(1)}s, response length=${rawResponse.length}`, { presetId, step: 'analyzing' });
+
       // ---------------------------------------------------------------
       // 5. Parse JSON response
       // ---------------------------------------------------------------
+      await this.setStep(presetId, 'parsing');
       this.log('Parsing Gemini response...', { presetId });
       let analysis: StylePresetAnalysis;
 
@@ -340,6 +333,7 @@ export class StylePresetAgent extends BaseAgent {
       // ---------------------------------------------------------------
       // 7. Update style_preset record with results
       // ---------------------------------------------------------------
+      await this.setStep(presetId, 'saving');
       const { error: updateError } = await this.supabase
         .from('style_preset')
         .update({
@@ -349,6 +343,7 @@ export class StylePresetAgent extends BaseAgent {
           patterns: analysis.patterns,
           visual_style: analysis.visual_style,
           status: 'ready',
+          current_step: null,
           updated_at: new Date().toISOString(),
         })
         .eq('id', presetId);
@@ -400,6 +395,23 @@ export class StylePresetAgent extends BaseAgent {
   }
 
   /**
+   * Update the current_step field so the frontend can show real progress.
+   */
+  private async setStep(presetId: string, step: string): Promise<void> {
+    try {
+      await this.supabase
+        .from('style_preset')
+        .update({
+          current_step: step,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', presetId);
+    } catch (err) {
+      this.log(`Failed to set current_step=${step}: ${err instanceof Error ? err.message : String(err)}`, { presetId });
+    }
+  }
+
+  /**
    * Set the style_preset status to 'failed' with an error message.
    */
   private async setFailed(presetId: string, errorMessage: string): Promise<void> {
@@ -409,6 +421,7 @@ export class StylePresetAgent extends BaseAgent {
         .update({
           status: 'failed',
           error_message: errorMessage,
+          current_step: null,
           updated_at: new Date().toISOString(),
         })
         .eq('id', presetId);

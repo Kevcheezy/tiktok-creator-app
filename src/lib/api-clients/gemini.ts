@@ -26,16 +26,24 @@ export class GeminiClient {
     options?: { temperature?: number; maxTokens?: number }
   ): Promise<string> {
     const start = Date.now();
+    const UPLOAD_TIMEOUT_MS = 60_000;
+    const GENERATE_TIMEOUT_MS = 180_000;
 
-    // 1. Upload the video file
+    // 1. Upload the video file (with 60s timeout)
     logger.info({ filePath }, 'Uploading video to Gemini File API');
-    const uploadResult = await this.fileManager.uploadFile(filePath, {
-      mimeType: 'video/mp4',
-      displayName: filePath.split('/').pop() || 'reference-video',
-    });
+    const uploadResult = await Promise.race([
+      this.fileManager.uploadFile(filePath, {
+        mimeType: 'video/mp4',
+        displayName: filePath.split('/').pop() || 'reference-video',
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`Gemini file upload timed out after ${UPLOAD_TIMEOUT_MS / 1000}s`)), UPLOAD_TIMEOUT_MS)
+      ),
+    ]);
 
     let file = uploadResult.file;
-    logger.info({ fileName: file.name, state: file.state }, 'File uploaded, waiting for processing');
+    const uploadMs = Date.now() - start;
+    logger.info({ fileName: file.name, state: file.state, uploadMs }, 'File uploaded, waiting for processing');
 
     // 2. Poll until file is ACTIVE (processed)
     const pollStart = Date.now();
@@ -55,20 +63,26 @@ export class GeminiClient {
 
     logger.info({ fileName: file.name, processingMs: Date.now() - pollStart }, 'File ready for analysis');
 
-    // 3. Send to generateContent with video + text
+    // 3. Send to generateContent with video + text (with 180s timeout)
     const model = this.genAI.getGenerativeModel({
       model: this.model,
       systemInstruction: systemPrompt,
     });
 
-    const result = await model.generateContent([
-      {
-        fileData: {
-          mimeType: file.mimeType,
-          fileUri: file.uri,
+    logger.info('Starting generateContent call');
+    const result = await Promise.race([
+      model.generateContent([
+        {
+          fileData: {
+            mimeType: file.mimeType,
+            fileUri: file.uri,
+          },
         },
-      },
-      { text: userPrompt },
+        { text: userPrompt },
+      ]),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`Gemini generateContent timed out after ${GENERATE_TIMEOUT_MS / 1000}s`)), GENERATE_TIMEOUT_MS)
+      ),
     ]);
 
     const responseText = result.response.text();

@@ -1,14 +1,11 @@
 import { SupabaseClient } from '@supabase/supabase-js';
-import { execFile } from 'child_process';
-import { promisify } from 'util';
-import { stat, unlink } from 'fs/promises';
+import { unlink } from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import { BaseAgent } from './base-agent';
 import { GeminiClient } from '@/lib/api-clients/gemini';
 import { API_COSTS } from '@/lib/constants';
-
-const execFileAsync = promisify(execFile);
+import { downloadTikTokVideo } from '@/lib/tiktok-video-downloader';
 
 // ---------------------------------------------------------------------------
 // VideoAnalysis interface — SEAL method (Scene, Emotion, Angle, Lighting)
@@ -198,27 +195,22 @@ export class VideoAnalysisAgent extends BaseAgent {
       this.log(`Video URL found: ${videoUrl}`, { projectId });
 
       // ---------------------------------------------------------------
-      // 3. Download video via yt-dlp
+      // 3. Download video
       // ---------------------------------------------------------------
-      this.log('Downloading video via yt-dlp...', { projectId });
+      this.log('Downloading video...', { projectId });
       await this.logEvent(projectId, 'download_start', 'video_analysis', {
         url: videoUrl,
       });
 
+      let downloadResult: { sizeBytes: number; source: string };
       try {
-        await execFileAsync('yt-dlp', [
-          videoUrl,
-          '-o', tmpPath,
-          '-f', 'best[ext=mp4][height<=720]/best[ext=mp4]/best',
-          '--no-playlist',
-          '--no-warnings',
-          '--quiet',
-        ], {
-          timeout: DOWNLOAD_TIMEOUT_MS,
+        downloadResult = await downloadTikTokVideo(videoUrl, tmpPath, {
+          timeoutMs: DOWNLOAD_TIMEOUT_MS,
+          maxSizeBytes: MAX_FILE_SIZE_BYTES,
         });
       } catch (dlError) {
         const msg = dlError instanceof Error ? dlError.message : String(dlError);
-        this.log(`yt-dlp download failed: ${msg}`, { projectId });
+        this.log(`Video download failed: ${msg}`, { projectId });
         await this.logEvent(projectId, 'error', 'video_analysis', {
           step: 'download',
           error: msg,
@@ -227,20 +219,7 @@ export class VideoAnalysisAgent extends BaseAgent {
         return null;
       }
 
-      // Check file size
-      const fileStat = await stat(tmpPath);
-      if (fileStat.size > MAX_FILE_SIZE_BYTES) {
-        this.log(`Downloaded file exceeds 100MB (${(fileStat.size / 1024 / 1024).toFixed(1)}MB), aborting`, { projectId });
-        await this.logEvent(projectId, 'error', 'video_analysis', {
-          step: 'download',
-          error: 'file_too_large',
-          sizeBytes: fileStat.size,
-        });
-        await this.setVideoAnalysisNull(projectId);
-        return null;
-      }
-
-      this.log(`Video downloaded: ${(fileStat.size / 1024 / 1024).toFixed(1)}MB`, { projectId });
+      this.log(`Video downloaded via ${downloadResult.source}: ${(downloadResult.sizeBytes / 1024 / 1024).toFixed(1)}MB`, { projectId });
 
       // ---------------------------------------------------------------
       // 4. Upload to Supabase Storage

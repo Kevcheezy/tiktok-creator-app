@@ -46,9 +46,19 @@ interface StylePresetFull {
   patterns: Patterns | null;
   visual_style: Record<string, unknown> | null;
   error_message: string | null;
+  current_step: string | null;
   created_at: string;
   updated_at: string | null;
 }
+
+// Step definitions for progress tracking
+const ANALYSIS_STEPS = [
+  { key: 'downloading', label: 'Downloading video' },
+  { key: 'uploading', label: 'Uploading to storage' },
+  { key: 'analyzing', label: 'Analyzing with Gemini' },
+  { key: 'parsing', label: 'Processing results' },
+  { key: 'saving', label: 'Saving analysis' },
+] as const;
 
 // Scoring criteria definitions: segment -> criteria list with max 2 each
 const SEGMENT_CRITERIA: Record<string, string[]> = {
@@ -212,12 +222,34 @@ export function PresetBuilder() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [retrying, setRetrying] = useState(false);
 
-  // Clean up polling on unmount
+  // Duration timer state
+  const [analysisStartedAt, setAnalysisStartedAt] = useState<number | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Clean up polling and timer on unmount
   useEffect(() => {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
+      if (timerRef.current) clearInterval(timerRef.current);
     };
   }, []);
+
+  // Duration timer effect
+  useEffect(() => {
+    if (analysisStartedAt && preset?.status === 'analyzing') {
+      timerRef.current = setInterval(() => {
+        setElapsedSeconds(Math.floor((Date.now() - analysisStartedAt) / 1000));
+      }, 1000);
+      return () => {
+        if (timerRef.current) clearInterval(timerRef.current);
+      };
+    }
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  }, [analysisStartedAt, preset?.status]);
 
   // Polling logic
   const startPolling = useCallback(
@@ -284,6 +316,8 @@ export function PresetBuilder() {
       const data = await res.json();
       const id = data.preset.id;
       setPresetId(id);
+      setAnalysisStartedAt(Date.now());
+      setElapsedSeconds(0);
       setPreset({
         id,
         name: data.preset.name,
@@ -296,6 +330,7 @@ export function PresetBuilder() {
         patterns: null,
         visual_style: null,
         error_message: null,
+        current_step: null,
         created_at: new Date().toISOString(),
         updated_at: null,
       });
@@ -342,6 +377,8 @@ export function PresetBuilder() {
       const data = await res.json();
       const newId = data.preset.id;
       setPresetId(newId);
+      setAnalysisStartedAt(Date.now());
+      setElapsedSeconds(0);
       setPreset({
         id: newId,
         name: data.preset.name,
@@ -354,6 +391,7 @@ export function PresetBuilder() {
         patterns: null,
         visual_style: null,
         error_message: null,
+        current_step: null,
         created_at: new Date().toISOString(),
         updated_at: null,
       });
@@ -494,6 +532,14 @@ export function PresetBuilder() {
   // Phase 2: Analysis in progress
   // ---------------------------------------------------------------------------
   if (preset?.status === 'analyzing') {
+    const currentStepKey = preset.current_step;
+    const currentStepIndex = currentStepKey
+      ? ANALYSIS_STEPS.findIndex((s) => s.key === currentStepKey)
+      : -1;
+    const mins = Math.floor(elapsedSeconds / 60);
+    const secs = elapsedSeconds % 60;
+    const timerDisplay = `${mins}:${secs.toString().padStart(2, '0')}`;
+
     return (
       <div className="animate-fade-in-up space-y-6">
         <div className="rounded-xl border border-border bg-surface p-8 text-center">
@@ -508,31 +554,57 @@ export function PresetBuilder() {
           <h3 className="mt-6 font-[family-name:var(--font-display)] text-lg font-semibold text-text-primary">
             Analyzing video...
           </h3>
+          <p className="mt-1 font-[family-name:var(--font-mono)] text-2xl font-bold text-electric">
+            {timerDisplay}
+          </p>
           <p className="mt-2 text-sm text-text-secondary">
             Downloading, transcribing, and scoring the video. This typically
-            takes 30-60 seconds.
+            takes 1-3 minutes.
           </p>
 
-          {/* Progress steps */}
-          <div className="mx-auto mt-6 max-w-xs space-y-2">
-            {[
-              'Downloading video',
-              'Transcribing audio',
-              'Segmenting transcript',
-              'Scoring criteria',
-              'Extracting patterns',
-            ].map((step, i) => (
-              <div
-                key={step}
-                className="flex items-center gap-3 text-left"
-                style={{ animationDelay: `${i * 0.2}s` }}
-              >
-                <div className="h-1.5 w-1.5 rounded-full bg-electric animate-pulse" />
-                <span className="font-[family-name:var(--font-mono)] text-xs text-text-muted">
-                  {step}
-                </span>
-              </div>
-            ))}
+          {/* Progress steps with real status */}
+          <div className="mx-auto mt-6 max-w-xs space-y-2.5">
+            {ANALYSIS_STEPS.map((step, i) => {
+              const isCompleted = currentStepIndex > i;
+              const isActive = currentStepIndex === i;
+              const isPending = currentStepIndex < i;
+
+              return (
+                <div
+                  key={step.key}
+                  className="flex items-center gap-3 text-left"
+                >
+                  {isCompleted ? (
+                    <svg
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      className="h-4 w-4 shrink-0 text-lime"
+                      stroke="currentColor"
+                      strokeWidth={2.5}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <polyline points="3.5 8 6.5 11 12.5 5" />
+                    </svg>
+                  ) : isActive ? (
+                    <div className="h-2.5 w-2.5 shrink-0 rounded-full bg-electric animate-pulse ml-[3px] mr-[3px]" />
+                  ) : (
+                    <div className={`h-1.5 w-1.5 shrink-0 rounded-full ml-[5px] mr-[5px] ${isPending ? 'bg-text-muted/30' : 'bg-electric'}`} />
+                  )}
+                  <span
+                    className={`font-[family-name:var(--font-mono)] text-xs ${
+                      isCompleted
+                        ? 'text-lime'
+                        : isActive
+                          ? 'text-electric'
+                          : 'text-text-muted/50'
+                    }`}
+                  >
+                    {step.label}
+                  </span>
+                </div>
+              );
+            })}
           </div>
 
           {pollError && (

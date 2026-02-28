@@ -8,3 +8,17 @@ export class CancellationError extends Error {
     this.name = 'CancellationError';
   }
 }
+
+/**
+ * Thrown when a TikTok video download fails across all strategies.
+ */
+export class TikTokDownloadError extends Error {
+  constructor(
+    message: string,
+    public readonly strategy: 'tikwm' | 'direct' | 'all',
+    public readonly cause?: Error,
+  ) {
+    super(message);
+    this.name = 'TikTokDownloadError';
+  }
+}
