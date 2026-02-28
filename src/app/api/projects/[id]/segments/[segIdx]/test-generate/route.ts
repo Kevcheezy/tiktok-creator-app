@@ -137,6 +137,13 @@ export async function POST(
       cfgScale: 0.5,
     }, { projectId: id, supabase });
 
+    // Delete old test video assets for this segment to prevent stale display on refresh
+    await supabase
+      .from('asset')
+      .delete()
+      .eq('scene_id', scene.id)
+      .eq('type', 'video');
+
     // Create asset record
     const { data: asset } = await supabase.from('asset').insert({
       project_id: id,
