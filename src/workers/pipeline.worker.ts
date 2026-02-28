@@ -1304,6 +1304,25 @@ async function handleCascadeRegeneration(
     for (let i = 0; i < cascadeChain.length; i++) {
       const kf = cascadeChain[i];
       try {
+        // Continuation STARTs (seg 1+) reuse the previous END frame directly.
+        // This matches CastingAgent behavior and ensures identical frames at cut points.
+        if (kf.type === 'keyframe_start' && kf._seg > 0 && previousUrl) {
+          jobLog.info({ assetId: kf.id, segment: kf._seg }, 'Cascade: reusing previous END as START (continuation)');
+          await supabase
+            .from('asset')
+            .update({
+              url: previousUrl,
+              status: 'completed',
+              provider: 'reused',
+              cost_usd: 0,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', kf.id);
+          // previousUrl stays the same — START IS the previous END
+          regeneratedCount++;
+          continue;
+        }
+
         jobLog.info({ assetId: kf.id, segment: kf._seg, type: kf.type, previousUrl: !!previousUrl }, 'Cascade: regenerating keyframe');
 
         const newUrl = await regenerateKeyframe(projectId, kf.id, kf, jobLog, previousUrl, projectRefs);
