@@ -74,8 +74,9 @@ export function VideoPreviewPanel({ projectId, segmentIndex, onTestApproved }: V
   const [testVideoAsset, setTestVideoAsset] = useState<{ id: string; url: string | null; status: string } | null>(null);
   const [isTestApproved, setIsTestApproved] = useState(false);
 
-  // Negative prompt collapsible
+  // Collapsible sections
   const [showNegativePrompt, setShowNegativePrompt] = useState(false);
+  const [showRawJson, setShowRawJson] = useState(false);
 
   // Video upload state
   const [isUploadingVideo, setIsUploadingVideo] = useState(false);
@@ -456,6 +457,36 @@ export function VideoPreviewPanel({ projectId, segmentIndex, onTestApproved }: V
                   )}
                 </div>
               )}
+
+              {/* 4b. Raw JSON (collapsible) */}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowRawJson(!showRawJson)}
+                  className="inline-flex items-center gap-1.5 font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted transition-colors hover:text-text-secondary"
+                >
+                  <svg
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    className={`h-2.5 w-2.5 transition-transform duration-200 ${showRawJson ? 'rotate-90' : ''}`}
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <polyline points="6 4 10 8 6 12" />
+                  </svg>
+                  {showRawJson ? 'Hide' : 'Show'} Raw JSON
+                </button>
+                {showRawJson && (
+                  <pre className="mt-2 max-h-80 overflow-auto rounded-lg border border-border bg-void p-3 font-[family-name:var(--font-mono)] text-[11px] leading-relaxed text-text-secondary">
+                    {(() => {
+                      try { return JSON.stringify(JSON.parse(previewData.serialized.prompt), null, 2); }
+                      catch { return previewData.serialized.prompt; }
+                    })()}
+                  </pre>
+                )}
+              </div>
 
               {/* 5. Config Bar */}
               <div className="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-surface-raised px-4 py-2.5">
