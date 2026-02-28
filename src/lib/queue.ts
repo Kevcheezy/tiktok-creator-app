@@ -3,6 +3,7 @@ import { Queue } from 'bullmq';
 export type PipelineJobData = {
   projectId?: string;
   productId?: string;
+  presetId?: string;
   step:
     | 'product_analysis'
     | 'scripting'
@@ -14,7 +15,8 @@ export type PipelineJobData = {
     | 'editing'
     | 'regenerate_asset'
     | 'regenerate_asset_cascade'
-    | 'keyframe_edit';
+    | 'keyframe_edit'
+    | 'analyze_style_preset';
   assetId?: string;
   editPrompt?: string;
   propagate?: boolean;

@@ -12,6 +12,7 @@ import { VoiceoverAgent } from '../agents/voiceover-agent';
 import { EditorAgent } from '../agents/editor-agent';
 import { BRollAgent } from '../agents/broll-agent';
 import { VideoAnalysisAgent } from '../agents/video-analysis-agent';
+import { StylePresetAgent } from '../agents/style-preset-agent';
 import { WaveSpeedClient } from '../lib/api-clients/wavespeed';
 import { ElevenLabsClient } from '../lib/api-clients/elevenlabs';
 import { FALLBACK_VOICES, API_COSTS, VIDEO_POLL_MAX_WAIT, VideoModelConfig, getFallbackVideoModel, PRODUCT_PLACEMENT_ARC, VISIBILITY_ANGLE_MAP, RESOLUTION } from '../lib/constants';
@@ -169,6 +170,14 @@ const worker = new Worker(
       await handleCascadeRegeneration(projectId, job.data.assetId, correlationId, jobLog);
     } else if (step === 'keyframe_edit') {
       await handleKeyframeEdit(projectId!, job.data.assetId!, job.data.editPrompt!, job.data.propagate || false, correlationId, jobLog);
+    } else if (step === 'analyze_style_preset') {
+      const presetId = job.data.presetId;
+      if (!presetId) throw new Error('presetId required for analyze_style_preset');
+      jobLog.info({ presetId }, 'Starting style preset analysis');
+      const agent = new StylePresetAgent(supabase);
+      agent.setCorrelationId(correlationId);
+      await agent.run(presetId);
+      jobLog.info({ presetId }, 'Style preset analysis complete');
     } else {
       jobLog.warn({ step }, 'Unknown step, skipping');
     }
