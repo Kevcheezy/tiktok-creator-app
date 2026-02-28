@@ -6,7 +6,7 @@ import { serializeForVideo } from '@/lib/prompt-serializer';
 import { WaveSpeedClient } from '@/lib/api-clients/wavespeed';
 import { VideoModelConfig, getFallbackVideoModel, API_COSTS } from '@/lib/constants';
 
-export const maxDuration = 30;
+export const maxDuration = 180; // 3 minutes — LLM prompt generation can take 60s+
 
 /**
  * Fetch the video model config for a project.
@@ -89,11 +89,15 @@ export async function POST(
 ) {
   const { id, segIdx: segIdxStr } = await params;
 
+  const routeStart = Date.now();
+
   try {
     const segIdx = parseInt(segIdxStr, 10);
     if (isNaN(segIdx) || segIdx < 0) {
       return NextResponse.json({ error: 'Invalid segment index' }, { status: 400 });
     }
+
+    logger.info({ projectId: id, segIdx }, 'Test-generate: starting');
 
     // Fetch project
     const { data: project, error: projError } = await supabase
@@ -173,7 +177,14 @@ export async function POST(
       const hasStructuredPrompt = visualPrompt && isStructuredPrompt(visualPrompt.start);
 
       if (hasStructuredPrompt) {
-        structuredPrompt = await generateVideoPrompt(scene, segIdx, negativePrompt, vm);
+        logger.info({ projectId: id, segIdx, elapsed: Date.now() - routeStart }, 'Test-generate: generating video prompt via LLM');
+        try {
+          structuredPrompt = await generateVideoPrompt(scene, segIdx, negativePrompt, vm);
+        } catch (llmErr) {
+          logger.error({ err: llmErr, projectId: id, segIdx, elapsed: Date.now() - routeStart }, 'Test-generate: LLM prompt generation failed');
+          return NextResponse.json({ error: 'Video prompt generation failed — please retry' }, { status: 500 });
+        }
+        logger.info({ projectId: id, segIdx, elapsed: Date.now() - routeStart }, 'Test-generate: LLM prompt generated');
         // Track LLM cost
         await supabase.rpc('increment_project_cost', {
           p_project_id: id,
@@ -249,6 +260,7 @@ export async function POST(
     const serialized = serializeForVideo(structuredPrompt, { shotDuration, lockCamera });
 
     // Call wavespeed.generateVideo with the same parameters DirectorAgent would use
+    logger.info({ projectId: id, segIdx, hasEndKeyframe: !!endKeyframe?.url, elapsed: Date.now() - routeStart }, 'Test-generate: calling WaveSpeed video API');
     const wavespeed = new WaveSpeedClient();
     const result = await wavespeed.generateVideo({
       image: startKeyframe.url,
@@ -285,6 +297,8 @@ export async function POST(
       stage: 'casting_review',
       detail: { segmentIndex: segIdx, sceneId: scene.id, taskId: result.taskId, cost: vm.cost_per_segment },
     });
+
+    logger.info({ projectId: id, segIdx, taskId: result.taskId, assetId: asset?.id, elapsed: Date.now() - routeStart }, 'Test-generate: video job submitted');
 
     return NextResponse.json({
       assetId: asset?.id,
