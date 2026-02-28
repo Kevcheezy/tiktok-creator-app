@@ -146,20 +146,54 @@ export class WaveSpeedClient {
     context?: ApiCallContext
   ): Promise<string> {
     const { model = 'google/gemini-2.5-flash', temperature = 0.7, maxTokens = 4096 } = options;
+    const LLM_TIMEOUT_MS = 60000;
+    const MAX_RETRIES = 2;       // 3 total attempts
+    const BASE_DELAY_MS = 3000;  // 3s, 6s backoff
 
-    const data = await this.request('/api/v3/wavespeed-ai/any-llm', {
-      method: 'POST',
-      body: JSON.stringify({
-        prompt: userPrompt,
-        system_prompt: systemPrompt,
-        model,
-        temperature,
-        max_tokens: maxTokens,
-        enable_sync_mode: true,
-      }),
-    }, context);
+    let lastError: Error | null = null;
 
-    return data.data?.outputs?.[0] || '';
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      if (attempt > 0) {
+        const delay = BASE_DELAY_MS * attempt;
+        logger.warn(
+          { attempt: attempt + 1, maxAttempts: MAX_RETRIES + 1, delayMs: delay },
+          `Retrying chatCompletion (attempt ${attempt + 1}/${MAX_RETRIES + 1})`
+        );
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+
+      try {
+        const data = await this.request('/api/v3/wavespeed-ai/any-llm', {
+          method: 'POST',
+          body: JSON.stringify({
+            prompt: userPrompt,
+            system_prompt: systemPrompt,
+            model,
+            temperature,
+            max_tokens: maxTokens,
+            enable_sync_mode: true,
+          }),
+        }, context, LLM_TIMEOUT_MS);
+
+        return data.data?.outputs?.[0] || '';
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        if (!this.isRetryableError(lastError)) {
+          throw lastError;
+        }
+      }
+    }
+
+    throw lastError!;
+  }
+
+  /** Determine if an error is transient and worth retrying. */
+  private isRetryableError(err: Error): boolean {
+    const msg = err.message;
+    if (msg.includes('API timeout') || msg.includes('AbortError')) return true;
+    if (msg.includes('(429)') || msg.includes('(500)') || msg.includes('(502)') || msg.includes('(503)')) return true;
+    if (msg.includes('ECONNRESET') || msg.includes('ECONNREFUSED') || msg.includes('ETIMEDOUT')) return true;
+    return false;
   }
 
   async generateImage(prompt: string, options?: ImageOptions, context?: ApiCallContext): Promise<{ taskId: string }> {

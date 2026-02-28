@@ -143,8 +143,9 @@ export class CastingAgent extends BaseAgent {
       const energyArc = vmEnergy[segIdx] || ENERGY_ARC[segIdx];
 
       const segmentProductImage = this.selectProductImageForSegment(segIdx, productImages, legacyProductImageUrl, placement.visibility);
-      const maxRetries = 1;
+      const maxRetries = 2;
       let segmentSuccess = false;
+      let savedPromptPair: { start: StructuredPrompt | string; end: StructuredPrompt | string } | null = null;
 
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
@@ -156,6 +157,7 @@ export class CastingAgent extends BaseAgent {
           const isContinuation = segIdx > 0 && !!previousEndFrameUrl;
 
           // Use LLM to generate detailed prompts for start and end frames
+          // On retry, reuse cached prompts to avoid redundant LLM calls
           const sealSegment = project.video_analysis?.segments?.[segIdx] || null;
           const hasProductRef = !!segmentProductImage;
           const negativePrompt = resolveNegativePrompt(project, 'casting');
@@ -167,20 +169,28 @@ export class CastingAgent extends BaseAgent {
           if (project.product_category) productSizeParts.push(project.product_category);
           const productSizeType = productSizeParts.length > 0 ? productSizeParts.join(', ') : null;
 
-          const promptPair = await this.generateVisualPrompts(
-            appearance, wardrobe, sceneDescription,
-            scene, placement, energyArc,
-            project.product_name || 'the product',
-            projectId,
-            useInfluencer || hasProductRef || isContinuation,
-            sealSegment,
-            interactionDescription,
-            hasProductRef,
-            isContinuation,
-            segIdx,
-            negativePrompt,
-            productSizeType,
-          );
+          let promptPair: { start: StructuredPrompt | string; end: StructuredPrompt | string };
+
+          if (savedPromptPair) {
+            promptPair = savedPromptPair;
+            this.log(`Segment ${segIdx}: reusing saved visual prompts (attempt ${attempt + 1})`);
+          } else {
+            promptPair = await this.generateVisualPrompts(
+              appearance, wardrobe, sceneDescription,
+              scene, placement, energyArc,
+              project.product_name || 'the product',
+              projectId,
+              useInfluencer || hasProductRef || isContinuation,
+              sealSegment,
+              interactionDescription,
+              hasProductRef,
+              isContinuation,
+              segIdx,
+              negativePrompt,
+              productSizeType,
+            );
+            savedPromptPair = promptPair;
+          }
 
           // Save visual prompts to scene
           await this.supabase
@@ -479,17 +489,9 @@ Aspect ratio: 9:16 portrait. Photorealistic.`;
 Match this reference video's visual style: use similar lighting, camera angle, and composition.`;
     }
 
-    const response = await this.wavespeed.chatCompletion(systemPrompt, userPrompt);
-    await this.trackCost(projectId, API_COSTS.wavespeedChat);
-
-    try {
-      // Parse the JSON response, handling potential markdown code blocks
-      const cleaned = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      const parsed = JSON.parse(cleaned);
-      return { start: parsed.start, end: parsed.end };
-    } catch {
-      // Fallback: use template-based prompts (legacy string format)
-      this.log('LLM StructuredPrompt generation failed, using template fallback');
+    // Template fallback builder — used when LLM fails or returns unparseable JSON
+    const buildTemplateFallback = () => {
+      this.log('Using template fallback for visual prompts');
       const cameraStr = cameraSpecs
         ? `${cameraSpecs.angle || 'medium'} shot, ${cameraSpecs.movement || 'static'}, ${cameraSpecs.lighting || 'natural_window'} lighting`
         : 'medium shot, static, cinematic lighting';
@@ -499,6 +501,28 @@ Match this reference video's visual style: use similar lighting, camera angle, a
         start: `${base}, ${energyArc.pattern.start.toLowerCase()} energy, opening pose, ${placement.visibility} product visibility${sizeInfo}`,
         end: `${base}, ${energyArc.pattern.end.toLowerCase()} energy, closing pose, ${placement.visibility} product visibility${sizeInfo}`,
       };
+    };
+
+    let response: string;
+    try {
+      response = await this.wavespeed.chatCompletion(systemPrompt, userPrompt);
+      await this.trackCost(projectId, API_COSTS.wavespeedChat);
+    } catch (llmErr) {
+      // LLM completely failed (after client-level retries exhausted) — use template fallback
+      const errMsg = llmErr instanceof Error ? llmErr.message : String(llmErr);
+      this.log(`LLM call failed: ${errMsg}. Falling back to template prompts.`);
+      return buildTemplateFallback();
+    }
+
+    try {
+      // Parse the JSON response, handling potential markdown code blocks
+      const cleaned = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      const parsed = JSON.parse(cleaned);
+      return { start: parsed.start, end: parsed.end };
+    } catch {
+      // JSON parse failed — use template fallback
+      this.log('LLM StructuredPrompt parse failed, using template fallback');
+      return buildTemplateFallback();
     }
   }
 
