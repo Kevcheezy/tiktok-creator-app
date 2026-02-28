@@ -3,7 +3,7 @@ import { BaseAgent } from './base-agent';
 import { CancellationError } from '@/lib/errors';
 import { API_COSTS, VIDEO_POLL_MAX_WAIT } from '@/lib/constants';
 import { StructuredPrompt, STRUCTURED_PROMPT_SCHEMA_DESCRIPTION, isStructuredPrompt, resolveNegativePrompt } from '@/lib/prompt-schema';
-import { serializeForVideoJSON } from '@/lib/prompt-serializer';
+import { buildVideoPromptJSON } from '@/lib/prompt-serializer';
 
 export class DirectorAgent extends BaseAgent {
   constructor(supabaseClient?: SupabaseClient) {
@@ -102,59 +102,12 @@ export class DirectorAgent extends BaseAgent {
       // R1.5.29: Check for video_prompt_override (set by preview/refine panel)
       const promptOverride = scene.video_prompt_override as StructuredPrompt | null;
 
-      let mainPrompt: string;
-      let effectiveNegativePrompt: string;
-
-      if (promptOverride && isStructuredPrompt(promptOverride)) {
-        // R1.5.29: Use override directly — skip LLM prompt generation
-        this.log(`Segment ${segIdx}: using video_prompt_override from preview panel`);
-        const serialized = serializeForVideoJSON(promptOverride, { lockCamera });
-        mainPrompt = serialized.prompt;
-        effectiveNegativePrompt = serialized.negativePrompt;
-      } else {
-        // Check if scene has structured visual_prompt (from CastingAgent R1.5.19)
-        const visualPrompt = scene.visual_prompt as { start: unknown; end: unknown } | null;
-        const hasStructuredPrompt = visualPrompt && isStructuredPrompt(visualPrompt.start);
-
-        if (hasStructuredPrompt) {
-          // Use LLM to generate a StructuredPrompt for video, then serialize as JSON
-          this.log(`Segment ${segIdx}: generating video StructuredPrompt via LLM`);
-          try {
-            const videoPrompt = await this.generateVideoPrompt(scene, segIdx, negativePrompt);
-            await this.trackCost(projectId, API_COSTS.wavespeedChat);
-
-            if (isStructuredPrompt(videoPrompt)) {
-              const serialized = serializeForVideoJSON(videoPrompt, { lockCamera });
-              mainPrompt = serialized.prompt;
-              effectiveNegativePrompt = serialized.negativePrompt;
-            } else {
-              throw new Error('LLM did not return valid StructuredPrompt');
-            }
-          } catch (llmError) {
-            this.log(`Video StructuredPrompt LLM failed, falling back to legacy: ${llmError instanceof Error ? llmError.message : String(llmError)}`);
-            const movementNote = lockCamera ? 'Static locked camera' : 'Natural movement';
-            mainPrompt = [
-              scene.script_text ? `Scene: ${scene.script_text.substring(0, 200)}` : '',
-              scene.section ? `Section: ${scene.section}` : '',
-              `${movementNote}, professional lighting, TikTok style video, ${vm.aspect_ratio} portrait`,
-            ].filter(Boolean).join('. ');
-            effectiveNegativePrompt = lockCamera
-              ? negativePrompt + ', camera movement, camera shake, camera pan, camera zoom, camera tilt'
-              : negativePrompt;
-          }
-        } else {
-          // Legacy path: no structured prompt available
-          const movementNote = lockCamera ? 'Static locked camera' : 'Natural movement';
-          mainPrompt = [
-            scene.script_text ? `Scene: ${scene.script_text.substring(0, 200)}` : '',
-            scene.section ? `Section: ${scene.section}` : '',
-            `${movementNote}, professional lighting, TikTok style video, ${vm.aspect_ratio} portrait`,
-          ].filter(Boolean).join('. ');
-          effectiveNegativePrompt = lockCamera
-            ? negativePrompt + ', camera movement, camera shake, camera pan, camera zoom, camera tilt'
-            : negativePrompt;
-        }
-      }
+      // Build video prompt JSON directly from scene data — no LLM needed.
+      // Uses visual_prompt, script_text, shot_scripts, energy_arc.
+      this.log(`Segment ${segIdx}: building video prompt from scene data`);
+      const serialized = buildVideoPromptJSON(scene, { shotDuration: vm.shot_duration, lockCamera });
+      const mainPrompt = serialized.prompt;
+      const effectiveNegativePrompt = serialized.negativePrompt || negativePrompt;
 
       // Generate video with retry logic (configurable per project, default 0 = no retries)
       const maxRetries = project?.video_retries ?? 0;

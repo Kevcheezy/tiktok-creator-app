@@ -134,6 +134,68 @@ export function serializeForVideoJSON(
   return { prompt: JSON.stringify(output), negativePrompt };
 }
 
+// ─── Video Prompt Builder (scene data → JSON, no LLM needed) ────────────────
+
+/**
+ * Builds a video prompt JSON directly from scene data. No LLM call needed.
+ * Produces the proven Kling-compatible format: dialogue, action.sequence with
+ * time ranges, camera_specs, environment, lighting, style.
+ */
+export function buildVideoPromptJSON(
+  scene: { script_text?: string; visual_prompt?: any; shot_scripts?: any[]; energy_arc?: any; camera_specs?: any },
+  opts: { shotDuration: number; lockCamera?: boolean },
+): { prompt: string; negativePrompt: string } {
+  const vp = scene.visual_prompt?.start || scene.visual_prompt?.end || {};
+  const endVp = scene.visual_prompt?.end || vp;
+  const shotScripts: any[] = scene.shot_scripts || [];
+  const energyArc = scene.energy_arc || {};
+
+  const output: Record<string, unknown> = {};
+
+  // Dialogue — full script text + delivery style from visual prompt
+  output.dialogue = {
+    text: scene.script_text || '',
+    delivery: vp.dialogue?.delivery || 'natural, conversational',
+  };
+
+  // Action sequence — time-based entries from shot scripts + start/end pose actions
+  const startAction = vp.action?.sequence?.[0]?.action || 'natural pose, direct gaze at camera';
+  const endAction = endVp.action?.sequence?.[0]?.action || 'relaxed pose, slight expression change';
+
+  output.action = {
+    sequence: shotScripts.map((shot: any, i: number) => ({
+      time: `${i * opts.shotDuration}-${(i + 1) * opts.shotDuration}s`,
+      action: i === 0 ? startAction
+        : i === shotScripts.length - 1 ? endAction
+        : `transitions between poses, ${(shot.energy || 'medium').toLowerCase()} energy, natural gestures while speaking`,
+      energy: (shot.energy || 'medium').toLowerCase(),
+    })),
+    energy_arc: `${energyArc.start || 'HIGH'} → ${energyArc.middle || 'PEAK'} → ${energyArc.end || 'HIGH'}`,
+  };
+
+  // Camera
+  const cam = vp.camera_specs || scene.camera_specs || {};
+  output.camera_specs = {
+    shot: cam.shot || cam.angle || 'medium',
+    movement: opts.lockCamera ? 'static, no camera movement' : (cam.movement || 'static'),
+    framing: cam.framing || 'subject centered',
+  };
+
+  // Environment, lighting, style from visual prompt
+  if (vp.environment) output.environment = vp.environment;
+  if (vp.lighting) output.lighting = vp.lighting;
+  if (vp.style) output.style = vp.style;
+
+  let negativePrompt = vp.negative_prompt || '';
+  if (opts.lockCamera) {
+    negativePrompt += negativePrompt
+      ? ', camera movement, camera shake, camera pan, camera zoom, camera tilt'
+      : 'camera movement, camera shake, camera pan, camera zoom, camera tilt';
+  }
+
+  return { prompt: JSON.stringify(output), negativePrompt };
+}
+
 // ─── Video Serializer (Kling 3.0 Pro — legacy prose + multi_prompt) ─────────
 
 export interface VideoPromptOutput {
