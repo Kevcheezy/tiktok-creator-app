@@ -96,7 +96,45 @@ export function serializeAsJSON(
   return JSON.stringify(output);
 }
 
-// ─── Video Serializer (Kling 3.0 Pro) ───────────────────────────────────────
+// ─── Video JSON Serializer (Kling 3.0 Pro — single JSON prompt) ─────────────
+
+/**
+ * Serializes a StructuredPrompt to a single JSON string for Kling 3.0 Pro
+ * image-to-video. Unlike serializeForVideo (prose + multi_prompt), this sends
+ * the structured prompt directly as JSON — Kling interprets the time-based
+ * action.sequence for motion and the dialogue for lip-sync.
+ */
+export function serializeForVideoJSON(
+  prompt: StructuredPrompt,
+  opts?: { lockCamera?: boolean; skipSubject?: boolean },
+): { prompt: string; negativePrompt: string } {
+  const output: Record<string, unknown> = {};
+
+  if (prompt.subject && !opts?.skipSubject) {
+    output.subject = prompt.subject;
+  }
+  if (prompt.dialogue) output.dialogue = prompt.dialogue;
+  if (prompt.action) output.action = prompt.action;
+  if (prompt.camera_specs) {
+    output.camera_specs = opts?.lockCamera
+      ? { ...prompt.camera_specs, movement: 'static, no camera movement' }
+      : prompt.camera_specs;
+  }
+  if (prompt.environment) output.environment = prompt.environment;
+  if (prompt.lighting) output.lighting = prompt.lighting;
+  if (prompt.style) output.style = prompt.style;
+
+  let negativePrompt = prompt.negative_prompt || '';
+  if (opts?.lockCamera) {
+    negativePrompt += negativePrompt
+      ? ', camera movement, camera shake, camera pan, camera zoom, camera tilt'
+      : 'camera movement, camera shake, camera pan, camera zoom, camera tilt';
+  }
+
+  return { prompt: JSON.stringify(output), negativePrompt };
+}
+
+// ─── Video Serializer (Kling 3.0 Pro — legacy prose + multi_prompt) ─────────
 
 export interface VideoPromptOutput {
   prompt: string;

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/db';
 import { logger, logToGenerationLog } from '@/lib/logger';
 import { StructuredPrompt, isStructuredPrompt, resolveNegativePrompt, STRUCTURED_PROMPT_SCHEMA_DESCRIPTION } from '@/lib/prompt-schema';
-import { serializeForVideo } from '@/lib/prompt-serializer';
+import { serializeForVideoJSON } from '@/lib/prompt-serializer';
 import { WaveSpeedClient } from '@/lib/api-clients/wavespeed';
 import { VideoModelConfig, getFallbackVideoModel, API_COSTS } from '@/lib/constants';
 
@@ -255,11 +255,10 @@ export async function POST(
       }
     }
 
-    // Serialize the StructuredPrompt for video
-    const shotDuration = String(vm.shot_duration);
-    const serialized = serializeForVideo(structuredPrompt, { shotDuration, lockCamera });
+    // Serialize the StructuredPrompt as JSON for video (no multi_prompt — JSON handles timing)
+    const serialized = serializeForVideoJSON(structuredPrompt, { lockCamera });
 
-    // Call wavespeed.generateVideo with the same parameters DirectorAgent would use
+    // Call wavespeed.generateVideo with JSON prompt
     logger.info({ projectId: id, segIdx, hasEndKeyframe: !!endKeyframe?.url, elapsed: Date.now() - routeStart }, 'Test-generate: calling WaveSpeed video API');
     const wavespeed = new WaveSpeedClient();
     const result = await wavespeed.generateVideo({
@@ -267,7 +266,7 @@ export async function POST(
       tailImage: vm.supports_tail_image ? endKeyframe?.url : undefined,
       prompt: serialized.prompt,
       negativePrompt: serialized.negativePrompt || negativePrompt,
-      multiPrompt: vm.supports_multi_prompt ? serialized.multiPrompt : [],
+      multiPrompt: [],  // Dropped: JSON prompt handles timing via action.sequence
       duration: vm.segment_duration,
       cfgScale: 0.5,
     }, { projectId: id, supabase });

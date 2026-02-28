@@ -3,7 +3,7 @@ import { BaseAgent } from './base-agent';
 import { CancellationError } from '@/lib/errors';
 import { API_COSTS, VIDEO_POLL_MAX_WAIT } from '@/lib/constants';
 import { StructuredPrompt, STRUCTURED_PROMPT_SCHEMA_DESCRIPTION, isStructuredPrompt, resolveNegativePrompt } from '@/lib/prompt-schema';
-import { serializeForVideo } from '@/lib/prompt-serializer';
+import { serializeForVideoJSON } from '@/lib/prompt-serializer';
 
 export class DirectorAgent extends BaseAgent {
   constructor(supabaseClient?: SupabaseClient) {
@@ -103,16 +103,13 @@ export class DirectorAgent extends BaseAgent {
       const promptOverride = scene.video_prompt_override as StructuredPrompt | null;
 
       let mainPrompt: string;
-      let multiPrompt: Array<{ prompt: string; duration: string }>;
       let effectiveNegativePrompt: string;
-      const shotDuration = String(vm.shot_duration);
 
       if (promptOverride && isStructuredPrompt(promptOverride)) {
         // R1.5.29: Use override directly — skip LLM prompt generation
         this.log(`Segment ${segIdx}: using video_prompt_override from preview panel`);
-        const serialized = serializeForVideo(promptOverride, { shotDuration, lockCamera });
+        const serialized = serializeForVideoJSON(promptOverride, { lockCamera });
         mainPrompt = serialized.prompt;
-        multiPrompt = vm.supports_multi_prompt ? serialized.multiPrompt : [];
         effectiveNegativePrompt = serialized.negativePrompt;
       } else {
         // Check if scene has structured visual_prompt (from CastingAgent R1.5.19)
@@ -120,30 +117,21 @@ export class DirectorAgent extends BaseAgent {
         const hasStructuredPrompt = visualPrompt && isStructuredPrompt(visualPrompt.start);
 
         if (hasStructuredPrompt) {
-          // R1.5.19: Use LLM to generate a StructuredPrompt for video, then serialize
+          // Use LLM to generate a StructuredPrompt for video, then serialize as JSON
           this.log(`Segment ${segIdx}: generating video StructuredPrompt via LLM`);
           try {
             const videoPrompt = await this.generateVideoPrompt(scene, segIdx, negativePrompt);
             await this.trackCost(projectId, API_COSTS.wavespeedChat);
 
             if (isStructuredPrompt(videoPrompt)) {
-              const serialized = serializeForVideo(videoPrompt, { shotDuration, lockCamera });
+              const serialized = serializeForVideoJSON(videoPrompt, { lockCamera });
               mainPrompt = serialized.prompt;
-              multiPrompt = vm.supports_multi_prompt ? serialized.multiPrompt : [];
               effectiveNegativePrompt = serialized.negativePrompt;
             } else {
-              // LLM returned something unexpected — fall through to legacy
               throw new Error('LLM did not return valid StructuredPrompt');
             }
           } catch (llmError) {
             this.log(`Video StructuredPrompt LLM failed, falling back to legacy: ${llmError instanceof Error ? llmError.message : String(llmError)}`);
-            // Fallback to legacy string concatenation
-            const shotScripts = scene.shot_scripts as { index: number; text: string; energy: string }[] | null;
-            const legacyCameraNote = lockCamera ? 'Static locked camera.' : 'Camera follows subject naturally.';
-            multiPrompt = (shotScripts || []).map((shot: { index: number; text: string; energy: string }) => ({
-              prompt: `${shot.text}. Energy: ${shot.energy}. ${legacyCameraNote}`,
-              duration: shotDuration,
-            }));
             const movementNote = lockCamera ? 'Static locked camera' : 'Natural movement';
             mainPrompt = [
               scene.script_text ? `Scene: ${scene.script_text.substring(0, 200)}` : '',
@@ -156,12 +144,6 @@ export class DirectorAgent extends BaseAgent {
           }
         } else {
           // Legacy path: no structured prompt available
-          const shotScripts = scene.shot_scripts as { index: number; text: string; energy: string }[] | null;
-          const legacyCameraNote = lockCamera ? 'Static locked camera.' : 'Camera follows subject naturally.';
-          multiPrompt = (shotScripts || []).map((shot: { index: number; text: string; energy: string }) => ({
-            prompt: `${shot.text}. Energy: ${shot.energy}. ${legacyCameraNote}`,
-            duration: shotDuration,
-          }));
           const movementNote = lockCamera ? 'Static locked camera' : 'Natural movement';
           mainPrompt = [
             scene.script_text ? `Scene: ${scene.script_text.substring(0, 200)}` : '',
@@ -194,7 +176,7 @@ export class DirectorAgent extends BaseAgent {
             tailImage: vm.supports_tail_image ? endKeyframe?.url : undefined,
             prompt: mainPrompt,
             negativePrompt: effectiveNegativePrompt,
-            multiPrompt: vm.supports_multi_prompt ? multiPrompt : [],
+            multiPrompt: [],  // Dropped: JSON prompt handles timing via action.sequence
             duration: vm.segment_duration,
             cfgScale: 0.5,
           });
