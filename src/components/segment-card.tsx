@@ -20,6 +20,7 @@ interface Scene {
   product_visibility: string | null;
   broll_cues: { shot_script_index: number; offset_seconds: number; duration_seconds: number; intent: string; spoken_text_during: string }[] | null;
   tone: string | null;
+  segment_score: { total: number; [criterion: string]: number } | null;
   version: number;
   created_at: string;
 }
@@ -451,6 +452,41 @@ export function SegmentCard({ scene, editable = false, projectId, scriptId, onSe
                   {sync.word}
                 </span>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Segment Score */}
+        {scene.segment_score && (
+          <div className="mt-3 rounded-lg bg-surface-overlay/50 p-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                Score
+              </span>
+              <span className="font-[family-name:var(--font-mono)] text-sm font-bold text-electric">
+                {scene.segment_score.total}/{[14, 10, 10, 10][scene.segment_index] ?? 10}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+              {Object.entries(scene.segment_score)
+                .filter(([key]) => key !== 'total')
+                .map(([criterion, score]) => (
+                  <div key={criterion} className="flex items-center justify-between">
+                    <span className="text-[10px] text-text-muted capitalize">
+                      {criterion.replace(/_/g, ' ')}
+                    </span>
+                    <div className="flex gap-0.5">
+                      {[0, 1].map((i) => (
+                        <span
+                          key={i}
+                          className={`h-1.5 w-1.5 rounded-full ${
+                            (score as number) > i ? 'bg-lime' : 'bg-surface-overlay'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
             </div>
           </div>
         )}

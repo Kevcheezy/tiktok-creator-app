@@ -55,6 +55,10 @@ interface Segment {
     movement: string;
     lighting: string;
   };
+  segment_score?: {
+    [criterion: string]: number;
+    total: number;
+  };
 }
 
 interface HookScore {
@@ -119,7 +123,35 @@ RULES:
    - Emotional trigger word? (0-2)
    - Specific number/claim? (0-2)
 
-7. B-ROLL TIMING CUES (REQUIRED for each segment):
+7. FULL SEGMENT SCORING (score each segment on its criteria, 0-2 per criterion):
+
+   Hook (Segment 1) — same 7 criteria as above:
+   - curiosity_loop, challenges_belief, clear_context, plants_question, pattern_interrupt, emotional_trigger, specific_claim (0-2 each, max 14)
+
+   Problem (Segment 2):
+   - relatability: Does the viewer immediately recognize this problem? (0-2)
+   - pain_amplification: Does it make the problem feel urgent/unbearable? (0-2)
+   - credibility: Does it reference real experiences/common frustrations? (0-2)
+   - emotional_depth: Does it trigger empathy/frustration/fear? (0-2)
+   - transition_setup: Does it naturally lead to the solution? (0-2)
+
+   Solution + Product (Segment 3):
+   - product_integration: Is the product introduced naturally, not forced? (0-2)
+   - proof_evidence: Does it include specific claims/stats/results? (0-2)
+   - transformation_narrative: Does it paint a clear before→after? (0-2)
+   - differentiation: Why this product over alternatives? (0-2)
+   - authenticity: Does the delivery feel genuine, not salesy? (0-2)
+
+   CTA (Segment 4):
+   - urgency: Is there a reason to act NOW? (0-2)
+   - value_stack: Does it reinforce what you're getting? (0-2)
+   - social_proof: Does it reference others' success/popularity? (0-2)
+   - clear_action: Is the next step obvious? (0-2)
+   - scarcity_exclusivity: Limited time/stock/offer? (0-2)
+
+   Include a "segment_score" object in EACH segment with the relevant criteria scores and a total.
+
+8. B-ROLL TIMING CUES (REQUIRED for each segment):
    Identify 2-5 moments where a B-roll cutaway image would strengthen the argument.
    Each cue marks when a supplementary image should appear on screen:
    - shot_script_index: which 5s shot block (0, 1, or 2)
@@ -129,7 +161,7 @@ RULES:
    - spoken_text_during: the exact script text being spoken while B-roll is on screen
    Target: visual refresh every ~2-3 seconds. Place cues on claims, proof points, product mentions, emotional beats.
 
-8. SEGMENT TAGGING (REQUIRED for each segment):
+9. SEGMENT TAGGING (REQUIRED for each segment):
    Tag each segment with production metadata:
    - props_needed: array of physical props visible in this segment (e.g., ["product bottle", "cotton pad", "mirror"])
    - interaction_type: how the creator interacts with the product. One of: hold_and_show, apply_to_skin, stir_mix, demonstrate, pour_drink, unbox, compare, try_on, set_down_point, none
@@ -138,7 +170,7 @@ RULES:
      - movement: one of static, slow_zoom_in, slow_zoom_out, pan_left, pan_right, tracking
      - lighting: one of ring_light_front, natural_window, warm_ambient, dramatic_side, soft_diffused
 
-9. SEGMENT TAGGING RULES:
+10. SEGMENT TAGGING RULES:
    - Segment 1 (Hook): interaction_type MUST be "none" (no product visible)
    - Segment 3 (Solution): interaction_type MUST NOT be "none" (product is the hero)
    - Props should include the product name when product_visibility is not "none"
@@ -162,6 +194,16 @@ OUTPUT FORMAT (valid JSON only, no markdown, no code fences):
         "shot_1_peak": { "word": "keyword at ~3s", "time": "~3s", "action": "confident gesture" },
         "shot_2_peak": { "word": "keyword at ~8s", "time": "~8s", "action": "hand on chest" },
         "shot_3_peak": { "word": "keyword at ~13s", "time": "~13s", "action": "lean + curious" }
+      },
+      "segment_score": {
+        "curiosity_loop": 2,
+        "challenges_belief": 1,
+        "clear_context": 2,
+        "plants_question": 2,
+        "pattern_interrupt": 1,
+        "emotional_trigger": 2,
+        "specific_claim": 2,
+        "total": 12
       },
       "broll_cues": [
         { "shot_script_index": 0, "offset_seconds": 1.0, "duration_seconds": 2.5, "intent": "negative contrast — show cheap generic alternatives", "spoken_text_during": "the exact words being spoken" },
@@ -215,6 +257,19 @@ export class ScriptingAgent extends BaseAgent {
       throw new Error(`Project ${projectId} has no product_data — run analysis first`);
     }
 
+    // Fetch style preset if project has one
+    let stylePreset: any = null;
+    if (proj.style_preset_id) {
+      const { data } = await this.supabase
+        .from('style_preset')
+        .select('*')
+        .eq('id', proj.style_preset_id)
+        .eq('status', 'ready')
+        .single();
+      stylePreset = data;
+      if (stylePreset) this.log(`Using style preset: ${stylePreset.name}`);
+    }
+
     // Read tone from project (falls back to default)
     const tone = (proj.tone as ScriptTone) in SCRIPT_TONES
       ? (proj.tone as ScriptTone)
@@ -232,7 +287,7 @@ export class ScriptingAgent extends BaseAgent {
     const template = await this.selectTemplate(productData.category);
 
     // 3. Build user prompt
-    const userPrompt = this.buildUserPrompt(productData, template, proj.video_url, proj.video_analysis);
+    const userPrompt = this.buildUserPrompt(productData, template, proj.video_url, proj.video_analysis, stylePreset);
 
     // 4. Call WaveSpeed LLM
     this.log('Calling WaveSpeed LLM for script generation...');
@@ -300,6 +355,7 @@ export class ScriptingAgent extends BaseAgent {
       props_needed: seg.props_needed || [],
       interaction_type: seg.interaction_type || null,
       camera_specs: seg.camera_specs || null,
+      segment_score: seg.segment_score || null,
     }));
 
     const { error: sceneError } = await this.supabase
@@ -617,6 +673,18 @@ Split this script into 4 segments following the output format.`;
       throw new Error(`Project ${projectId} has no product_data — run analysis first`);
     }
 
+    // Fetch style preset if project has one
+    let stylePreset: any = null;
+    if (proj.style_preset_id) {
+      const { data } = await this.supabase
+        .from('style_preset')
+        .select('*')
+        .eq('id', proj.style_preset_id)
+        .eq('status', 'ready')
+        .single();
+      stylePreset = data;
+    }
+
     const productData = proj.product_data as {
       product_name: string;
       category: string;
@@ -682,6 +750,13 @@ Product visibility: ${productVisibility}`;
       userPrompt += `\n\nUSER FEEDBACK: ${feedback}`;
     }
 
+    if (stylePreset) {
+      const segmentMaxScores: Record<number, number> = { 0: 14, 1: 10, 2: 10, 3: 10 };
+      const segmentScoreKeys: Record<number, string> = { 0: 'hook', 1: 'problem', 2: 'solution', 3: 'cta' };
+      const presetTargetScore = stylePreset.segment_scores?.[segmentScoreKeys[segmentIndex]]?.total || segmentMaxScores[segmentIndex];
+      userPrompt += `\n\nSTYLE PRESET: Match the ${stylePreset.patterns?.hook_technique || ''} style. Target score: ${presetTargetScore}/${segmentMaxScores[segmentIndex]} for this segment.`;
+    }
+
     userPrompt += `
 
 OUTPUT: Return ONLY a single segment object (not wrapped in segments array):
@@ -701,13 +776,15 @@ OUTPUT: Return ONLY a single segment object (not wrapped in segments array):
     "shot_2_peak": { "word": "...", "time": "~8s", "action": "..." },
     "shot_3_peak": { "word": "...", "time": "~13s", "action": "..." }
   },
+  "segment_score": { "criterion_1": 2, "criterion_2": 1, "total": 3 },
   "props_needed": ["..."],
   "interaction_type": "...",
   "camera_specs": { "angle": "...", "movement": "...", "lighting": "..." },
   "text_overlay": "...",
   "key_moment": "..."
 }
-${segmentIndex === 0 ? 'Also include a "hook_score" object with curiosity_loop, challenges_belief, clear_context, plants_question, pattern_interrupt, emotional_trigger, specific_claim, and total fields.' : 'Do NOT include hook_score.'}`;
+${segmentIndex === 0 ? 'Also include a "hook_score" object with curiosity_loop, challenges_belief, clear_context, plants_question, pattern_interrupt, emotional_trigger, specific_claim, and total fields.' : 'Do NOT include hook_score.'}
+Include a "segment_score" object with the relevant criteria scores for this segment type and a total.`;
 
     // 9. Call WaveSpeed LLM
     this.log(`Calling WaveSpeed LLM to regenerate segment ${segmentIndex}...`);
@@ -746,6 +823,7 @@ ${segmentIndex === 0 ? 'Also include a "hook_score" object with curiosity_loop, 
       props_needed: parsed.props_needed,
       interaction_type: parsed.interaction_type,
       camera_specs: parsed.camera_specs,
+      segment_score: parsed.segment_score,
     };
 
     // 11. Validate the segment: override syllable_count, check shot_scripts
@@ -761,6 +839,18 @@ ${segmentIndex === 0 ? 'Also include a "hook_score" object with curiosity_loop, 
       this.log(
         `[Validation] WARNING: Segment ${segment.id} has ${segment.shot_scripts?.length ?? 0} shot_scripts, expected ${this.videoModel.shots_per_segment}`
       );
+    }
+
+    // Validate segment_score total if present
+    if (segment.segment_score) {
+      const { total, ...criteria } = segment.segment_score;
+      const calculatedTotal = Object.values(criteria).reduce((sum: number, v) => sum + (typeof v === 'number' ? v : 0), 0);
+      if (calculatedTotal !== total) {
+        this.log(
+          `[Validation] Regenerated segment ${segment.id} segment_score total mismatch: reported ${total}, calculated ${calculatedTotal}. Overriding.`
+        );
+        segment.segment_score.total = calculatedTotal;
+      }
     }
 
     // 12. INSERT new versioned scene row (per-segment history)
@@ -781,6 +871,7 @@ ${segmentIndex === 0 ? 'Also include a "hook_score" object with curiosity_loop, 
         props_needed: segment.props_needed || [],
         interaction_type: segment.interaction_type || null,
         camera_specs: segment.camera_specs || null,
+        segment_score: segment.segment_score || null,
         tone: resolvedTone,
         version: nextVersion,
       })
@@ -898,37 +989,53 @@ ${segmentIndex === 0 ? 'Also include a "hook_score" object with curiosity_loop, 
     } | null,
     videoUrl?: string | null,
     videoAnalysis?: any | null,
+    stylePreset?: any | null,
   ): string {
     const sellingPointsList = productData.selling_points
       .map((p: string, i: number) => `${i + 1}. ${p}`)
       .join('\n');
 
-    let prompt = `PRODUCT: ${productData.product_name}
+    const parts: string[] = [];
+
+    parts.push(`PRODUCT: ${productData.product_name}
 CATEGORY: ${productData.category}
 SELLING POINTS:
 ${sellingPointsList}
-HOOK ANGLE: ${productData.hook_angle}`;
+HOOK ANGLE: ${productData.hook_angle}`);
 
     if (template) {
-      prompt += `
-
-USE THIS HOOK PATTERN:
+      parts.push(`USE THIS HOOK PATTERN:
 Type: ${template.hook_type}
 Text Template: ${template.text_hook_template}
 Spoken Template: ${template.spoken_hook_template}
-Energy Arc: ${JSON.stringify(template.energy_arc)}`;
+Energy Arc: ${JSON.stringify(template.energy_arc)}`);
+    }
+
+    if (stylePreset) {
+      parts.push(`STYLE PRESET: "${stylePreset.name}"
+Match this winning formula extracted from a successful video:
+- Hook technique: ${stylePreset.patterns?.hook_technique || 'N/A'}
+- Product integration: ${stylePreset.patterns?.product_integration_style || 'N/A'}
+- CTA formula: ${stylePreset.patterns?.cta_formula || 'N/A'}
+- Pacing: ${stylePreset.patterns?.pacing || 'N/A'}
+- Reference scores to match: Hook ${stylePreset.segment_scores?.hook?.total || '?'}/14, Problem ${stylePreset.segment_scores?.problem?.total || '?'}/10, Solution ${stylePreset.segment_scores?.solution?.total || '?'}/10, CTA ${stylePreset.segment_scores?.cta?.total || '?'}/10
+
+Reference transcript (match this style, NOT this content):
+${stylePreset.transcript?.segments?.map((s: any) => `[${s.section}]: ${s.text}`).join('\n') || 'N/A'}
+
+Aim for a total score of ${stylePreset.total_score || '?'}/44 or higher.`);
     }
 
     if (videoAnalysis) {
       const sealBlock = this.buildSEALBlock(videoAnalysis);
-      prompt += `\n\n${sealBlock}`;
+      parts.push(sealBlock);
     } else if (videoUrl) {
-      prompt += `\n\nREFERENCE VIDEO (analyze structure): ${videoUrl}`;
+      parts.push(`REFERENCE VIDEO (analyze structure): ${videoUrl}`);
     } else {
-      prompt += `\n\nMODE: Generate from scratch using proven hook formula`;
+      parts.push(`MODE: Generate from scratch using proven hook formula`);
     }
 
-    return prompt;
+    return parts.join('\n\n');
   }
 
   // ─── SEAL Block Builder ──────────────────────────────────────────────────
@@ -1001,6 +1108,19 @@ Adapt the CONTENT for the current product while preserving the reference's prove
         this.log(
           `[Validation] WARNING: Segment ${seg.id} has ${seg.shot_scripts?.length ?? 0} shot_scripts, expected ${this.videoModel.shots_per_segment}`
         );
+      }
+
+      // Validate segment_score total if present
+      if (seg.segment_score) {
+        const { total, ...criteria } = seg.segment_score;
+        const calculatedTotal = Object.values(criteria).reduce((sum: number, v) => sum + (typeof v === 'number' ? v : 0), 0);
+        if (calculatedTotal !== total) {
+          this.log(
+            `[Validation] Segment ${seg.id} "${seg.section}" segment_score total mismatch: reported ${total}, calculated ${calculatedTotal}. Overriding.`
+          );
+          seg.segment_score.total = calculatedTotal;
+        }
+        this.log(`[Validation] Segment ${seg.id} "${seg.section}" score: ${seg.segment_score.total}`);
       }
     }
 

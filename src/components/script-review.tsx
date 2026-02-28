@@ -23,8 +23,23 @@ interface Scene {
   product_visibility: string | null;
   broll_cues: { shot_script_index: number; offset_seconds: number; duration_seconds: number; intent: string; spoken_text_during: string }[] | null;
   tone: string | null;
+  segment_score: { total: number; [criterion: string]: number } | null;
   version: number;
   created_at: string;
+}
+
+interface StylePreset {
+  id: string;
+  name: string;
+  status: 'analyzing' | 'ready' | 'failed';
+  total_score: number | null;
+  patterns: {
+    hook_technique: string;
+    energy_arc: Record<string, unknown>;
+    product_integration_style: string;
+    cta_formula: string;
+    pacing: string;
+  } | null;
 }
 
 interface Script {
@@ -58,6 +73,8 @@ export function ScriptReview({
   const [activeScript, setActiveScript] = useState(0);
   const [showUpload, setShowUpload] = useState(false);
   const [breakdownView, setBreakdownView] = useState<'cards' | 'timeline' | 'beats'>('cards');
+  const [presets, setPresets] = useState<StylePreset[]>([]);
+  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
 
   const fetchScripts = useCallback(async () => {
     try {
@@ -79,6 +96,43 @@ export function ScriptReview({
   useEffect(() => {
     fetchScripts();
   }, [fetchScripts]);
+
+  // Fetch available style presets
+  useEffect(() => {
+    fetch('/api/style-presets')
+      .then((res) => (res.ok ? res.json() : { presets: [] }))
+      .then((data) => {
+        setPresets((data.presets || []).filter((p: StylePreset) => p.status === 'ready'));
+      })
+      .catch(() => setPresets([]));
+  }, []);
+
+  // Fetch the project's current style_preset_id
+  useEffect(() => {
+    fetch(`/api/projects/${projectId}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.style_preset_id) {
+          setSelectedPresetId(data.style_preset_id);
+        }
+      })
+      .catch(() => {});
+  }, [projectId]);
+
+  const activePreset = presets.find((p) => p.id === selectedPresetId) || null;
+
+  const handlePresetChange = useCallback(async (presetId: string | null) => {
+    setSelectedPresetId(presetId);
+    try {
+      await fetch(`/api/projects/${projectId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ style_preset_id: presetId }),
+      });
+    } catch (err) {
+      console.error('Failed to update style preset:', err);
+    }
+  }, [projectId]);
 
   if (loading) {
     return (
@@ -181,6 +235,17 @@ export function ScriptReview({
                 Hook: {script.hook_score}
               </span>
             )}
+            {(() => {
+              const totalGeneratedScore = script.scenes.reduce(
+                (sum, s) => sum + (s.segment_score?.total || 0),
+                0
+              );
+              return activePreset && activePreset.total_score && totalGeneratedScore > 0 ? (
+                <span className="rounded-md bg-summon/10 px-2 py-0.5 font-[family-name:var(--font-mono)] text-xs text-summon">
+                  Match: {Math.round((totalGeneratedScore / activePreset.total_score) * 100)}%
+                </span>
+              ) : null;
+            })()}
             {script.tone && (
               <span className="rounded-md bg-surface-overlay px-2 py-0.5 font-[family-name:var(--font-display)] text-xs text-text-secondary">
                 {SCRIPT_TONES[script.tone as keyof typeof SCRIPT_TONES]?.label || script.tone}
@@ -201,6 +266,53 @@ export function ScriptReview({
           </button>
         )}
       </div>
+
+      {/* Style Preset Selector */}
+      {presets.length > 0 && (
+        <div className="rounded-xl border border-border bg-surface p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                Style Preset
+              </span>
+              {activePreset && activePreset.total_score !== null && (
+                <span className="rounded-md bg-summon/10 px-2 py-0.5 font-[family-name:var(--font-mono)] text-xs text-summon">
+                  {activePreset.total_score}/44
+                </span>
+              )}
+            </div>
+            <select
+              value={selectedPresetId || ''}
+              onChange={(e) => handlePresetChange(e.target.value || null)}
+              className="rounded-lg border border-border bg-surface-raised px-3 py-1.5 text-xs text-text-primary focus:border-electric focus:outline-none"
+            >
+              <option value="">No preset</option>
+              {presets.map((p) => (
+                <option key={p.id} value={p.id}>{p.name} ({p.total_score}/44)</option>
+              ))}
+            </select>
+          </div>
+          {activePreset && activePreset.patterns && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {activePreset.patterns.hook_technique && (
+                <span className="rounded-full bg-electric/10 px-2 py-0.5 text-[10px] text-electric">
+                  {activePreset.patterns.hook_technique}
+                </span>
+              )}
+              {activePreset.patterns.pacing && (
+                <span className="rounded-full bg-phoenix/10 px-2 py-0.5 text-[10px] text-phoenix">
+                  {activePreset.patterns.pacing}
+                </span>
+              )}
+              {activePreset.patterns.cta_formula && (
+                <span className="rounded-full bg-lime/10 px-2 py-0.5 text-[10px] text-lime">
+                  {activePreset.patterns.cta_formula}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Full script text */}
       {script.full_text && (

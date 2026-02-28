@@ -79,7 +79,7 @@ export async function PATCH(
     }
 
     // Always-allowed fields (internal updates from frontend — product_placement, etc.)
-    const ALWAYS_ALLOWED = ['product_placement', 'product_image_url', 'product_data', 'negative_prompt_override', 'fast_mode', 'video_retries', 'scene_override', 'scene_preset_id', 'interaction_override', 'interaction_preset_id'] as const;
+    const ALWAYS_ALLOWED = ['product_placement', 'product_image_url', 'product_data', 'negative_prompt_override', 'fast_mode', 'video_retries', 'scene_override', 'scene_preset_id', 'interaction_override', 'interaction_preset_id', 'style_preset_id'] as const;
     for (const field of ALWAYS_ALLOWED) {
       if (field in body) {
         updates[field] = body[field];
