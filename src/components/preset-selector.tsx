@@ -270,13 +270,13 @@ export function PresetSelector({
                     type="button"
                     onClick={(e) => startEdit(preset, e)}
                     title="Edit description"
-                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded transition-all ${
+                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded transition-all ${
                       isSelected
                         ? 'text-electric/60 hover:text-electric hover:bg-electric/10'
                         : 'text-text-muted/0 group-hover:text-text-muted/50 hover:!text-electric hover:bg-electric/10'
                     }`}
                   >
-                    <PencilIcon className="h-3 w-3" />
+                    <PencilIcon className="h-4 w-4" />
                   </button>
                 )}
 
