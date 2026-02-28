@@ -126,6 +126,16 @@ export function SidebarNav({ collapsed, onToggle }: SidebarNavProps) {
         })}
       </nav>
 
+      {/* Version */}
+      <div className={`border-t border-border px-3 py-2 ${collapsed ? 'text-center' : ''}`}>
+        <span className="font-[family-name:var(--font-mono)] text-[10px] text-text-muted">
+          {collapsed
+            ? (process.env.NEXT_PUBLIC_GIT_COMMIT || 'dev').slice(0, 7)
+            : `v${process.env.NEXT_PUBLIC_APP_VERSION || '0.0.0'}-${(process.env.NEXT_PUBLIC_GIT_COMMIT || 'dev').slice(0, 7)}`
+          }
+        </span>
+      </div>
+
       {/* Collapse toggle */}
       <button
         type="button"
