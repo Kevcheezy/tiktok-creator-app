@@ -428,6 +428,18 @@ Influencer `<select>` options displayed the entire `persona` field (full appeara
 - [x] Fix: Reorder both END frame reference arrays (continuation path + first segment path) to put influencer at position 0
 - The B0.30 fix correctly ordered START frame references but missed END frame references
 
+#### ~~B0.41 — Keyframe sequencing fix + JSON structured prompts~~ FIXED
+**Severity:** Critical — END frames not evolving from START frames
+**Scope:** Backend (agents, lib)
+
+**Why:** B0.40 put influencer at position 0 for END frames, but Nano Banana Pro edit API treats position 0 as the base image to transform. Each END frame independently regenerated from the influencer photo instead of evolving from the START frame. Also, image prompts were serialized to flat prose losing structured specificity.
+
+**Fix checklist:**
+- [x] Reorder END frame refs: startUrl position 0 (evolve), influencer position 1 (identity anchor), product position 2
+- [x] Add `serializeAsJSON()` to prompt-serializer.ts — sends structured JSON as prompt text
+- [x] Switch casting agent + worker regen handler to use serializeAsJSON instead of serializeForImage
+- [x] Add observability: reference images stored in asset metadata, api_call events logged to generation_log
+
 ---
 
 ### Tier 1: Complete the Core Pipeline (Ship a working end-to-end product)

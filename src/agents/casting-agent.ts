@@ -3,7 +3,7 @@ import { BaseAgent } from './base-agent';
 import { CancellationError } from '@/lib/errors';
 import { AVATAR_MAPPING, PRODUCT_PLACEMENT_ARC, ENERGY_ARC, API_COSTS, RESOLUTION, VISIBILITY_ANGLE_MAP } from '@/lib/constants';
 import { StructuredPrompt, STRUCTURED_PROMPT_SCHEMA_DESCRIPTION, IMAGE_NEGATIVE_PROMPT, resolveNegativePrompt, isStructuredPrompt } from '@/lib/prompt-schema';
-import { serializeForImage } from '@/lib/prompt-serializer';
+import { serializeAsJSON } from '@/lib/prompt-serializer';
 
 const CONTINUITY_PROMPT = 'CONTINUITY: This frame continues directly from the previous segment. The FIRST reference image is the influencer\'s base photo — preserve their EXACT face and likeness. A previous segment\'s end frame is also provided for scene continuity. Preserve the EXACT same person, room, lighting, and wardrobe. Only change: pose, energy level, and product visibility as specified.';
 
@@ -199,12 +199,12 @@ export class CastingAgent extends BaseAgent {
           let startUrl = '';
           let endUrl = '';
 
-          // Serialize structured prompts to API-ready strings.
-          // When using reference images (isEdit), skip subject description — the reference
+          // Serialize structured prompts as JSON for Nano Banana Pro.
+          // When using reference images, skip subject description — the reference
           // image defines the person's appearance. Only describe actions, scenery, and product.
           const skipSubject = useInfluencer || hasProductRef || isContinuation;
-          const startPromptStr = isStructuredPrompt(promptPair.start) ? serializeForImage(promptPair.start, { skipSubject }) : String(promptPair.start);
-          const endPromptStr = isStructuredPrompt(promptPair.end) ? serializeForImage(promptPair.end, { skipSubject }) : String(promptPair.end);
+          const startPromptStr = isStructuredPrompt(promptPair.start) ? serializeAsJSON(promptPair.start, { skipSubject }) : String(promptPair.start);
+          const endPromptStr = isStructuredPrompt(promptPair.end) ? serializeAsJSON(promptPair.end, { skipSubject }) : String(promptPair.end);
 
           if (referenceImages.length > 0) {
             // Edit mode: use reference images
@@ -227,12 +227,19 @@ export class CastingAgent extends BaseAgent {
                 cost_usd: 0,
               });
 
-              // Generate only the end keyframe: chain ref first (sequential continuity), then product if visible
+              // Generate END keyframe: start frame first (evolve from it), influencer second (identity anchor), product third
               const endRefs: string[] = [startUrl];
+              if (useInfluencer) endRefs.push(influencer.image_url);
               if (segmentProductImage) endRefs.push(segmentProductImage);
-              this.log(`Segment ${segIdx}: generating END keyframe with previous frame as primary ref (attempt ${attempt + 1})`);
+              this.log(`Segment ${segIdx}: generating END keyframe with start frame as primary + influencer anchor (attempt ${attempt + 1})`);
+              await this.logEvent(projectId, 'api_call', 'casting', {
+                provider: 'wavespeed', endpoint: 'nano-banana-pro/edit',
+                segment: segIdx, frameType: 'end', referenceImages: endRefs,
+              });
               const endResult = await this.wavespeed.editImage(endRefs, endPromptStr, editOpts);
-              await this.createAsset(projectId, scene.id, 'keyframe_end', endResult.taskId, 'nano-banana-pro-edit');
+              await this.createAsset(projectId, scene.id, 'keyframe_end', endResult.taskId, 'nano-banana-pro-edit', {
+                referenceImages: endRefs, segment: segIdx, frameType: 'end',
+              });
               const endPoll = await this.wavespeed.pollResult(endResult.taskId, { maxWait: POLL_MAX_WAIT, initialInterval: POLL_INITIAL_INTERVAL, shouldCancel: this.shouldCancel });
               endUrl = endPoll.url || '';
               await this.updateAssetUrl(endResult.taskId, endUrl);
@@ -246,19 +253,32 @@ export class CastingAgent extends BaseAgent {
               ].filter(Boolean).join(' + ');
 
               this.log(`Segment ${segIdx}: generating START keyframe with refs [${refLabels}] (attempt ${attempt + 1})`);
+              await this.logEvent(projectId, 'api_call', 'casting', {
+                provider: 'wavespeed', endpoint: 'nano-banana-pro/edit',
+                segment: segIdx, frameType: 'start', referenceImages,
+              });
               const startResult = await this.wavespeed.editImage(referenceImages, startPromptStr, editOpts);
-              await this.createAsset(projectId, scene.id, 'keyframe_start', startResult.taskId, 'nano-banana-pro-edit');
+              await this.createAsset(projectId, scene.id, 'keyframe_start', startResult.taskId, 'nano-banana-pro-edit', {
+                referenceImages, segment: segIdx, frameType: 'start',
+              });
               const startPoll = await this.wavespeed.pollResult(startResult.taskId, { maxWait: POLL_MAX_WAIT, initialInterval: POLL_INITIAL_INTERVAL, shouldCancel: this.shouldCancel });
               startUrl = startPoll.url || '';
               await this.updateAssetUrl(startResult.taskId, startUrl);
 
-              // End frame: chain ref first (sequential continuity), then product if visible
+              // End frame: start frame first (evolve from it), influencer second (identity anchor), product third
               const endRefs: string[] = [];
               if (startUrl) endRefs.push(startUrl);
+              if (useInfluencer) endRefs.push(influencer.image_url);
               if (segmentProductImage) endRefs.push(segmentProductImage);
-              this.log(`Segment ${segIdx}: generating END keyframe with start frame as primary ref (attempt ${attempt + 1})`);
+              this.log(`Segment ${segIdx}: generating END keyframe with start frame as primary + influencer anchor (attempt ${attempt + 1})`);
+              await this.logEvent(projectId, 'api_call', 'casting', {
+                provider: 'wavespeed', endpoint: 'nano-banana-pro/edit',
+                segment: segIdx, frameType: 'end', referenceImages: endRefs,
+              });
               const endResult = await this.wavespeed.editImage(endRefs, endPromptStr, editOpts);
-              await this.createAsset(projectId, scene.id, 'keyframe_end', endResult.taskId, 'nano-banana-pro-edit');
+              await this.createAsset(projectId, scene.id, 'keyframe_end', endResult.taskId, 'nano-banana-pro-edit', {
+                referenceImages: endRefs, segment: segIdx, frameType: 'end',
+              });
               const endPoll = await this.wavespeed.pollResult(endResult.taskId, { maxWait: POLL_MAX_WAIT, initialInterval: POLL_INITIAL_INTERVAL, shouldCancel: this.shouldCancel });
               endUrl = endPoll.url || '';
               await this.updateAssetUrl(endResult.taskId, endUrl);
@@ -522,6 +542,7 @@ Match this reference video's visual style: use similar lighting, camera angle, a
     type: 'keyframe_start' | 'keyframe_end',
     taskId: string,
     provider: string = 'nano-banana-pro',
+    metadata?: Record<string, unknown>,
   ): Promise<void> {
     const costPerImage = provider === 'nano-banana-pro-edit'
       ? API_COSTS.nanoBananaProEdit
@@ -535,6 +556,7 @@ Match this reference video's visual style: use similar lighting, camera angle, a
       provider_task_id: taskId,
       status: 'generating',
       cost_usd: costPerImage,
+      ...(metadata ? { metadata } : {}),
     });
   }
 

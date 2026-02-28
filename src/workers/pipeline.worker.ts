@@ -17,7 +17,7 @@ import { WaveSpeedClient } from '../lib/api-clients/wavespeed';
 import { ElevenLabsClient } from '../lib/api-clients/elevenlabs';
 import { FALLBACK_VOICES, API_COSTS, VIDEO_POLL_MAX_WAIT, VideoModelConfig, getFallbackVideoModel, PRODUCT_PLACEMENT_ARC, VISIBILITY_ANGLE_MAP, RESOLUTION } from '../lib/constants';
 import { isStructuredPrompt, resolveNegativePrompt } from '../lib/prompt-schema';
-import { serializeForImage, serializeForVideo } from '../lib/prompt-serializer';
+import { serializeAsJSON, serializeForVideo } from '../lib/prompt-serializer';
 import { getPipelineQueue, type PipelineJobData } from '../lib/queue';
 import { APP_VERSION, GIT_COMMIT } from '../lib/version';
 import { createLogger, logToGenerationLog } from '../lib/logger';
@@ -1162,7 +1162,7 @@ async function regenerateKeyframe(
   // Serialize prompt AFTER building referenceImages so we can skip subject
   // description when a reference image defines the person's appearance
   const promptText = isStructuredPrompt(rawPrompt)
-    ? serializeForImage(rawPrompt, { skipSubject: referenceImages.length > 0 })
+    ? serializeAsJSON(rawPrompt, { skipSubject: referenceImages.length > 0 })
     : String(rawPrompt);
 
   const wavespeed = new WaveSpeedClient();

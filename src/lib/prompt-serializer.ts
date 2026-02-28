@@ -67,6 +67,35 @@ export function serializeForImage(
   return parts.filter(Boolean).join('. ') + '.';
 }
 
+// ─── JSON Serializer (Nano Banana Pro) ──────────────────────────────────────
+
+/**
+ * Serializes a StructuredPrompt as a compact JSON string for Nano Banana Pro.
+ * Image models can interpret structured JSON prompts more precisely than prose.
+ * When skipSubject is true, the subject block is omitted (appearance comes from
+ * reference images, not the text prompt).
+ */
+export function serializeAsJSON(
+  prompt: StructuredPrompt,
+  opts?: { skipSubject?: boolean },
+): string {
+  const output: Record<string, unknown> = {};
+
+  if (prompt.subject && !opts?.skipSubject) {
+    output.subject = prompt.subject;
+  }
+
+  if (prompt.product) output.product = prompt.product;
+  if (prompt.action) output.action = prompt.action;
+  if (prompt.camera_specs) output.camera_specs = prompt.camera_specs;
+  if (prompt.environment) output.environment = prompt.environment;
+  if (prompt.lighting) output.lighting = prompt.lighting;
+  if (prompt.style) output.style = prompt.style;
+  if (prompt.negative_prompt) output.negative_prompt = prompt.negative_prompt;
+
+  return JSON.stringify(output);
+}
+
 // ─── Video Serializer (Kling 3.0 Pro) ───────────────────────────────────────
 
 export interface VideoPromptOutput {
