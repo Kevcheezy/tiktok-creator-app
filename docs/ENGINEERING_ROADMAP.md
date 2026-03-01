@@ -1257,6 +1257,20 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 - [x] Cancel/invalidate stale video assets so they are no longer shown as active
 - [x] Ensure cancelled assets are excluded from downstream pipeline stages
 
+#### ~~R1.5.36 - BeatBoard Per-Sentence Syllable Breakdown & Pacing Controls~~ ~~DONE~~
+**Priority:** P2 - Medium
+**Effort:** Small
+**Depends on:** R1.5.10 (Visual Script Breakdown provides BeatBoard component)
+**Why:** The BeatBoard view shows a 2-line clamped script preview and a simple syllable count, but doesn't break down pacing per-sentence. Adding per-sentence syllable badges with color-coded target ranges and adjustable pacing controls gives creators fine-grained visibility and control over script pacing before generation.
+
+**Frontend:**
+- [x] BeatBoard: replace 2-line clamp with per-sentence syllable breakdown using `analyzeSentencePacing`
+- [x] BeatBoard: add component syllable summary with color-coded target range indicator
+- [x] BeatBoard: update meta grid to show sentence count instead of raw syllable count
+- [x] ScriptReview: add collapsible Pacing Controls panel with per-section min/max inputs
+- [x] ScriptReview: pass syllable targets to ScriptBreakdown component
+- [x] ScriptReview: change default view from 'cards' to 'beats'
+
 ---
 
 ### Tier 2: Make It Actually Convert (Quality & conversion optimization)

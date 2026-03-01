@@ -72,9 +72,21 @@ export function ScriptReview({
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [activeScript, setActiveScript] = useState(0);
   const [showUpload, setShowUpload] = useState(false);
-  const [breakdownView, setBreakdownView] = useState<'cards' | 'timeline' | 'beats'>('cards');
+  const [breakdownView, setBreakdownView] = useState<'cards' | 'timeline' | 'beats'>('beats');
   const [presets, setPresets] = useState<StylePreset[]>([]);
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
+
+  const DEFAULT_SYLLABLE_TARGETS = {
+    hook: { min: 65, max: 80 },
+    problem: { min: 75, max: 90 },
+    solution_product: { min: 80, max: 95 },
+    cta: { min: 55, max: 70 },
+  };
+
+  const [syllableTargets, setSyllableTargets] = useState(DEFAULT_SYLLABLE_TARGETS);
+  const [targetsModified, setTargetsModified] = useState(false);
+  const [showPacingControls, setShowPacingControls] = useState(false);
+  const [pacingSaving, setPacingSaving] = useState(false);
 
   const fetchScripts = useCallback(async () => {
     try {
@@ -107,13 +119,16 @@ export function ScriptReview({
       .catch(() => setPresets([]));
   }, []);
 
-  // Fetch the project's current style_preset_id
+  // Fetch the project's current style_preset_id and syllable_targets
   useEffect(() => {
     fetch(`/api/projects/${projectId}`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data?.style_preset_id) {
           setSelectedPresetId(data.style_preset_id);
+        }
+        if (data?.syllable_targets) {
+          setSyllableTargets(data.syllable_targets);
         }
       })
       .catch(() => {});
@@ -357,6 +372,118 @@ export function ScriptReview({
         </div>
       </div>
 
+      {/* Pacing Controls (beats view only) */}
+      {breakdownView === 'beats' && (
+        <div className="rounded-xl border border-border bg-surface">
+          <button
+            type="button"
+            onClick={() => setShowPacingControls(!showPacingControls)}
+            className="flex w-full items-center justify-between px-4 py-3 transition-colors hover:bg-surface-raised/50"
+          >
+            <span className="font-[family-name:var(--font-display)] text-xs font-semibold uppercase tracking-wider text-text-muted">
+              Pacing Controls
+            </span>
+            <svg
+              viewBox="0 0 16 16"
+              fill="none"
+              className={`h-3.5 w-3.5 text-text-muted transition-transform ${showPacingControls ? 'rotate-180' : ''}`}
+              stroke="currentColor"
+              strokeWidth={1.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M4 6l4 4 4-4" />
+            </svg>
+          </button>
+          {showPacingControls && (
+            <div className="border-t border-border px-4 pb-4 pt-3">
+              <div className="space-y-2.5">
+                {([
+                  { key: 'hook' as const, label: 'Hook', dotColor: 'bg-magenta' },
+                  { key: 'problem' as const, label: 'Problem', dotColor: 'bg-amber-hot' },
+                  { key: 'solution_product' as const, label: 'Solution + Product', dotColor: 'bg-electric' },
+                  { key: 'cta' as const, label: 'CTA', dotColor: 'bg-lime' },
+                ]).map(({ key, label, dotColor }) => (
+                  <div key={key} className="flex items-center gap-3">
+                    <span className={`h-2.5 w-2.5 flex-shrink-0 rounded-full ${dotColor}`} />
+                    <span className="w-32 flex-shrink-0 font-[family-name:var(--font-display)] text-xs font-medium text-text-secondary">
+                      {label}
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="number"
+                        value={syllableTargets[key].min}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value) || 0;
+                          setSyllableTargets((prev) => ({ ...prev, [key]: { ...prev[key], min: val } }));
+                          setTargetsModified(true);
+                        }}
+                        className="w-16 rounded bg-surface-overlay border border-border px-2 py-1 text-xs font-mono text-text-primary"
+                      />
+                      <span className="text-[10px] text-text-muted">&ndash;</span>
+                      <input
+                        type="number"
+                        value={syllableTargets[key].max}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value) || 0;
+                          setSyllableTargets((prev) => ({ ...prev, [key]: { ...prev[key], max: val } }));
+                          setTargetsModified(true);
+                        }}
+                        className="w-16 rounded bg-surface-overlay border border-border px-2 py-1 text-xs font-mono text-text-primary"
+                      />
+                      <span className="font-[family-name:var(--font-mono)] text-[10px] text-text-muted">syl</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {targetsModified && (
+                <div className="mt-4 flex items-center gap-3">
+                  <button
+                    type="button"
+                    disabled={pacingSaving}
+                    onClick={async () => {
+                      setPacingSaving(true);
+                      try {
+                        await fetch(`/api/projects/${projectId}`, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ syllable_targets: syllableTargets }),
+                        });
+                        const currentTone = script.tone || 'reluctant-insider';
+                        await fetch(`/api/projects/${projectId}/scripts/${script.id}/regenerate`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ tone: currentTone }),
+                        });
+                        setTargetsModified(false);
+                        onStatusChange?.();
+                      } catch (err) {
+                        console.error('Failed to apply pacing targets:', err);
+                      } finally {
+                        setPacingSaving(false);
+                      }
+                    }}
+                    className="inline-flex items-center rounded-lg border border-electric/30 bg-electric/10 px-4 py-1.5 font-[family-name:var(--font-display)] text-xs font-semibold text-electric transition-colors hover:bg-electric/20 disabled:opacity-50"
+                  >
+                    {pacingSaving ? 'Applying...' : 'Apply & Regenerate'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSyllableTargets(DEFAULT_SYLLABLE_TARGETS);
+                      setTargetsModified(false);
+                    }}
+                    className="font-[family-name:var(--font-display)] text-xs font-medium text-text-muted underline underline-offset-2 transition-colors hover:text-text-secondary"
+                  >
+                    Reset
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Segment views */}
       {breakdownView === 'cards' && (
         <div className="stagger-children grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -374,7 +501,7 @@ export function ScriptReview({
         </div>
       )}
       {breakdownView === 'timeline' && <ScriptBreakdown scenes={script.scenes} view="timeline" productTerms={productTerms} />}
-      {breakdownView === 'beats' && <ScriptBreakdown scenes={script.scenes} view="beats" productTerms={productTerms} />}
+      {breakdownView === 'beats' && <ScriptBreakdown scenes={script.scenes} view="beats" productTerms={productTerms} syllableTargets={syllableTargets} />}
 
       {/* Approve / Regenerate controls */}
       {!readOnly && (

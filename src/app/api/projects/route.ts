@@ -2,8 +2,49 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/db';
 import { getPipelineQueue } from '@/lib/queue';
 import { TONE_IDS } from '@/lib/constants';
+import { countTextSyllables } from '@/lib/syllables';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
+
+const DEFAULT_SYLLABLE_TARGETS = {
+  hook: { min: 65, max: 80 },
+  problem: { min: 75, max: 90 },
+  solution_product: { min: 80, max: 95 },
+  cta: { min: 55, max: 70 },
+};
+
+/**
+ * Derive syllable targets from a style preset's transcript.
+ * Uses ±15% of the actual syllable count per segment as the target range.
+ */
+function deriveSyllableTargetsFromPreset(
+  transcript: { segments: Array<{ section: string; text: string }> } | null
+): typeof DEFAULT_SYLLABLE_TARGETS {
+  if (!transcript?.segments || transcript.segments.length < 4) {
+    return DEFAULT_SYLLABLE_TARGETS;
+  }
+
+  const targets = { ...DEFAULT_SYLLABLE_TARGETS };
+
+  for (const seg of transcript.segments) {
+    const count = countTextSyllables(seg.text);
+    const min = Math.round(count * 0.85);
+    const max = Math.round(count * 1.15);
+    const section = seg.section.toLowerCase();
+
+    if (section === 'hook') {
+      targets.hook = { min, max };
+    } else if (section === 'problem') {
+      targets.problem = { min, max };
+    } else if (section.includes('solution')) {
+      targets.solution_product = { min, max };
+    } else if (section === 'cta') {
+      targets.cta = { min, max };
+    }
+  }
+
+  return targets;
+}
 
 const createProjectSchema = z.object({
   productId: z.string().uuid().optional(),
@@ -61,6 +102,21 @@ export async function POST(request: NextRequest) {
       resolvedVideoModelId = defaultModel?.id || null;
     }
 
+    // Resolve syllable targets from style preset if selected
+    let syllableTargets = DEFAULT_SYLLABLE_TARGETS;
+    if (stylePresetId) {
+      const { data: preset } = await supabase
+        .from('style_preset')
+        .select('transcript')
+        .eq('id', stylePresetId)
+        .single();
+      if (preset?.transcript) {
+        syllableTargets = deriveSyllableTargetsFromPreset(
+          preset.transcript as { segments: Array<{ section: string; text: string }> }
+        );
+      }
+    }
+
     // Path A: existing product by ID
     if (productId) {
       const { data: prod, error: prodError } = await supabase
@@ -87,6 +143,7 @@ export async function POST(request: NextRequest) {
           character_id: characterId || null,
           video_model_id: resolvedVideoModelId,
           style_preset_id: stylePresetId || null,
+          syllable_targets: syllableTargets,
           name: name || null,
           tone,
           input_mode: videoUrl ? 'video_analysis' : 'product_only',
@@ -160,6 +217,7 @@ export async function POST(request: NextRequest) {
         character_id: characterId || null,
         video_model_id: resolvedVideoModelId,
         style_preset_id: stylePresetId || null,
+        syllable_targets: syllableTargets,
         name: name || null,
         tone,
         input_mode: videoUrl ? 'video_analysis' : 'product_only',

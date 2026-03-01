@@ -157,6 +157,7 @@ export const project = pgTable('project', {
   videoRetries: integer('video_retries').notNull().default(0),
   productPlacement: jsonb('product_placement'),
   negativePromptOverride: jsonb('negative_prompt_override'),
+  syllableTargets: jsonb('syllable_targets'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });

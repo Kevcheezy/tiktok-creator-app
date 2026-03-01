@@ -1,6 +1,7 @@
 'use client';
 
 import { HighlightedText } from './highlighted-text';
+import { analyzeSentencePacing } from '@/lib/syllables';
 
 // ─── Types ────────────────────────────────────────────
 
@@ -25,10 +26,19 @@ interface Scene {
   broll_cues: BrollCue[] | null;
 }
 
+interface SyllableTarget { min: number; max: number }
+interface SyllableTargets {
+  hook: SyllableTarget;
+  problem: SyllableTarget;
+  solution_product: SyllableTarget;
+  cta: SyllableTarget;
+}
+
 interface ScriptBreakdownProps {
   scenes: Scene[];
   view: 'timeline' | 'beats';
   productTerms?: string[];
+  syllableTargets?: SyllableTargets;
 }
 
 // ─── Constants ────────────────────────────────────────
@@ -68,11 +78,11 @@ const VISIBILITY_LABELS: Record<string, { label: string; opacity: number }> = {
 
 // ─── Main Component ───────────────────────────────────
 
-export function ScriptBreakdown({ scenes, view, productTerms }: ScriptBreakdownProps) {
+export function ScriptBreakdown({ scenes, view, productTerms, syllableTargets }: ScriptBreakdownProps) {
   const sorted = [...scenes].sort((a, b) => a.segment_index - b.segment_index);
   if (sorted.length === 0) return null;
 
-  if (view === 'beats') return <BeatBoard scenes={sorted} productTerms={productTerms} />;
+  if (view === 'beats') return <BeatBoard scenes={sorted} productTerms={productTerms} syllableTargets={syllableTargets} />;
   return <TimelineView scenes={sorted} />;
 }
 
@@ -307,20 +317,55 @@ function ProductIcon({ visibility }: { visibility: string }) {
 // BEAT BOARD VIEW
 // ═══════════════════════════════════════════════════════
 
-function BeatBoard({ scenes, productTerms }: { scenes: Scene[]; productTerms?: string[] }) {
+function getSectionTarget(section: string, targets: SyllableTargets): SyllableTarget {
+  const key = section.toLowerCase().replace(/\s*\+\s*/g, '_').replace(/\s+/g, '_');
+  if (key === 'hook') return targets.hook;
+  if (key === 'problem') return targets.problem;
+  if (key.includes('solution')) return targets.solution_product;
+  if (key === 'cta') return targets.cta;
+  return { min: 75, max: 90 };
+}
+
+function syllableSummaryColor(total: number, target: SyllableTarget): string {
+  if (total >= target.min && total <= target.max) return 'text-lime';
+  const distance = total < target.min ? target.min - total : total - target.max;
+  if (distance <= 10) return 'text-amber-hot';
+  return 'text-magenta';
+}
+
+function sentenceBadgeColor(
+  syllables: number,
+  sentenceCount: number,
+  target: SyllableTarget | undefined,
+): string {
+  if (!target || sentenceCount === 0) return 'bg-surface-overlay text-text-muted';
+  const perSentenceMin = (target.min / sentenceCount) * 0.8;
+  const perSentenceMax = (target.max / sentenceCount) * 1.2;
+  if (syllables >= perSentenceMin && syllables <= perSentenceMax) return 'bg-lime/15 text-lime';
+  const distLow = syllables < perSentenceMin ? perSentenceMin - syllables : 0;
+  const distHigh = syllables > perSentenceMax ? syllables - perSentenceMax : 0;
+  const dist = Math.max(distLow, distHigh);
+  if (dist <= 5) return 'bg-amber-hot/15 text-amber-hot';
+  return 'bg-magenta/15 text-magenta';
+}
+
+function BeatBoard({ scenes, productTerms, syllableTargets }: { scenes: Scene[]; productTerms?: string[]; syllableTargets?: SyllableTargets }) {
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       {scenes.map((s) => {
         const colors = SECTION_COLORS[s.section] || SECTION_COLORS.Hook;
         const brollCount = s.broll_cues?.length || 0;
         const vis = VISIBILITY_LABELS[s.product_visibility || 'none'] || VISIBILITY_LABELS.none;
+        const shots = (s.shot_scripts || []).length;
+        const pacing = s.script_text ? analyzeSentencePacing(s.script_text) : null;
+        const sectionTarget = syllableTargets ? getSectionTarget(s.section, syllableTargets) : undefined;
 
         return (
           <div
             key={s.segment_index}
             className={`rounded-xl border ${colors.border} ${colors.bg} p-4`}
           >
-            {/* Header */}
+            {/* Header + syllable summary */}
             <div className="flex items-center gap-2">
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-surface-overlay font-[family-name:var(--font-mono)] text-[10px] font-bold text-text-muted">
                 {s.segment_index + 1}
@@ -328,8 +373,18 @@ function BeatBoard({ scenes, productTerms }: { scenes: Scene[]; productTerms?: s
               <h3 className={`font-[family-name:var(--font-display)] text-sm font-bold uppercase ${colors.accent}`}>
                 {s.section}
               </h3>
+              {pacing && sectionTarget && (
+                <span className={`ml-1 font-[family-name:var(--font-mono)] text-[10px] font-semibold ${syllableSummaryColor(pacing.totalSyllables, sectionTarget)}`}>
+                  {pacing.totalSyllables} / {sectionTarget.min}-{sectionTarget.max} syl
+                </span>
+              )}
+              {pacing && !sectionTarget && (
+                <span className="ml-1 font-[family-name:var(--font-mono)] text-[10px] text-text-muted">
+                  {pacing.totalSyllables} syl
+                </span>
+              )}
               <span className="ml-auto font-[family-name:var(--font-mono)] text-[10px] text-text-muted">
-                {s.segment_index * 15}s – {(s.segment_index + 1) * 15}s
+                {s.segment_index * 15}s &ndash; {(s.segment_index + 1) * 15}s
               </span>
             </div>
 
@@ -352,11 +407,27 @@ function BeatBoard({ scenes, productTerms }: { scenes: Scene[]; productTerms?: s
               </div>
             )}
 
-            {/* Script preview */}
-            {s.script_text && (
-              <p className="mt-3 line-clamp-2 text-xs leading-relaxed text-text-secondary">
-                &ldquo;<HighlightedText text={s.script_text} terms={productTerms} productVisibility={s.product_visibility} />&rdquo;
-              </p>
+            {/* Per-sentence breakdown */}
+            {pacing && pacing.sentences.length > 0 && (
+              <div className="mt-3 space-y-1.5">
+                {pacing.sentences.map((sentence, i) => (
+                  <div key={i} className="flex items-start gap-2">
+                    <span
+                      className={`mt-0.5 inline-flex h-[18px] min-w-[32px] flex-shrink-0 items-center justify-center rounded px-1 font-[family-name:var(--font-mono)] text-[9px] font-semibold ${sentenceBadgeColor(sentence.syllableCount, pacing.sentenceCount, sectionTarget)}`}
+                    >
+                      {sentence.syllableCount}
+                    </span>
+                    <span className="text-xs leading-relaxed text-text-secondary">
+                      <HighlightedText text={sentence.text} terms={productTerms} productVisibility={s.product_visibility} />
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Fallback when no script text */}
+            {!pacing && s.script_text === null && (
+              <p className="mt-3 text-xs italic text-text-muted">No script text</p>
             )}
 
             {/* Meta grid */}
@@ -395,10 +466,10 @@ function BeatBoard({ scenes, productTerms }: { scenes: Scene[]; productTerms?: s
                 </div>
               )}
 
-              {/* Syllable count */}
+              {/* Sentence & shot summary */}
               <div className="col-span-2 flex items-center gap-1.5">
                 <span className="font-[family-name:var(--font-mono)] text-[10px] text-text-muted">
-                  {s.syllable_count || '?'} syl &middot; 15s &middot; {(s.shot_scripts || []).length} shots
+                  {pacing?.sentenceCount || '?'} sentences &middot; {shots} shots &middot; 15s
                 </span>
               </div>
             </div>

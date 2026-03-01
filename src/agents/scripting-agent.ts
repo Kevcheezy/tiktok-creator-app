@@ -86,9 +86,29 @@ interface ScriptResult {
   segments: Segment[];
 }
 
+// ─── Per-Section Syllable Targets ─────────────────────────────────────────────
+
+const DEFAULT_SYLLABLE_TARGETS = {
+  hook: { min: 65, max: 80 },
+  problem: { min: 75, max: 90 },
+  solution_product: { min: 80, max: 95 },
+  cta: { min: 55, max: 70 },
+};
+
+type SyllableTargets = typeof DEFAULT_SYLLABLE_TARGETS;
+
+function getSectionTargets(section: string, targets: SyllableTargets): { min: number; max: number } {
+  const key = section.toLowerCase().replace(/\s*\+\s*/g, '_').replace(/\s+/g, '_');
+  if (key === 'hook') return targets.hook;
+  if (key === 'problem') return targets.problem;
+  if (key === 'solution_product' || key === 'solution_+_product') return targets.solution_product;
+  if (key === 'cta') return targets.cta;
+  return { min: 75, max: 90 }; // fallback
+}
+
 // ─── System Prompt ─────────────────────────────────────────────────────────────
 
-function buildSystemPrompt(tone: ScriptTone): string {
+function buildSystemPrompt(tone: ScriptTone, syllableTargets: SyllableTargets): string {
   const toneConfig = SCRIPT_TONES[tone];
   return `You are a Script Architect for TikTok Shop UGC videos.
 
@@ -97,7 +117,12 @@ ${toneConfig.promptBlock}
 CREATE A 4-SEGMENT SCRIPT for a 60-second video.
 
 RULES:
-1. Each segment = 15 seconds, 82-90 syllables
+1. Each segment = 15 seconds. Syllable targets per section:
+- Hook: ${syllableTargets.hook.min}-${syllableTargets.hook.max} syllables
+- Problem: ${syllableTargets.problem.min}-${syllableTargets.problem.max} syllables
+- Solution + Product: ${syllableTargets.solution_product.min}-${syllableTargets.solution_product.max} syllables
+- CTA: ${syllableTargets.cta.min}-${syllableTargets.cta.max} syllables
+IMPORTANT: Match these syllable counts precisely. Fewer syllables = slower, more authentic pacing.
 2. Each segment will be split into 3 shots of 5 seconds each for Kling 3.0 multi-shot
 3. SEGMENT STRUCTURE (4 segments):
    - Segment 1 (HOOK): HIGH energy throughout (exception - sustained), NO product, open curiosity loop
@@ -276,6 +301,13 @@ export class ScriptingAgent extends BaseAgent {
       : DEFAULT_TONE;
     this.log(`Using tone: ${tone}`);
 
+    // Resolve per-section syllable targets (project overrides merged with defaults)
+    const syllableTargets: SyllableTargets = {
+      ...DEFAULT_SYLLABLE_TARGETS,
+      ...(proj.syllable_targets as Partial<SyllableTargets> || {}),
+    };
+    this.log(`Using syllable targets: hook=${syllableTargets.hook.min}-${syllableTargets.hook.max}, problem=${syllableTargets.problem.min}-${syllableTargets.problem.max}, solution=${syllableTargets.solution_product.min}-${syllableTargets.solution_product.max}, cta=${syllableTargets.cta.min}-${syllableTargets.cta.max}`);
+
     const productData = proj.product_data as {
       product_name: string;
       category: string;
@@ -293,7 +325,7 @@ export class ScriptingAgent extends BaseAgent {
     this.log('Calling WaveSpeed LLM for script generation...');
     let rawResponse: string;
     try {
-      rawResponse = await this.wavespeed.chatCompletion(buildSystemPrompt(tone), userPrompt, {
+      rawResponse = await this.wavespeed.chatCompletion(buildSystemPrompt(tone, syllableTargets), userPrompt, {
         temperature: 0.7,
         maxTokens: 8192,
       });
@@ -314,7 +346,7 @@ export class ScriptingAgent extends BaseAgent {
     }
 
     // 6. Validate and override syllable counts
-    this.validateAndFix(script);
+    this.validateAndFix(script, syllableTargets);
 
     // 7. Determine version (A5: script versioning)
     const version = await this.getNextVersion(projectId);
@@ -408,6 +440,12 @@ export class ScriptingAgent extends BaseAgent {
       : DEFAULT_TONE;
     this.log(`Using tone: ${tone}`);
 
+    // Resolve per-section syllable targets (project overrides merged with defaults)
+    const syllableTargets: SyllableTargets = {
+      ...DEFAULT_SYLLABLE_TARGETS,
+      ...(proj.syllable_targets as Partial<SyllableTargets> || {}),
+    };
+
     const productData = proj.product_data as {
       product_name: string;
       category: string;
@@ -421,7 +459,12 @@ export class ScriptingAgent extends BaseAgent {
 You will receive raw script text that a creator has written or uploaded. Your job is to SPLIT this text into exactly 4 segments: Hook, Problem, Solution + Product, CTA.
 
 RULES:
-1. Each segment = 15 seconds, 82-90 syllables
+1. Each segment = 15 seconds. Syllable targets per section:
+- Hook: ${syllableTargets.hook.min}-${syllableTargets.hook.max} syllables
+- Problem: ${syllableTargets.problem.min}-${syllableTargets.problem.max} syllables
+- Solution + Product: ${syllableTargets.solution_product.min}-${syllableTargets.solution_product.max} syllables
+- CTA: ${syllableTargets.cta.min}-${syllableTargets.cta.max} syllables
+IMPORTANT: Match these syllable counts precisely. Fewer syllables = slower, more authentic pacing.
 2. Each segment will be split into 3 shots of 5 seconds each for Kling 3.0 multi-shot
 3. SEGMENT STRUCTURE (4 segments):
    - Segment 1 (HOOK): HIGH energy throughout (exception - sustained), NO product, open curiosity loop
@@ -550,7 +593,7 @@ Split this script into 4 segments following the output format.`;
     }
 
     // 6. Validate and override syllable counts
-    this.validateAndFix(script);
+    this.validateAndFix(script, syllableTargets);
 
     // 7. Determine version
     const version = await this.getNextVersion(projectId);
@@ -703,6 +746,12 @@ Split this script into 4 segments following the output format.`;
             : DEFAULT_TONE;
     this.log(`Using tone: ${resolvedTone}`);
 
+    // Resolve per-section syllable targets (project overrides merged with defaults)
+    const syllableTargets: SyllableTargets = {
+      ...DEFAULT_SYLLABLE_TARGETS,
+      ...(proj.syllable_targets as Partial<SyllableTargets> || {}),
+    };
+
     // 5. Get target scene
     const targetScene = scenes[segmentIndex];
     if (!targetScene) {
@@ -712,8 +761,11 @@ Split this script into 4 segments following the output format.`;
     // 6. Get section name
     const sectionName = this.videoModel.section_names[segmentIndex] ?? targetScene.section;
 
+    // Look up per-section syllable target for this segment
+    const sectionTarget = getSectionTargets(sectionName, syllableTargets);
+
     // 7. Build system prompt
-    const systemPrompt = buildSystemPrompt(resolvedTone);
+    const systemPrompt = buildSystemPrompt(resolvedTone, syllableTargets);
 
     // 8. Build focused user prompt with surrounding context
     const sellingPointsList = productData.selling_points
@@ -742,7 +794,7 @@ SURROUNDING CONTEXT (do NOT modify these segments):
 ${surroundingContext}
 
 REGENERATE ONLY Segment ${segmentIndex + 1} (${sectionName}).
-Target: 82-90 syllables, 3 shot_scripts of ~5s each.
+Target: ${sectionTarget.min}-${sectionTarget.max} syllables, 3 shot_scripts of ~5s each.
 Energy pattern: ${energyPattern}
 Product visibility: ${productVisibility}`;
 
@@ -1079,12 +1131,15 @@ Adapt the CONTENT for the current product while preserving the reference's prove
 
   // ─── Validation ────────────────────────────────────────────────────────────
 
-  private validateAndFix(script: ScriptResponse): void {
-    const { min, max, warnMin, warnMax } = this.videoModel.syllables_per_segment;
-
+  private validateAndFix(script: ScriptResponse, syllableTargets: SyllableTargets = DEFAULT_SYLLABLE_TARGETS): void {
     let totalSyllables = 0;
 
     for (const seg of script.segments) {
+      // Look up per-section syllable target
+      const sectionTarget = getSectionTargets(seg.section, syllableTargets);
+      const warnMin = sectionTarget.min - 10;
+      const warnMax = sectionTarget.max + 10;
+
       // Override LLM's syllable count with programmatic count
       const programmaticCount = countTextSyllables(seg.script_text);
       if (programmaticCount !== seg.syllable_count) {
@@ -1099,7 +1154,7 @@ Adapt the CONTENT for the current product while preserving the reference's prove
       // Warn on syllable range (don't throw)
       if (programmaticCount < warnMin || programmaticCount > warnMax) {
         this.log(
-          `[Validation] WARNING: Segment ${seg.id} "${seg.section}" has ${programmaticCount} syllables (target: ${min}-${max})`
+          `[Validation] WARNING: Segment ${seg.id} "${seg.section}" has ${programmaticCount} syllables (target: ${sectionTarget.min}-${sectionTarget.max})`
         );
       }
 
