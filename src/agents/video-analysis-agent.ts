@@ -119,13 +119,13 @@ The JSON MUST conform to this exact schema:
 }
 
 RULES:
-- Break the video into EXACTLY 4 segments of approximately 15 seconds each (adjust endTime if video is shorter/longer)
+- Break the video into EXACTLY 4 segments of approximately 10 seconds each (adjust endTime if video is shorter/longer)
 - Segments must have index values 0, 1, 2, 3
 - Be extremely specific and visual in descriptions — they will be used as prompts for AI image generation
 - Include colors, textures, spatial relationships, and body language details
 - For the description field, write as if you're describing the scene to an AI image generator
 - Identify the specific viral content pattern being used
-- If the video is shorter than 60s, still break into 4 segments proportionally`;
+- If the video is shorter than 40s, still break into 4 segments proportionally`;
 
 const USER_PROMPT = `Analyze this reference TikTok video in detail.
 

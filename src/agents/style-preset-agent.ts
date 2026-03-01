@@ -59,7 +59,7 @@ const USER_PROMPT = `Analyze this TikTok UGC review video. Perform ALL of the fo
 
 1. TRANSCRIBE the spoken audio word-for-word.
 
-2. SEGMENT the transcript into 4 segments (~15 seconds each):
+2. SEGMENT the transcript into 4 segments (~10 seconds each):
    - Segment 0 (Hook): The attention-grabbing opener
    - Segment 1 (Problem): The pain point or problem setup
    - Segment 2 (Solution + Product): Product introduction and benefits

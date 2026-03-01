@@ -2417,7 +2417,7 @@ function ScriptingProgress({ startedAt }: { startedAt: string | null }) {
             </span>
           </div>
           <p className="mt-0.5 text-sm text-text-secondary">
-            Crafting a 60-second TikTok script with hooks, shots, and energy arcs...
+            Crafting a 40-second TikTok script with hooks, shots, and energy arcs...
           </p>
         </div>
       </div>

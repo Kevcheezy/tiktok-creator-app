@@ -63,7 +63,7 @@ export class VoiceoverAgent extends BaseAgent {
       }
     }
 
-    const segmentDuration = this.videoModel?.segment_duration || 15;
+    const segmentDuration = this.videoModel?.segment_duration || 10;
 
     // 4. Generate TTS for each segment (with per-segment error recovery)
     let segmentsCompleted = 0;

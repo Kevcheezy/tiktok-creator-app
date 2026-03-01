@@ -23,7 +23,7 @@ const FIELD_INSTRUCTIONS: Record<RegenerableField, string> = {
   key_claims: 'Generate 3-5 factual, verifiable claims with specific numbers when possible (e.g., "20g collagen per serving").',
   benefits: 'Generate 3-5 concrete consumer benefits. Focus on outcomes the buyer will experience.',
   usage: 'Write 1-2 concise sentences explaining how to use this product.',
-  hook_angle: 'Write a specific emotional or logical hook strategy for a 60-second TikTok UGC video. What will make viewers stop scrolling? Be specific, not generic.',
+  hook_angle: 'Write a specific emotional or logical hook strategy for a 40-second TikTok UGC video. What will make viewers stop scrolling? Be specific, not generic.',
   avatar_description: 'Describe the ideal authority figure to present this product. Include: profession, appearance, wardrobe, setting. Match the product category.',
   image_description_for_nano_banana_pro: 'Write a detailed visual description of the product packaging for AI image generation. Include: container type, colors, label design, distinguishing features.',
 };

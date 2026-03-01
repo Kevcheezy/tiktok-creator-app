@@ -35,7 +35,7 @@ The JSON must have exactly these fields:
   "key_claims": ["Array of 3-5 factual/numerical claims (e.g. '20g collagen per serving')"],
   "usage": "How to use the product (1-2 sentences)",
   "benefits": ["Array of 3-5 key benefits for the consumer"],
-  "hook_angle": "The emotional or logical hook strategy for a 60-second UGC video. What will make viewers stop scrolling?",
+  "hook_angle": "The emotional or logical hook strategy for a 40-second UGC video. What will make viewers stop scrolling?",
   "product_image_url": "Main product image URL if visible on the page, otherwise empty string",
   "image_description_for_nano_banana_pro": "Detailed visual description of the product packaging for AI image generation. Include: container type, colors, label design, any distinguishing features",
   "avatar_description": "Description of the ideal authority figure to present this product. Include: profession, appearance, wardrobe, setting"

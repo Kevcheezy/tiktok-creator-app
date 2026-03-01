@@ -203,7 +203,7 @@ export function StageProgress({ projectId, stage, color = 'magenta', onRetry, on
               {stage === 'casting' && 'Creating character keyframe images with Nano Banana Pro...'}
               {stage === 'broll_planning' && 'Analyzing script and generating B-roll shot list...'}
               {stage === 'broll_generation' && 'Creating B-roll images with Nano Banana Pro...'}
-              {stage === 'directing' && 'Creating 15-second video segments with Kling 3.0 Pro...'}
+              {stage === 'directing' && 'Creating 10-second video segments with Kling 3.0 Pro...'}
               {stage === 'voiceover' && 'Creating voiceover audio with ElevenLabs...'}
               {stage === 'editing' && 'Composing final video...'}
             </p>

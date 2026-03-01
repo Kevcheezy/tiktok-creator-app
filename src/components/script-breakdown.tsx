@@ -469,7 +469,7 @@ function BeatBoard({ scenes, productTerms, syllableTargets }: { scenes: Scene[];
               {/* Sentence & shot summary */}
               <div className="col-span-2 flex items-center gap-1.5">
                 <span className="font-[family-name:var(--font-mono)] text-[10px] text-text-muted">
-                  {pacing?.sentenceCount || '?'} sentences &middot; {shots} shots &middot; 15s
+                  {pacing?.sentenceCount || '?'} sentences &middot; {shots} shots &middot; 10s
                 </span>
               </div>
             </div>

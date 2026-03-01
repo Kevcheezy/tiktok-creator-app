@@ -141,10 +141,10 @@ export const RESOLUTION = {
 // Pipeline configuration
 export const PIPELINE_CONFIG = {
   segmentCount: 4,
-  segmentDuration: 15,
-  shotsPerSegment: 3,
+  segmentDuration: 10,
+  shotsPerSegment: 2,
   shotDuration: 5,
-  totalDuration: 60,
+  totalDuration: 40,
   syllablesPerSegment: { min: 82, max: 90, warnMin: 75, warnMax: 95, errorMin: 60, errorMax: 110 },
   hookScoreMinimum: 10,
   hookScoreMax: 14,

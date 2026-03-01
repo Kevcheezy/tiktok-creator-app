@@ -114,30 +114,29 @@ function buildSystemPrompt(tone: ScriptTone, syllableTargets: SyllableTargets): 
 
 ${toneConfig.promptBlock}
 
-CREATE A 4-SEGMENT SCRIPT for a 60-second video.
+CREATE A 4-SEGMENT SCRIPT for a 40-second video.
 
 RULES:
-1. Each segment = 15 seconds. Syllable targets per section:
+1. Each segment = 10 seconds. Syllable targets per section:
 - Hook: ${syllableTargets.hook.min}-${syllableTargets.hook.max} syllables
 - Problem: ${syllableTargets.problem.min}-${syllableTargets.problem.max} syllables
 - Solution + Product: ${syllableTargets.solution_product.min}-${syllableTargets.solution_product.max} syllables
 - CTA: ${syllableTargets.cta.min}-${syllableTargets.cta.max} syllables
 IMPORTANT: Match these syllable counts precisely. Fewer syllables = slower, more authentic pacing.
-2. Each segment will be split into 3 shots of 5 seconds each for Kling 3.0 multi-shot
+2. Each segment will be split into 2 shots of 5 seconds each for Kling 3.0 multi-shot
 3. SEGMENT STRUCTURE (4 segments):
    - Segment 1 (HOOK): HIGH energy throughout (exception - sustained), NO product, open curiosity loop
    - Segment 2 (PROBLEM): LOW→PEAK→LOW energy, subtle product mention
    - Segment 3 (SOLUTION + PRODUCT): LOW→PEAK→LOW energy, product as solution, hero moment, features
    - Segment 4 (CTA): LOW→PEAK→LOW energy, urgency, call to action
 
-4. SHOT_SCRIPTS: For each segment, split the script into 3 roughly equal portions (one per 5s shot).
+4. SHOT_SCRIPTS: For each segment, split the script into 2 roughly equal portions (one per 5s shot).
    Each shot_script maps to a Kling 3.0 multi-shot prompt.
 
 5. AUDIO SYNC POINTS (REQUIRED for each segment):
-   Identify 3 key words/phrases for gesture timing, one per shot:
+   Identify 2 key words/phrases for gesture timing, one per shot:
    - shot_1_peak (~3s): Word where speaker makes confident opening gesture
    - shot_2_peak (~8s): Word where speaker makes emphasis gesture
-   - shot_3_peak (~13s): Word where speaker transitions to calm/curious expression
 
 6. HOOK SCORING (must score >=10/14):
    - Opens curiosity loop? (0-2)
@@ -179,8 +178,8 @@ IMPORTANT: Match these syllable counts precisely. Fewer syllables = slower, more
 8. B-ROLL TIMING CUES (REQUIRED for each segment):
    Identify 2-5 moments where a B-roll cutaway image would strengthen the argument.
    Each cue marks when a supplementary image should appear on screen:
-   - shot_script_index: which 5s shot block (0, 1, or 2)
-   - offset_seconds: offset within the 15s segment (e.g., 1.5, 6.0, 11.5)
+   - shot_script_index: which 5s shot block (0 or 1)
+   - offset_seconds: offset within the 10s segment (e.g., 1.5, 6.0)
    - duration_seconds: how long the B-roll stays on screen (2-3s)
    - intent: what the B-roll should communicate (e.g., "show clinical evidence", "negative contrast")
    - spoken_text_during: the exact script text being spoken while B-roll is on screen
@@ -207,18 +206,16 @@ OUTPUT FORMAT (valid JSON only, no markdown, no code fences):
     {
       "id": 1,
       "section": "Hook",
-      "script_text": "full 15s spoken words...",
-      "syllable_count": 85,
+      "script_text": "full 10s spoken words...",
+      "syllable_count": 70,
       "energy": { "start": "HIGH", "middle": "HIGH", "end": "HIGH" },
       "shot_scripts": [
         { "index": 0, "text": "first 5s portion...", "energy": "HIGH" },
-        { "index": 1, "text": "middle 5s portion...", "energy": "HIGH" },
-        { "index": 2, "text": "final 5s portion...", "energy": "HIGH" }
+        { "index": 1, "text": "final 5s portion...", "energy": "HIGH" }
       ],
       "audio_sync": {
         "shot_1_peak": { "word": "keyword at ~3s", "time": "~3s", "action": "confident gesture" },
-        "shot_2_peak": { "word": "keyword at ~8s", "time": "~8s", "action": "hand on chest" },
-        "shot_3_peak": { "word": "keyword at ~13s", "time": "~13s", "action": "lean + curious" }
+        "shot_2_peak": { "word": "keyword at ~8s", "time": "~8s", "action": "emphasis gesture" }
       },
       "segment_score": {
         "curiosity_loop": 2,
@@ -459,27 +456,26 @@ export class ScriptingAgent extends BaseAgent {
 You will receive raw script text that a creator has written or uploaded. Your job is to SPLIT this text into exactly 4 segments: Hook, Problem, Solution + Product, CTA.
 
 RULES:
-1. Each segment = 15 seconds. Syllable targets per section:
+1. Each segment = 10 seconds. Syllable targets per section:
 - Hook: ${syllableTargets.hook.min}-${syllableTargets.hook.max} syllables
 - Problem: ${syllableTargets.problem.min}-${syllableTargets.problem.max} syllables
 - Solution + Product: ${syllableTargets.solution_product.min}-${syllableTargets.solution_product.max} syllables
 - CTA: ${syllableTargets.cta.min}-${syllableTargets.cta.max} syllables
 IMPORTANT: Match these syllable counts precisely. Fewer syllables = slower, more authentic pacing.
-2. Each segment will be split into 3 shots of 5 seconds each for Kling 3.0 multi-shot
+2. Each segment will be split into 2 shots of 5 seconds each for Kling 3.0 multi-shot
 3. SEGMENT STRUCTURE (4 segments):
    - Segment 1 (HOOK): HIGH energy throughout (exception - sustained), NO product, open curiosity loop
    - Segment 2 (PROBLEM): LOW→PEAK→LOW energy, subtle product mention
    - Segment 3 (SOLUTION + PRODUCT): LOW→PEAK→LOW energy, product as solution, hero moment, features
    - Segment 4 (CTA): LOW→PEAK→LOW energy, urgency, call to action
 
-4. SHOT_SCRIPTS: For each segment, split the script into 3 roughly equal portions (one per 5s shot).
+4. SHOT_SCRIPTS: For each segment, split the script into 2 roughly equal portions (one per 5s shot).
    Each shot_script maps to a Kling 3.0 multi-shot prompt.
 
 5. AUDIO SYNC POINTS (REQUIRED for each segment):
-   Identify 3 key words/phrases for gesture timing, one per shot:
+   Identify 2 key words/phrases for gesture timing, one per shot:
    - shot_1_peak (~3s): Word where speaker makes confident opening gesture
    - shot_2_peak (~8s): Word where speaker makes emphasis gesture
-   - shot_3_peak (~13s): Word where speaker transitions to calm/curious expression
 
 6. HOOK SCORING (must score >=10/14):
    - Opens curiosity loop? (0-2)
@@ -493,8 +489,8 @@ IMPORTANT: Match these syllable counts precisely. Fewer syllables = slower, more
 7. B-ROLL TIMING CUES (REQUIRED for each segment):
    Identify 2-5 moments where a B-roll cutaway image would strengthen the argument.
    Each cue marks when a supplementary image should appear on screen:
-   - shot_script_index: which 5s shot block (0, 1, or 2)
-   - offset_seconds: offset within the 15s segment (e.g., 1.5, 6.0, 11.5)
+   - shot_script_index: which 5s shot block (0 or 1)
+   - offset_seconds: offset within the 10s segment (e.g., 1.5, 6.0)
    - duration_seconds: how long the B-roll stays on screen (2-3s)
    - intent: what the B-roll should communicate
    - spoken_text_during: the exact script text being spoken while B-roll is on screen
@@ -520,18 +516,16 @@ OUTPUT FORMAT (valid JSON only, no markdown, no code fences):
     {
       "id": 1,
       "section": "Hook",
-      "script_text": "full 15s spoken words...",
-      "syllable_count": 85,
+      "script_text": "full 10s spoken words...",
+      "syllable_count": 70,
       "energy": { "start": "HIGH", "middle": "HIGH", "end": "HIGH" },
       "shot_scripts": [
         { "index": 0, "text": "first 5s portion...", "energy": "HIGH" },
-        { "index": 1, "text": "middle 5s portion...", "energy": "HIGH" },
-        { "index": 2, "text": "final 5s portion...", "energy": "HIGH" }
+        { "index": 1, "text": "final 5s portion...", "energy": "HIGH" }
       ],
       "audio_sync": {
         "shot_1_peak": { "word": "keyword at ~3s", "time": "~3s", "action": "confident gesture" },
-        "shot_2_peak": { "word": "keyword at ~8s", "time": "~8s", "action": "hand on chest" },
-        "shot_3_peak": { "word": "keyword at ~13s", "time": "~13s", "action": "lean + curious" }
+        "shot_2_peak": { "word": "keyword at ~8s", "time": "~8s", "action": "emphasis gesture" }
       },
       "broll_cues": [
         { "shot_script_index": 0, "offset_seconds": 1.0, "duration_seconds": 2.5, "intent": "negative contrast", "spoken_text_during": "exact words" }
@@ -794,7 +788,7 @@ SURROUNDING CONTEXT (do NOT modify these segments):
 ${surroundingContext}
 
 REGENERATE ONLY Segment ${segmentIndex + 1} (${sectionName}).
-Target: ${sectionTarget.min}-${sectionTarget.max} syllables, 3 shot_scripts of ~5s each.
+Target: ${sectionTarget.min}-${sectionTarget.max} syllables, 2 shot_scripts of ~5s each.
 Energy pattern: ${energyPattern}
 Product visibility: ${productVisibility}`;
 
