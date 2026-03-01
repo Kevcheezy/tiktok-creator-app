@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/db';
 import { logger, logToGenerationLog } from '@/lib/logger';
 import { StructuredPrompt, isStructuredPrompt, resolveNegativePrompt, STRUCTURED_PROMPT_SCHEMA_DESCRIPTION } from '@/lib/prompt-schema';
-import { serializeForVideo } from '@/lib/prompt-serializer';
+import { buildVideoPromptJSON } from '@/lib/prompt-serializer';
 import { WaveSpeedClient } from '@/lib/api-clients/wavespeed';
 import { VideoModelConfig, getFallbackVideoModel, API_COSTS } from '@/lib/constants';
 
@@ -138,7 +138,7 @@ export async function POST(
     // Fetch project to validate it exists and get negative prompt override
     const { data: project, error: projError } = await supabase
       .from('project')
-      .select('id, status, negative_prompt_override')
+      .select('id, status, negative_prompt_override, lock_camera')
       .eq('id', id)
       .single();
 
@@ -181,9 +181,9 @@ export async function POST(
       });
     }
 
-    // Serialize for video
-    const shotDuration = String(vm.shot_duration);
-    const serialized = serializeForVideo(structuredPrompt, shotDuration);
+    // Build video prompt JSON from scene data (matches what test-generate sends to Kling)
+    const lockCamera = project.lock_camera ?? false;
+    const serialized = buildVideoPromptJSON(scene, { shotDuration: vm.shot_duration, lockCamera });
     const negativePrompt = resolveNegativePrompt(project, 'directing');
 
     // Log preview event
@@ -206,7 +206,6 @@ export async function POST(
       structuredPrompt,
       serialized: {
         prompt: serialized.prompt,
-        multiPrompt: serialized.multiPrompt,
         negativePrompt: serialized.negativePrompt || negativePrompt,
       },
       config: {
