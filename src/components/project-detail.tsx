@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { StatusBadge } from './status-badge';
 import { PipelineProgress } from './pipeline-progress';
 import { ScriptReview } from './script-review';
+import { ConceptReview } from './concept-review';
 import { AssetReview } from './asset-review';
 import { StoryboardView } from './storyboard-view';
 import { ConfirmDialog } from './confirm-dialog';
@@ -69,6 +70,13 @@ interface ProjectData {
   scene_override: string | null;
   interaction_preset_id: string | null;
   interaction_override: string | null;
+  concept: {
+    persona: { demographics: string; psychographics: string; current_situation: string; desired_outcomes: string };
+    pain_points: { functional: string[]; emotional: string[] };
+    unique_mechanism: string;
+    transformation: { before: string; after: string };
+    hook_angle: string;
+  } | null;
 }
 
 // Client-side rollback map (mirrors backend cancel endpoint)
@@ -85,6 +93,7 @@ const CANCEL_ROLLBACK: Record<string, string> = {
 
 const NAV_STAGE_LABELS: Record<string, string> = {
   analysis_review: 'Analysis Review',
+  concept_review: 'Concept Review',
   script_review: 'Script Review',
   broll_review: 'B-Roll Review',
   influencer_selection: 'Influencer Selection',
@@ -687,6 +696,17 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
       )}
       {!isViewingPast && project.status === 'editing' && (
         <StageProgress projectId={projectId} stage="editing" color="electric" onRetry={() => handleStageRetry('editing')} onCancel={() => setShowCancelConfirm(true)} />
+      )}
+
+      {/* Concept Review */}
+      {displayStage === 'concept_review' && (
+        <ConceptReview
+          projectId={projectId}
+          concept={project.concept}
+          productData={project.product_data}
+          onStatusChange={fetchProject}
+          readOnly={readOnlyMode}
+        />
       )}
 
       {/* Script Review */}

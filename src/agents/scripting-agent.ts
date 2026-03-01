@@ -249,7 +249,9 @@ OUTPUT FORMAT (valid JSON only, no markdown, no code fences):
     "total": 12
   },
   "total_syllables": 345
-}`;
+}
+
+When a TARGET PERSONA is provided, address them directly. Use their PAIN POINTS in the Problem segment. Introduce the product through the UNIQUE MECHANISM. Frame the CTA around the TRANSFORMATION.`;
 }
 
 // ─── ScriptingAgent ────────────────────────────────────────────────────────────
@@ -312,11 +314,20 @@ export class ScriptingAgent extends BaseAgent {
       hook_angle: string;
     };
 
+    // Read concept data (optional — projects without concept still work)
+    const concept = proj.concept as {
+      persona?: { demographics?: string; psychographics?: string; current_situation?: string; desired_outcomes?: string };
+      pain_points?: { functional?: string[]; emotional?: string[] };
+      unique_mechanism?: string;
+      transformation?: { before?: string; after?: string };
+      hook_angle?: string;
+    } | null;
+
     // 2. Optionally select a matching script_template (least used first)
     const template = await this.selectTemplate(productData.category);
 
     // 3. Build user prompt
-    const userPrompt = this.buildUserPrompt(productData, template, proj.video_url, proj.video_analysis, stylePreset);
+    const userPrompt = this.buildUserPrompt(productData, template, proj.video_url, proj.video_analysis, stylePreset, concept);
 
     // 4. Call WaveSpeed LLM
     this.log('Calling WaveSpeed LLM for script generation...');
@@ -1036,6 +1047,13 @@ Include a "segment_score" object with the relevant criteria scores for this segm
     videoUrl?: string | null,
     videoAnalysis?: any | null,
     stylePreset?: any | null,
+    concept?: {
+      persona?: { demographics?: string; psychographics?: string; current_situation?: string; desired_outcomes?: string };
+      pain_points?: { functional?: string[]; emotional?: string[] };
+      unique_mechanism?: string;
+      transformation?: { before?: string; after?: string };
+      hook_angle?: string;
+    } | null,
   ): string {
     const sellingPointsList = productData.selling_points
       .map((p: string, i: number) => `${i + 1}. ${p}`)
@@ -1048,6 +1066,26 @@ CATEGORY: ${productData.category}
 SELLING POINTS:
 ${sellingPointsList}
 HOOK ANGLE: ${productData.hook_angle}`);
+
+    if (concept) {
+      parts.push(`\nTARGET PERSONA:
+Demographics: ${concept.persona?.demographics || 'N/A'}
+Psychographics: ${concept.persona?.psychographics || 'N/A'}
+Current situation: ${concept.persona?.current_situation || 'N/A'}
+Desired outcomes: ${concept.persona?.desired_outcomes || 'N/A'}
+
+PAIN POINTS TO ADDRESS:
+Functional: ${(concept.pain_points?.functional || []).join(', ')}
+Emotional: ${(concept.pain_points?.emotional || []).join(', ')}
+
+UNIQUE MECHANISM: ${concept.unique_mechanism || 'N/A'}
+
+TRANSFORMATION:
+Before: ${concept.transformation?.before || 'N/A'}
+After: ${concept.transformation?.after || 'N/A'}
+
+STRATEGIC HOOK ANGLE: ${concept.hook_angle || productData.hook_angle}`);
+    }
 
     if (template) {
       parts.push(`USE THIS HOOK PATTERN:

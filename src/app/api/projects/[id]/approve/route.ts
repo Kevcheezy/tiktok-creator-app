@@ -2,15 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/db';
 import { getPipelineQueue } from '@/lib/queue';
 import { logger } from '@/lib/logger';
+import { WaveSpeedClient } from '@/lib/api-clients/wavespeed';
+import { API_COSTS } from '@/lib/constants';
 
 /**
  * POST /api/projects/[id]/approve
  *
  * Approves the current review stage and enqueues the next pipeline step.
- * - analysis_review -> enqueue 'scripting'
- * - script_review   -> enqueue 'casting'
+ * - analysis_review -> auto-draft concept via LLM, set status to 'concept_review'
+ * - concept_review  -> save concept edits, enqueue 'scripting'
+ * - script_review   -> enqueue 'broll_planning'
  * - casting_review  -> enqueue 'directing'
- * - asset_review    -> set status to 'editing' (Phase 4 placeholder)
+ * - asset_review    -> enqueue 'editing'
  */
 export async function POST(
   request: NextRequest,
@@ -36,6 +39,129 @@ export async function POST(
         { error: 'A product image is required before proceeding. Upload one or verify the extracted image.' },
         { status: 400 }
       );
+    }
+
+    // analysis_review -> concept_review (auto-draft concept from product_data via LLM)
+    if (proj.status === 'analysis_review') {
+      const { data: fullProj } = await supabase
+        .from('project')
+        .select('product_data')
+        .eq('id', id)
+        .single();
+
+      const productData = fullProj?.product_data as {
+        product_name?: string;
+        category?: string;
+        selling_points?: string[];
+        key_claims?: string[];
+        benefits?: string[];
+        hook_angle?: string;
+      } | null;
+
+      let concept = null;
+
+      if (productData) {
+        try {
+          const wavespeed = new WaveSpeedClient();
+          const systemPrompt = `You are a marketing strategist. Given product data, create a strategic concept for a UGC advertisement.
+Output ONLY valid JSON matching this structure:
+{
+  "persona": {
+    "demographics": "specific age, gender, life stage",
+    "psychographics": "values, priorities, lifestyle constraints",
+    "current_situation": "specific challenges they face right now",
+    "desired_outcomes": "what they actually want beyond product benefits"
+  },
+  "pain_points": {
+    "functional": ["3-5 surface-level practical problems"],
+    "emotional": ["3-5 deeper emotional drivers"]
+  },
+  "unique_mechanism": "how this product works differently from category defaults",
+  "transformation": {
+    "before": "vivid description of their current frustrated state",
+    "after": "vivid description of their desired state with emotional specificity"
+  },
+  "hook_angle": "the strategic opening angle for the advertisement"
+}`;
+
+          const userPrompt = `Product: ${productData.product_name || 'Unknown'}
+Category: ${productData.category || 'general'}
+Selling Points: ${(productData.selling_points || []).join(', ')}
+Key Claims: ${(productData.key_claims || []).join(', ')}
+Benefits: ${(productData.benefits || []).join(', ')}
+Current Hook Angle: ${productData.hook_angle || 'N/A'}
+
+Create a detailed strategic concept targeting the most compelling audience for this product.`;
+
+          const rawResponse = await wavespeed.chatCompletion(systemPrompt, userPrompt);
+          const cleaned = rawResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+          concept = JSON.parse(cleaned);
+
+          // Track LLM cost
+          await supabase.rpc('increment_project_cost', {
+            p_id: id,
+            amount: API_COSTS.wavespeedChat,
+          });
+        } catch (err) {
+          logger.error({ err, projectId: id, route: '/api/projects/[id]/approve' }, 'Failed to auto-draft concept, proceeding with null concept');
+        }
+      }
+
+      await supabase
+        .from('project')
+        .update({
+          status: 'concept_review',
+          concept,
+          cancel_requested_at: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id);
+
+      return NextResponse.json({
+        message: 'Analysis approved. Concept drafted for review.',
+        projectId: id,
+        previousStatus: 'analysis_review',
+        nextStep: 'concept_review',
+      });
+    }
+
+    // concept_review -> scripting (save any pending concept edits, enqueue scripting)
+    if (proj.status === 'concept_review') {
+      let conceptFromBody = null;
+      try {
+        const body = await request.json();
+        if (body?.concept) {
+          conceptFromBody = body.concept;
+        }
+      } catch {
+        // No body or invalid JSON — use existing concept
+      }
+
+      const updatePayload: Record<string, unknown> = {
+        cancel_requested_at: null,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (conceptFromBody) {
+        updatePayload.concept = conceptFromBody;
+      }
+
+      await supabase
+        .from('project')
+        .update(updatePayload)
+        .eq('id', id);
+
+      await getPipelineQueue().add('scripting', {
+        projectId: id,
+        step: 'scripting',
+      });
+
+      return NextResponse.json({
+        message: 'Concept approved. Scripting started.',
+        projectId: id,
+        previousStatus: 'concept_review',
+        nextStep: 'scripting',
+      });
     }
 
     // script_review -> broll_planning (B-roll planning runs before influencer selection)
@@ -99,7 +225,6 @@ export async function POST(
 
     // Map review status to next pipeline step
     const nextStepMap: Record<string, { step: string; jobName: string }> = {
-      analysis_review: { step: 'scripting', jobName: 'scripting' },
       casting_review: { step: 'directing', jobName: 'directing' },
     };
 

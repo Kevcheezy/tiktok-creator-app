@@ -208,6 +208,7 @@ export const PROJECT_STATUSES = [
   'created',
   'analyzing',
   'analysis_review',
+  'concept_review',
   'scripting',
   'script_review',
   'broll_planning',
@@ -230,7 +231,8 @@ export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 export const VALID_STATUS_TRANSITIONS: Record<string, string[]> = {
   created: ['analyzing'],
   analyzing: ['analysis_review', 'failed'],
-  analysis_review: ['scripting'],
+  analysis_review: ['concept_review'],
+  concept_review: ['scripting'],
   scripting: ['script_review', 'failed'],
   script_review: ['broll_planning'],
   broll_planning: ['broll_review', 'failed'],
@@ -250,6 +252,7 @@ export const VALID_STATUS_TRANSITIONS: Record<string, string[]> = {
 // Statuses where the user can edit project settings (tone, character, influencer)
 export const REVIEW_GATE_STATUSES: ProjectStatus[] = [
   'analysis_review',
+  'concept_review',
   'script_review',
   'broll_review',
   'influencer_selection',
@@ -263,7 +266,7 @@ export const EDITABLE_PROJECT_FIELDS = ['tone', 'character_id', 'influencer_id',
 // Map of stage to the review gate it should restart from
 export const RESTART_STAGE_MAP: Record<string, { targetStatus: ProjectStatus; queueStep: string }> = {
   analysis: { targetStatus: 'created', queueStep: 'product_analysis' },
-  scripting: { targetStatus: 'analysis_review', queueStep: 'scripting' },
+  scripting: { targetStatus: 'concept_review', queueStep: 'scripting' },
   broll_planning: { targetStatus: 'script_review', queueStep: 'broll_planning' },
   casting: { targetStatus: 'broll_review', queueStep: 'casting' },
   directing: { targetStatus: 'casting_review', queueStep: 'directing' },

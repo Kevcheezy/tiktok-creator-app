@@ -1,13 +1,14 @@
 import { CHARACTER_MAP, getCharacterForStatus } from './ff7-theme';
 
 const REVIEW_GATES = new Set([
-  'analysis_review', 'script_review', 'broll_review',
+  'analysis_review', 'concept_review', 'script_review', 'broll_review',
   'influencer_selection', 'casting_review', 'asset_review',
 ]);
 
 const STAGES = [
   { key: 'analyzing', label: 'Analyze' },
   { key: 'analysis_review', label: 'Review' },
+  { key: 'concept_review', label: 'Concept' },
   { key: 'scripting', label: 'Script' },
   { key: 'script_review', label: 'Review' },
   { key: 'broll_planning', label: 'B-Roll' },
