@@ -36,6 +36,38 @@ interface VideoModel {
   is_default: boolean;
 }
 
+interface StylePreset {
+  id: string;
+  name: string;
+  total_score: number | null;
+  status: string;
+  patterns: {
+    hook_technique?: string;
+    pacing?: string;
+    cta_formula?: string;
+    product_integration_style?: string;
+  } | null;
+  transcript: {
+    segments: Array<{
+      index: number;
+      section: string;
+      text: string;
+      start_time: number;
+      end_time: number;
+    }>;
+  } | null;
+  visual_style: {
+    segments: Array<{
+      scene: { setting: string; props: string[]; composition: string; productPresence: string };
+      emotion: { mood: string; energy: string; pacing: string; viewerIntent: string };
+      angle: { shotType: string; cameraMovement: string; transitions: string };
+      lighting: { style: string; colorTemp: string; contrast: string };
+    }>;
+    overall: Record<string, unknown>;
+  } | null;
+  segment_scores: Record<string, Record<string, number>> | null;
+}
+
 export function CreateProjectForm() {
   const router = useRouter();
   const [productUrl, setProductUrl] = useState('');
@@ -50,6 +82,10 @@ export function CreateProjectForm() {
   const [characters, setCharacters] = useState<Character[]>([]);
   const [videoModels, setVideoModels] = useState<VideoModel[]>([]);
   const [videoModelId, setVideoModelId] = useState('');
+  const [stylePresets, setStylePresets] = useState<StylePreset[]>([]);
+  const [stylePresetId, setStylePresetId] = useState('');
+  const [presetExpanded, setPresetExpanded] = useState(false);
+  const [expandedSegment, setExpandedSegment] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -74,6 +110,12 @@ export function CreateProjectForm() {
         if (defaultModel) setVideoModelId(defaultModel.id);
       })
       .catch(() => setVideoModels([]));
+    fetch('/api/style-presets')
+      .then((res) => (res.ok ? res.json() : { presets: [] }))
+      .then((data: { presets: StylePreset[] }) => {
+        setStylePresets((data.presets || []).filter((p) => p.status === 'ready'));
+      })
+      .catch(() => setStylePresets([]));
   }, []);
 
   useEffect(() => {
@@ -102,6 +144,7 @@ export function CreateProjectForm() {
           influencerId: influencerId || undefined,
           characterId: characterId || undefined,
           videoModelId: videoModelId || undefined,
+          stylePresetId: stylePresetId || undefined,
           tone,
         }),
       });
@@ -396,6 +439,240 @@ export function CreateProjectForm() {
         </label>
         <ToneSelector value={tone} onChange={setTone} />
       </div>
+
+      {/* Style Preset */}
+      {stylePresets.length > 0 && (
+        <div>
+          <label
+            htmlFor="stylePreset"
+            className="mb-2 block font-[family-name:var(--font-display)] text-sm font-medium text-text-primary"
+          >
+            Style Preset{' '}
+            <span className="font-normal text-text-muted">(optional)</span>
+          </label>
+          <div className="relative">
+            <select
+              id="stylePreset"
+              value={stylePresetId}
+              onChange={(e) => {
+                setStylePresetId(e.target.value);
+                setPresetExpanded(false);
+                setExpandedSegment(null);
+              }}
+              className="block w-full appearance-none rounded-lg border border-border bg-surface-raised px-4 py-3 pr-10 text-sm text-text-primary transition-all focus:border-electric focus:outline-none focus:ring-1 focus:ring-electric"
+            >
+              <option value="">No style preset</option>
+              {stylePresets.map((sp) => (
+                <option key={sp.id} value={sp.id}>
+                  {sp.name}{sp.total_score !== null ? ` (${sp.total_score}/44)` : ''}
+                </option>
+              ))}
+            </select>
+            <svg
+              viewBox="0 0 16 16"
+              fill="none"
+              className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="4 6 8 10 12 6" />
+            </svg>
+          </div>
+
+          {/* Preset summary + expand toggle */}
+          {(() => {
+            const selected = stylePresets.find((sp) => sp.id === stylePresetId);
+            if (!selected) return null;
+
+            const scoreKeys = ['hook', 'problem', 'solution', 'cta'] as const;
+            const sectionLabels: Record<string, string> = { hook: 'Hook', problem: 'Problem', solution: 'Solution + Product', cta: 'CTA' };
+
+            return (
+              <div className="mt-3 space-y-3">
+                {/* Pattern tags */}
+                {selected.patterns && (
+                  <div className="flex flex-wrap gap-2">
+                    {selected.patterns.hook_technique && (
+                      <span className="rounded-full bg-electric/10 px-2 py-0.5 text-[10px] text-electric">
+                        {selected.patterns.hook_technique}
+                      </span>
+                    )}
+                    {selected.patterns.pacing && (
+                      <span className="rounded-full bg-phoenix/10 px-2 py-0.5 text-[10px] text-phoenix">
+                        {selected.patterns.pacing}
+                      </span>
+                    )}
+                    {selected.patterns.cta_formula && (
+                      <span className="rounded-full bg-summon/10 px-2 py-0.5 text-[10px] text-summon">
+                        {selected.patterns.cta_formula}
+                      </span>
+                    )}
+                    {selected.patterns.product_integration_style && (
+                      <span className="rounded-full bg-lime/10 px-2 py-0.5 text-[10px] text-lime">
+                        {selected.patterns.product_integration_style}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Expand toggle */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPresetExpanded(!presetExpanded);
+                    if (presetExpanded) setExpandedSegment(null);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg border border-border bg-surface-raised px-3 py-2 text-xs text-text-secondary transition-all hover:border-electric/30 hover:text-text-primary"
+                >
+                  <svg
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    className={`h-3 w-3 transition-transform ${presetExpanded ? 'rotate-90' : ''}`}
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <polyline points="6 4 10 8 6 12" />
+                  </svg>
+                  <span className="font-[family-name:var(--font-display)] font-medium">
+                    {presetExpanded ? 'Hide details' : 'View preset details'}
+                  </span>
+                  {selected.transcript?.segments && (
+                    <span className="text-text-muted">
+                      ({selected.transcript.segments.length} segments)
+                    </span>
+                  )}
+                </button>
+
+                {/* Expanded detail panel */}
+                {presetExpanded && (
+                  <div className="space-y-2">
+                    {(selected.transcript?.segments || []).map((seg, idx) => {
+                      const scoreKey = scoreKeys[idx];
+                      const scores = scoreKey && selected.segment_scores ? selected.segment_scores[scoreKey] : null;
+                      const segTotal = scores?.total ?? null;
+                      const segMax = scoreKey === 'hook' ? 14 : scoreKey === 'problem' ? 10 : scoreKey === 'solution' ? 10 : 10;
+                      const visual = selected.visual_style?.segments?.[idx];
+                      const isSegExpanded = expandedSegment === idx;
+
+                      return (
+                        <div
+                          key={idx}
+                          className="rounded-lg border border-border bg-void/50 overflow-hidden"
+                        >
+                          {/* Segment header */}
+                          <button
+                            type="button"
+                            onClick={() => setExpandedSegment(isSegExpanded ? null : idx)}
+                            className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-surface-raised/50"
+                          >
+                            <span className="shrink-0 rounded-md bg-electric/10 px-2 py-0.5 font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase text-electric">
+                              {sectionLabels[scoreKey] || seg.section}
+                            </span>
+                            <span className="font-[family-name:var(--font-mono)] text-[10px] text-text-muted">
+                              {seg.start_time}s–{seg.end_time}s
+                            </span>
+                            {segTotal !== null && (
+                              <span className="ml-auto font-[family-name:var(--font-mono)] text-[10px] text-summon">
+                                {segTotal}/{segMax}
+                              </span>
+                            )}
+                            <svg
+                              viewBox="0 0 16 16"
+                              fill="none"
+                              className={`h-3 w-3 shrink-0 text-text-muted transition-transform ${isSegExpanded ? 'rotate-90' : ''}`}
+                              stroke="currentColor"
+                              strokeWidth={2}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <polyline points="6 4 10 8 6 12" />
+                            </svg>
+                          </button>
+
+                          {/* Segment detail */}
+                          {isSegExpanded && (
+                            <div className="border-t border-border px-3 py-3 space-y-3">
+                              {/* Transcript */}
+                              <div>
+                                <p className="mb-1 font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                                  Transcript
+                                </p>
+                                <p className="text-xs leading-relaxed text-text-secondary">
+                                  {seg.text}
+                                </p>
+                              </div>
+
+                              {/* Score breakdown */}
+                              {scores && (
+                                <div>
+                                  <p className="mb-1.5 font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                                    Score Breakdown
+                                  </p>
+                                  <div className="flex flex-wrap gap-x-3 gap-y-1">
+                                    {Object.entries(scores)
+                                      .filter(([k]) => k !== 'total')
+                                      .map(([key, val]) => (
+                                        <span key={key} className="flex items-center gap-1 font-[family-name:var(--font-mono)] text-[10px]">
+                                          <span className="text-text-muted">{key.replace(/_/g, ' ')}:</span>
+                                          <span className={val >= 2 ? 'text-summon' : 'text-phoenix'}>{val}/2</span>
+                                        </span>
+                                      ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Visual style */}
+                              {visual && (
+                                <div className="space-y-2">
+                                  <p className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                                    Visual Style
+                                  </p>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    {/* Scene */}
+                                    <div className="rounded-md border border-border bg-surface p-2">
+                                      <p className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-electric">Scene</p>
+                                      <p className="text-[10px] leading-snug text-text-secondary">{visual.scene.setting}</p>
+                                      {visual.scene.productPresence && visual.scene.productPresence !== 'None' && (
+                                        <p className="mt-1 text-[10px] text-summon">Product: {visual.scene.productPresence}</p>
+                                      )}
+                                    </div>
+                                    {/* Emotion */}
+                                    <div className="rounded-md border border-border bg-surface p-2">
+                                      <p className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-phoenix">Emotion</p>
+                                      <p className="text-[10px] leading-snug text-text-secondary">{visual.emotion.mood}</p>
+                                      <p className="text-[10px] text-text-muted">Energy: {visual.emotion.energy}</p>
+                                    </div>
+                                    {/* Angle */}
+                                    <div className="rounded-md border border-border bg-surface p-2">
+                                      <p className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-summon">Angle</p>
+                                      <p className="text-[10px] leading-snug text-text-secondary">{visual.angle.shotType}</p>
+                                      <p className="text-[10px] text-text-muted">{visual.angle.cameraMovement}</p>
+                                    </div>
+                                    {/* Lighting */}
+                                    <div className="rounded-md border border-border bg-surface p-2">
+                                      <p className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-lime">Lighting</p>
+                                      <p className="text-[10px] leading-snug text-text-secondary">{visual.lighting.style}</p>
+                                      <p className="text-[10px] text-text-muted">{visual.lighting.colorTemp} · {visual.lighting.contrast}</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </div>
+      )}
 
       {/* Submit */}
       <button

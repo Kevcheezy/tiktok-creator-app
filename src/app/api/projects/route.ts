@@ -12,6 +12,7 @@ const createProjectSchema = z.object({
   influencerId: z.string().uuid().optional(),
   characterId: z.string().uuid().optional(),
   videoModelId: z.string().uuid().optional(),
+  stylePresetId: z.string().uuid().optional(),
   name: z.string().optional(),
   tone: z.enum(TONE_IDS as [string, ...string[]]).optional().default('reluctant-insider'),
 }).refine(
@@ -45,7 +46,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { productId, productUrl, videoUrl, influencerId, characterId, videoModelId, name, tone } = parsed.data;
+    const { productId, productUrl, videoUrl, influencerId, characterId, videoModelId, stylePresetId, name, tone } = parsed.data;
 
     // Resolve video model: use provided ID, or fall back to the default model
     let resolvedVideoModelId = videoModelId || null;
@@ -85,6 +86,7 @@ export async function POST(request: NextRequest) {
           influencer_id: influencerId || null,
           character_id: characterId || null,
           video_model_id: resolvedVideoModelId,
+          style_preset_id: stylePresetId || null,
           name: name || null,
           tone,
           input_mode: videoUrl ? 'video_analysis' : 'product_only',
@@ -157,6 +159,7 @@ export async function POST(request: NextRequest) {
         influencer_id: influencerId || null,
         character_id: characterId || null,
         video_model_id: resolvedVideoModelId,
+        style_preset_id: stylePresetId || null,
         name: name || null,
         tone,
         input_mode: videoUrl ? 'video_analysis' : 'product_only',

@@ -227,8 +227,13 @@ export const scene = pgTable('scene', {
   visualPrompt: jsonb('visual_prompt'),
   productVisibility: text('product_visibility'),
   brollCues: jsonb('broll_cues'),
+  propsNeeded: jsonb('props_needed'),
+  interactionType: text('interaction_type'),
+  cameraSpecs: jsonb('camera_specs'),
+  segmentScore: jsonb('segment_score'),
   tone: text('tone'),
   version: integer('version').default(1),
+  videoPromptOverride: jsonb('video_prompt_override'),
   createdAt: timestamp('created_at').defaultNow(),
 });
 
