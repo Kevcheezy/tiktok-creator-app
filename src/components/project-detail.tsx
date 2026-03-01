@@ -63,6 +63,7 @@ interface ProjectData {
   negative_prompt_override: unknown;
   fast_mode: boolean | null;
   lock_camera: boolean | null;
+  keyframe_chaining: boolean | null;
   video_retries: number;
   scene_preset_id: string | null;
   scene_override: string | null;
@@ -795,6 +796,12 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
           <LockCameraToggle
             projectId={projectId}
             lockCamera={!!project.lock_camera}
+            onUpdated={fetchProject}
+            readOnly={readOnlyMode}
+          />
+          <KeyframeChainingToggle
+            projectId={projectId}
+            chainingEnabled={project.keyframe_chaining !== false}
             onUpdated={fetchProject}
             readOnly={readOnlyMode}
           />
@@ -2937,6 +2944,91 @@ function LockCameraToggle({
           <div
             className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-all duration-200 ${
               lockCamera ? 'left-[18px]' : 'left-0.5'
+            }`}
+          />
+        </div>
+      </button>
+    </div>
+  );
+}
+
+/* ── Keyframe Chaining Toggle ─────────────────────────────────────── */
+function KeyframeChainingToggle({
+  projectId,
+  chainingEnabled,
+  onUpdated,
+  readOnly,
+}: {
+  projectId: string;
+  chainingEnabled: boolean;
+  onUpdated: () => void;
+  readOnly?: boolean;
+}) {
+  const [toggling, setToggling] = useState(false);
+
+  async function handleToggle() {
+    if (readOnly) return;
+    setToggling(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keyframe_chaining: !chainingEnabled }),
+      });
+      if (res.ok) {
+        onUpdated();
+      }
+    } catch {
+      // silently fail — user can retry
+    } finally {
+      setToggling(false);
+    }
+  }
+
+  return (
+    <div className="glass flex items-center justify-between rounded-lg px-4 py-2.5">
+      <div className="flex items-center gap-2.5">
+        {/* Chain link icon */}
+        <svg
+          viewBox="0 0 16 16"
+          fill="none"
+          className={`h-3.5 w-3.5 transition-colors ${chainingEnabled ? 'text-electric' : 'text-text-muted'}`}
+          stroke="currentColor"
+          strokeWidth={1.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M6.5 9.5l3-3" />
+          <path d="M9 11l1.5-1.5a2.83 2.83 0 0 0-4-4L5 7" />
+          <path d="M7 5L5.5 6.5a2.83 2.83 0 0 0 4 4L11 9" />
+        </svg>
+        <div className="flex flex-col">
+          <span className="font-[family-name:var(--font-display)] text-xs font-semibold text-text-secondary">
+            Chain Keyframes
+          </span>
+          <span className="font-[family-name:var(--font-mono)] text-[10px] text-text-muted">
+            Each segment starts from the previous end frame
+          </span>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={handleToggle}
+        disabled={toggling || readOnly}
+        className="group inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+        title={chainingEnabled
+          ? 'When enabled, each segment\u2019s start frame reuses the previous end frame for visual continuity'
+          : 'When disabled, each segment generates its start frame independently'}
+      >
+        <div
+          className={`relative h-5 w-9 rounded-full transition-colors duration-200 ${
+            chainingEnabled ? 'bg-electric' : 'bg-surface-overlay'
+          }`}
+        >
+          <div
+            className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-all duration-200 ${
+              chainingEnabled ? 'left-[18px]' : 'left-0.5'
             }`}
           />
         </div>

@@ -158,6 +158,7 @@ export const project = pgTable('project', {
   productPlacement: jsonb('product_placement'),
   negativePromptOverride: jsonb('negative_prompt_override'),
   syllableTargets: jsonb('syllable_targets'),
+  keyframeChaining: boolean('keyframe_chaining').notNull().default(true),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });

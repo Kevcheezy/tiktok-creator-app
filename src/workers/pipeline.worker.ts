@@ -948,7 +948,14 @@ async function handleAssetRegeneration(
     });
 
     if (asset.type === 'keyframe_start' || asset.type === 'keyframe_end') {
-      await regenerateKeyframe(projectId, assetId, asset, jobLog);
+      // Fetch project's keyframe_chaining flag to control cross-segment reference behavior
+      const { data: proj } = await supabase
+        .from('project')
+        .select('keyframe_chaining')
+        .eq('id', projectId)
+        .single();
+      const keyframeChaining = proj?.keyframe_chaining !== false;
+      await regenerateKeyframe(projectId, assetId, asset, jobLog, null, null, keyframeChaining);
     } else if (asset.type === 'video') {
       await regenerateVideo(projectId, assetId, asset, jobLog);
     } else if (asset.type === 'audio') {
@@ -1079,6 +1086,7 @@ async function regenerateKeyframe(
   jobLog: ReturnType<typeof createLogger>,
   previousFrameUrl?: string | null,
   projectRefs?: ProjectReferenceData | null,
+  keyframeChaining?: boolean,
 ): Promise<string> {
   const scene = Array.isArray(asset.scene) ? asset.scene[0] : asset.scene;
   const visualPrompt = scene?.visual_prompt as { start: unknown; end: unknown } | null;
@@ -1095,13 +1103,19 @@ async function regenerateKeyframe(
   // Chain ref is ALWAYS position [0] (primary) for sequential continuity.
   // Influencer is only used as fallback when no chain ref exists (very first keyframe).
   // Product is included only when product placement visibility != 'none'.
+  //
+  // When keyframeChaining is false:
+  //   - START keyframes always use influencer as primary reference (no cross-segment chain)
+  //   - END keyframes still use same-segment START for within-segment consistency
+  //   - previousFrameUrl chain reference is skipped
+  const chainingEnabled = keyframeChaining !== false;
   const referenceImages: string[] = [];
 
   // 1. Chain reference — FIRST (primary) for sequential continuity
-  if (previousFrameUrl) {
+  if (chainingEnabled && previousFrameUrl) {
     referenceImages.push(previousFrameUrl);
   } else if (asset.type === 'keyframe_end' && scene) {
-    // For END keyframe: use same segment's START as chain ref
+    // For END keyframe: use same segment's START as chain ref (always — within-segment consistency)
     const { data: startAsset } = await supabase
       .from('asset')
       .select('url')
@@ -1110,8 +1124,8 @@ async function regenerateKeyframe(
       .eq('status', 'completed')
       .single();
     if (startAsset?.url) referenceImages.push(startAsset.url);
-  } else if (asset.type === 'keyframe_start' && scene) {
-    // For START keyframe: use previous segment's END as chain ref
+  } else if (chainingEnabled && asset.type === 'keyframe_start' && scene) {
+    // For START keyframe: use previous segment's END as chain ref (only when chaining enabled)
     const segmentIndex = scene.segment_index ?? 0;
     if (segmentIndex > 0) {
       const { data: prevEndAsset } = await supabase
@@ -1129,7 +1143,7 @@ async function regenerateKeyframe(
   }
 
   // 2. If NO chain ref found, use influencer as the initial identity source
-  //    (only happens for the very first keyframe in the chain)
+  //    (happens for the very first keyframe in the chain, or all START keyframes when chaining is off)
   if (referenceImages.length === 0 && refs.influencerImageUrl) {
     referenceImages.push(refs.influencerImageUrl);
   }
@@ -1262,6 +1276,14 @@ async function handleCascadeRegeneration(
     // Avoids N redundant Supabase joins and ensures consistent reference data.
     const projectRefs = await fetchProjectReferences(projectId, jobLog);
 
+    // Fetch keyframe_chaining flag: when false, don't chain across segment boundaries
+    const { data: projectRow } = await supabase
+      .from('project')
+      .select('keyframe_chaining')
+      .eq('id', projectId)
+      .single();
+    const keyframeChaining = projectRow?.keyframe_chaining !== false;
+
     // Fetch ALL keyframe assets for this project, ordered by segment + type
     const { data: allKeyframes } = await supabase
       .from('asset')
@@ -1289,12 +1311,12 @@ async function handleCascadeRegeneration(
     // Walk the chain: each frame uses the previous output as primary reference
     let previousUrl: string | null = null;
 
-    // If source is an END keyframe, get same segment's START as initial reference
-    // If source is a START keyframe of seg > 0, get previous segment's END
+    // If source is an END keyframe, get same segment's START as initial reference (always — within-segment)
+    // If source is a START keyframe of seg > 0, get previous segment's END (only when chaining enabled)
     if (!sourceIsStart) {
       const sameSegStart = ordered.find((kf: any) => kf._seg === sourceSegment && kf.type === 'keyframe_start');
       previousUrl = sameSegStart?.url || null;
-    } else if (sourceSegment > 0) {
+    } else if (keyframeChaining && sourceSegment > 0) {
       const prevSegEnd = ordered.find((kf: any) => kf._seg === sourceSegment - 1 && kf.type === 'keyframe_end');
       previousUrl = prevSegEnd?.url || null;
     }
@@ -1306,7 +1328,8 @@ async function handleCascadeRegeneration(
       try {
         // Continuation STARTs (seg 1+) reuse the previous END frame directly.
         // This matches CastingAgent behavior and ensures identical frames at cut points.
-        if (kf.type === 'keyframe_start' && kf._seg > 0 && previousUrl) {
+        // Only when keyframe chaining is enabled — otherwise generate independently.
+        if (keyframeChaining && kf.type === 'keyframe_start' && kf._seg > 0 && previousUrl) {
           jobLog.info({ assetId: kf.id, segment: kf._seg }, 'Cascade: reusing previous END as START (continuation)');
           await supabase
             .from('asset')
@@ -1325,8 +1348,15 @@ async function handleCascadeRegeneration(
 
         jobLog.info({ assetId: kf.id, segment: kf._seg, type: kf.type, previousUrl: !!previousUrl }, 'Cascade: regenerating keyframe');
 
-        const newUrl = await regenerateKeyframe(projectId, kf.id, kf, jobLog, previousUrl, projectRefs);
+        const newUrl = await regenerateKeyframe(projectId, kf.id, kf, jobLog, previousUrl, projectRefs, keyframeChaining);
         previousUrl = newUrl;
+
+        // When chaining is off, break the cross-segment chain after END keyframes.
+        // Within-segment propagation (START → END) is still allowed.
+        if (!keyframeChaining && kf.type === 'keyframe_end') {
+          previousUrl = null;
+        }
+
         regeneratedCount++;
 
         jobLog.info({ assetId: kf.id, segment: kf._seg, type: kf.type }, 'Cascade: keyframe regenerated');

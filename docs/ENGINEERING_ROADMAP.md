@@ -1273,6 +1273,20 @@ Ship-blocking bugs are fixed (Tier 0) and the pipeline works end-to-end (Tier 1)
 
 ---
 
+#### ~~R1.5.37 - Keyframe Chaining Flag in Worker Regeneration~~ ~~DONE~~
+**Priority:** P1 - High
+**Effort:** Small
+**Depends on:** None (CastingAgent already respects `keyframe_chaining`)
+**Why:** The project's `keyframe_chaining` boolean flag controls whether keyframes chain across segments. CastingAgent already respects this flag, but the worker's `regenerateKeyframe()` and `cascadeRegenerateKeyframes()` functions always use cross-segment chaining regardless of the flag. This means regenerated keyframes don't match the original generation behavior when chaining is disabled.
+
+**Backend:**
+- [x] `regenerateKeyframe()`: add `keyframeChaining` parameter; skip cross-segment references when false
+- [x] `handleAssetRegeneration()`: fetch project's `keyframe_chaining` and pass to `regenerateKeyframe()`
+- [x] `handleCascadeRegeneration()`: fetch project's `keyframe_chaining` and conditionally skip cross-segment reuse/propagation
+- [x] Passes `npm run build`
+
+---
+
 ### Tier 2: Make It Actually Convert (Quality & conversion optimization)
 
 These features separate "generates a video" from "generates a video that sells."

@@ -26,6 +26,11 @@ export class CastingAgent extends BaseAgent {
 
     if (projError || !project) throw new Error('Project not found');
 
+    // Keyframe chaining: when true (default), each segment's end frame feeds into the
+    // next segment as a reference image for visual continuity. When false, every segment
+    // generates both keyframes independently from the influencer image — no cross-segment references.
+    const keyframeChaining = project.keyframe_chaining !== false;
+
     // Fetch multi-angle product images
     type ProductImg = { id: string; url: string; url_clean: string | null; angle: string; is_primary: boolean };
     let productImages: ProductImg[] = [];
@@ -154,7 +159,7 @@ export class CastingAgent extends BaseAgent {
             await new Promise(resolve => setTimeout(resolve, 5000));
           }
 
-          const isContinuation = segIdx > 0 && !!previousEndFrameUrl;
+          const isContinuation = keyframeChaining && segIdx > 0 && !!previousEndFrameUrl;
 
           // Use LLM to generate detailed prompts for start and end frames
           // On retry, reuse cached prompts to avoid redundant LLM calls
@@ -204,7 +209,7 @@ export class CastingAgent extends BaseAgent {
           const referenceImages: string[] = [];
           if (useInfluencer) referenceImages.push(influencer.image_url);
           if (segmentProductImage) referenceImages.push(segmentProductImage);
-          if (previousEndFrameUrl) referenceImages.push(previousEndFrameUrl);
+          if (keyframeChaining && previousEndFrameUrl) referenceImages.push(previousEndFrameUrl);
 
           let startUrl = '';
           let endUrl = '';
@@ -328,8 +333,8 @@ export class CastingAgent extends BaseAgent {
             }
           }
 
-          // Chain: pass this segment's end frame URL to next segment
-          if (endUrl) {
+          // Chain: pass this segment's end frame URL to next segment (only when chaining enabled)
+          if (keyframeChaining && endUrl) {
             previousEndFrameUrl = endUrl;
             this.log(`Segment ${segIdx} end frame chained → next segment`);
           }
