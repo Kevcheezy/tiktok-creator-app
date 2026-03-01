@@ -77,10 +77,10 @@ export function ScriptReview({
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
 
   const DEFAULT_SYLLABLE_TARGETS = {
-    hook: { min: 65, max: 80 },
-    problem: { min: 75, max: 90 },
-    solution_product: { min: 80, max: 95 },
-    cta: { min: 55, max: 70 },
+    hook: { min: 70, max: 70 },
+    problem: { min: 70, max: 70 },
+    solution_product: { min: 70, max: 70 },
+    cta: { min: 70, max: 70 },
   };
 
   const [syllableTargets, setSyllableTargets] = useState(DEFAULT_SYLLABLE_TARGETS);
