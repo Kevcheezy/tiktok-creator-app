@@ -464,12 +464,12 @@ export function SegmentCard({ scene, editable = false, projectId, scriptId, onSe
                 Score
               </span>
               <span className="font-[family-name:var(--font-mono)] text-sm font-bold text-electric">
-                {scene.segment_score.total}/{[14, 10, 10, 10][scene.segment_index] ?? 10}
+                {scene.segment_score.total}/{[16, 12, 12, 10][scene.segment_index] ?? 10}
               </span>
             </div>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1">
               {Object.entries(scene.segment_score)
-                .filter(([key]) => key !== 'total')
+                .filter(([key]) => key !== 'total' && key !== 'recommendations')
                 .map(([criterion, score]) => (
                   <div key={criterion} className="flex items-center justify-between">
                     <span className="text-[10px] text-text-muted capitalize">
@@ -488,6 +488,21 @@ export function SegmentCard({ scene, editable = false, projectId, scriptId, onSe
                   </div>
                 ))}
             </div>
+
+            {/* Improvement Recommendations */}
+            {Array.isArray((scene.segment_score as any).recommendations) && (scene.segment_score as any).recommendations.length > 0 && (
+              <div className="mt-3 space-y-1.5 border-t border-border/50 pt-2">
+                <span className="font-[family-name:var(--font-display)] text-[10px] font-semibold uppercase tracking-wider text-phoenix">
+                  Suggestions
+                </span>
+                {((scene.segment_score as any).recommendations as string[]).map((rec: string, i: number) => (
+                  <div key={i} className="flex gap-2 text-[11px] leading-relaxed text-text-secondary">
+                    <span className="mt-0.5 flex-shrink-0 text-phoenix">→</span>
+                    <span>{rec}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

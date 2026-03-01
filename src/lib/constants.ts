@@ -147,7 +147,7 @@ export const PIPELINE_CONFIG = {
   totalDuration: 40,
   syllablesPerSegment: { min: 82, max: 90, warnMin: 75, warnMax: 95, errorMin: 60, errorMax: 110 },
   hookScoreMinimum: 10,
-  hookScoreMax: 14,
+  hookScoreMax: 16,
 } as const;
 
 // Product placement arc across 4 segments

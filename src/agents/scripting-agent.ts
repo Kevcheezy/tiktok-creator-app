@@ -138,7 +138,7 @@ IMPORTANT: Match these syllable counts precisely. Fewer syllables = slower, more
    - shot_1_peak (~3s): Word where speaker makes confident opening gesture
    - shot_2_peak (~8s): Word where speaker makes emphasis gesture
 
-6. HOOK SCORING (must score >=10/14):
+6. HOOK SCORING (must score >=10/16):
    - Opens curiosity loop? (0-2)
    - Challenges common belief? (0-2)
    - Context immediately clear? (0-2)
@@ -146,34 +146,44 @@ IMPORTANT: Match these syllable counts precisely. Fewer syllables = slower, more
    - Uses pattern interrupt? (0-2)
    - Emotional trigger word? (0-2)
    - Specific number/claim? (0-2)
+   - Directly addresses target persona in first 3-7 seconds? (0-2) — e.g., "hey mom", "if you recently had a baby"
 
 7. FULL SEGMENT SCORING (score each segment on its criteria, 0-2 per criterion):
 
-   Hook (Segment 1) — same 7 criteria as above:
-   - curiosity_loop, challenges_belief, clear_context, plants_question, pattern_interrupt, emotional_trigger, specific_claim (0-2 each, max 14)
+   Hook (Segment 1) — 8 criteria (max 16):
+   - curiosity_loop, challenges_belief, clear_context, plants_question, pattern_interrupt, emotional_trigger, specific_claim, persona_address
 
-   Problem (Segment 2):
+   Problem (Segment 2) — 6 criteria (max 12):
    - relatability: Does the viewer immediately recognize this problem? (0-2)
    - pain_amplification: Does it make the problem feel urgent/unbearable? (0-2)
    - credibility: Does it reference real experiences/common frustrations? (0-2)
    - emotional_depth: Does it trigger empathy/frustration/fear? (0-2)
    - transition_setup: Does it naturally lead to the solution? (0-2)
+   - concrete_details: Uses specific concrete details, not generic pain? (0-2) — e.g., "I tried keto, walked 30 min daily, cut carbs, and nothing changed" vs "I struggled with weight loss"
 
-   Solution + Product (Segment 3):
+   Solution + Product (Segment 3) — 6 criteria (max 12):
    - product_integration: Is the product introduced naturally, not forced? (0-2)
    - proof_evidence: Does it include specific claims/stats/results? (0-2)
-   - transformation_narrative: Does it paint a clear before→after? (0-2)
+   - transformation_narrative: Does it paint a vivid, emotional before→after? (0-2) — must include emotional outcomes, not just functional metrics
    - differentiation: Why this product over alternatives? (0-2)
    - authenticity: Does the delivery feel genuine, not salesy? (0-2)
+   - mechanism_framing: Introduces product through unique mechanism, not just features? (0-2) — e.g., "works with your biology" vs "contains 20g collagen"
 
-   CTA (Segment 4):
+   CTA (Segment 4) — 5 criteria (max 10):
    - urgency: Is there a reason to act NOW? (0-2)
    - value_stack: Does it reinforce what you're getting? (0-2)
    - social_proof: Does it reference others' success/popularity? (0-2)
    - clear_action: Is the next step obvious? (0-2)
    - scarcity_exclusivity: Limited time/stock/offer? (0-2)
 
-   Include a "segment_score" object in EACH segment with the relevant criteria scores and a total.
+   Include a "segment_score" object in EACH segment with the relevant criteria scores, a total, AND a "recommendations" array.
+
+   RECOMMENDATIONS RULE: For each criterion scoring 0 or 1, include a specific actionable improvement suggestion in the "recommendations" array.
+   Recommendations must be CONCRETE — tell the user exactly what to change, not generic advice.
+   Example: "Replace 'I struggled with weight loss' with specific details like 'I tried keto, walked 30 minutes daily, cut carbs for 3 months, and still nothing changed'"
+   Example: "Open with 'Hey mama' or 'If you just had a baby' to directly address your target persona in the first 3 seconds"
+
+   Also include a top-level "pacing_score" (0-2) evaluating whether the emotional progression flows naturally: moderate during problem → builds during solution → peaks at transformation → sustains for CTA.
 
 8. B-ROLL TIMING CUES (REQUIRED for each segment):
    Identify 2-5 moments where a B-roll cutaway image would strengthen the argument.
